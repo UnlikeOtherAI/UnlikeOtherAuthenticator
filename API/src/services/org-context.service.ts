@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { activeAuthorityUserWhere,activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
 import { assertOrgAccessPolicy } from './org-sso-policy.service.js';
 import type { ClientConfig } from './config.service.js';
 import { assertDatabaseEnabled, normalizeDomain } from './organisation.service.base.js';
@@ -74,13 +75,13 @@ export async function getActiveUserOrgContext(
       userId,
       ...(orgId ? { orgId } : {}),
       status: 'ACTIVE',
-      user: { lifecycleStatus: 'ACTIVE' },
+      user: activeAuthorityUserWhere(),
       org: { lifecycleStatus: 'ACTIVE', ...(params.allowCrossDomain ? {} : { domain }) },
     },
     select: {
       orgId: true,
       role: true,
-      org: { select: { slug: true } },
+      org: { select: { slug: true,ownerId:true } },
     },
   });
 
@@ -110,6 +111,16 @@ export async function getActiveUserOrgContext(
     teamRoles[row.teamId] = row.teamRole;
     return row.teamId;
   });
+  // Effective org authority is not a TeamMember record. Claims list selectable
+  // teams while retaining the org role as the source of that authority.
+  if(orgMembership.role==='owner'||orgMembership.role==='admin'||orgMembership.org.ownerId===userId) {
+    const admitted=await prisma.team.findMany({where:{orgId:orgMembership.orgId,
+      AND:[activeTeamAuthorityWhere(userId)]},select:{id:true},orderBy:{id:'asc'}});
+    for(const team of admitted)if(!teams.includes(team.id)){
+      teams.push(team.id);teamRoles[team.id]=orgMembership.org.ownerId===userId?'owner':orgMembership.role;
+    }
+    teams.sort();
+  }
 
   const context: OrgContext = {
     org_id: orgMembership.orgId,

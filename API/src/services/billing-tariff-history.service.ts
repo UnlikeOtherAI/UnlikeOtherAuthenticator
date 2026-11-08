@@ -60,8 +60,9 @@ export async function resolveBillingTariffForMonth(
   params: {
     serviceId: string;
     organisationId: string;
-    teamId: string;
+    teamId: string | null;
     billingMonth: string;
+    financialScope?: 'organisation';
   },
 ): Promise<EffectiveTariff> {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(params.billingMonth)) {
@@ -124,7 +125,7 @@ export async function resolveBillingTariffForMonth(
       assignmentId: contract.tariffAssignmentId };
   }
   const choices = [
-    { source: BillingTariffSource.TEAM, scopeKey: `${params.organisationId}:${params.teamId}` },
+    ...(params.financialScope ? [] : [{ source: BillingTariffSource.TEAM, scopeKey: `${params.organisationId}:${params.teamId}` }]),
     { source: BillingTariffSource.ORGANISATION, scopeKey: params.organisationId },
     { source: BillingTariffSource.SERVICE_DEFAULT, scopeKey: params.serviceId },
   ];

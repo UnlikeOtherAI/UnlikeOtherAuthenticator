@@ -20,7 +20,7 @@ export type BillingCreditFundingCopy = Readonly<{
 
 export const BILLING_CREDIT_FUNDING_COPY = {
   cs: {
-    title: 'Doplnit týmové kredity',
+    title: 'Doplnit kredity organizace',
     description: 'Kredity platí používání propojených služeb. Předplatná se účtují zvlášť.',
     paymentPending: 'Platba už probíhá. Dokončete ji před dalším nákupem.',
     offerUnavailable: 'Tuto nabídku teď nelze použít.',
@@ -36,7 +36,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     rateUnavailable: 'Ceny kreditů v {currency} teď nejsou dostupné. Zkuste to prosím za chvíli.',
   },
   'en-US': {
-    title: 'Add team credits',
+    title: 'Add organisation credits',
     description: 'Credits pay for using connected services. Subscriptions are charged separately.',
     paymentPending: 'A payment is already in progress. Finish it before starting another purchase.',
     offerUnavailable: 'This offer is unavailable right now.',
@@ -52,7 +52,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     rateUnavailable: 'Credit prices in {currency} are unavailable right now. Please try again shortly.',
   },
   'en-GB': {
-    title: 'Add team credits',
+    title: 'Add organisation credits',
     description: 'Credits pay for using connected services. Subscriptions are charged separately.',
     paymentPending: 'A payment is already in progress. Finish it before starting another purchase.',
     offerUnavailable: 'This offer is unavailable right now.',
@@ -68,7 +68,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     rateUnavailable: 'Credit prices in {currency} are unavailable right now. Please try again shortly.',
   },
   de: {
-    title: 'Team-Credits aufladen',
+    title: 'Organisationsguthaben aufladen',
     description: 'Credits bezahlen die Nutzung verbundener Dienste. Abonnements werden separat abgerechnet.',
     paymentPending: 'Eine Zahlung läuft bereits. Schließen Sie sie ab, bevor Sie einen weiteren Kauf starten.',
     offerUnavailable: 'Dieses Angebot ist derzeit nicht verfügbar.',
@@ -84,7 +84,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     rateUnavailable: 'Credit-Preise in {currency} sind derzeit nicht verfügbar. Bitte versuchen Sie es gleich noch einmal.',
   },
   es: {
-    title: 'Añadir créditos al equipo',
+    title: 'Añadir créditos a la organización',
     description: 'Los créditos pagan el uso de los servicios conectados. Las suscripciones se cobran aparte.',
     paymentPending: 'Ya hay un pago en curso. Termínalo antes de iniciar otra compra.',
     offerUnavailable: 'Esta oferta no está disponible ahora.',
@@ -100,7 +100,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     rateUnavailable: 'Los precios de los créditos en {currency} no están disponibles ahora. Inténtalo de nuevo en unos minutos.',
   },
   fr: {
-    title: 'Ajouter des crédits à l’équipe',
+    title: 'Ajouter des crédits à l’organisation',
     description: 'Les crédits paient l’utilisation des services connectés. Les abonnements sont facturés séparément.',
     paymentPending: 'Un paiement est déjà en cours. Terminez-le avant de lancer un autre achat.',
     offerUnavailable: 'Cette offre est indisponible pour le moment.',
@@ -116,7 +116,7 @@ export const BILLING_CREDIT_FUNDING_COPY = {
     rateUnavailable: 'Les prix des crédits en {currency} sont indisponibles pour le moment. Réessayez dans quelques instants.',
   },
   it: {
-    title: 'Aggiungi crediti al team',
+    title: 'Aggiungi crediti all’organizzazione',
     description: 'I crediti pagano l’utilizzo dei servizi collegati. Gli abbonamenti vengono addebitati a parte.',
     paymentPending: 'È già in corso un pagamento. Completalo prima di iniziare un altro acquisto.',
     offerUnavailable: 'Questa offerta non è disponibile al momento.',

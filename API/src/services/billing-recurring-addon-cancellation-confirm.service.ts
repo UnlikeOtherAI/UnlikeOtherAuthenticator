@@ -25,7 +25,7 @@ import {
   recurringAddonCancellationDigest,
   scopeForSubscription,
 } from './billing-recurring-addon-cancellation-preview.service.js';
-import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import { resolveFinancialTariffContext } from './billing-entitlement.service.js';
 import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js';
 import {
   assertCanManageRecurringAddonScope,
@@ -93,7 +93,7 @@ function assertIntentBinding(
     appKeyId: string;
     serviceId: string;
     orgId: string;
-    requestedTeamId: string;
+    requestedTeamId: string|null;
     requestedByUserId: string;
     idempotencyKey: string;
     subjectFingerprint: string;
@@ -241,7 +241,7 @@ export async function confirmRecurringAddonCancellation(
   },
 ): Promise<BillingRecurringAddonCancellationConfirmationV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const { actor } = await resolveEffectiveTariffContext(
+  const { actor } = await resolveFinancialTariffContext(
     {
       request: params.request,
       actorToken: params.actorToken,
@@ -321,9 +321,15 @@ export async function confirmRecurringAddonCancellation(
   const current = await prisma.billingRecurringAddonSubscription.findFirst({
     where: {
       id: claimed.subscription.id,
+      accountId:claimed.subscription.accountId,
+      checkoutId:claimed.subscription.checkoutId,
+      customerId:claimed.subscription.customerId,
+      catalogId:claimed.subscription.catalogId,
+      stripeSubscriptionId:claimed.subscription.stripeSubscriptionId,
+      scope:claimed.subscription.scope,scopeKey:claimed.subscription.scopeKey,
+      teamId:claimed.subscription.teamId,subscribingUserId:claimed.subscription.subscribingUserId,
       serviceId: params.credential.service.id,
       orgId: params.request.organisationId,
-      OR: [{ scope: 'ORGANISATION', teamId: null }, { teamId: params.request.teamId }],
     },
     include: recurringAddonSubscriptionInclude,
   });

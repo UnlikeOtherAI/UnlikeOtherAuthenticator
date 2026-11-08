@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { deleteOrganisation } from '../../src/services/organisation.service.organisation.js';
 import { createTestDb } from '../helpers/test-db.js';
@@ -18,7 +19,7 @@ describe.skipIf(!hasDatabase)('admin organisation deletion persistence', () => {
   afterAll(async () => {
     if (originalDatabaseUrl === undefined) Reflect.deleteProperty(process.env, 'DATABASE_URL');
     else process.env.DATABASE_URL = originalDatabaseUrl;
-    if (handle) await handle.cleanup();
+    if (handle) await handle.cleanup();vi.unstubAllEnvs();
   });
 
   it('refuses the legacy bypass and preserves all operational records', async () => {
@@ -103,6 +104,7 @@ describe.skipIf(!hasDatabase)('admin organisation deletion persistence', () => {
     await handle!.prisma.billingOrganisationContract.create({
       data: {
         orgId: organisation.id,
+        ...await captureTestOrganisationFinancialBinding(handle!.prisma,organisation.id),
         reference: 'protected-contract',
         name: 'Protected Contract',
       },

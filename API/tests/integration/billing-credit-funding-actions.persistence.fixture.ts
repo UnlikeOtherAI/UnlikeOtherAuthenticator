@@ -74,7 +74,9 @@ export const optionSelection = {
   },
 };
 
-export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
+export let fundingScopeEpoch:Date;
+export async function seedFundingRace(prisma: PrismaClient,historicalTeam=false): Promise<void> {
+  fundingScopeEpoch=(await prisma.billingOrganisationScopeCutover.findUniqueOrThrow({where:{id:1}})).activatedAt;
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
     await tx.user.create({
@@ -106,7 +108,11 @@ export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
     await tx.team.create({
       data: { id: ids.team, orgId: ids.org, name: 'Funding Race Team', slug: 'funding-race' },
     });
-    await tx.billingTeamMode.create({ data: { teamId: ids.team, sandbox: true, revision: 1 } });
+    if(historicalTeam)await tx.billingTeamMode.create({data:{teamId:ids.team,sandbox:true,revision:1}});
+    else {
+      await tx.billingOrganisationMode.create({data:{orgId:ids.org,sandbox:true,revision:1}});
+      await tx.billingOrganisationModeEvent.create({data:{orgId:ids.org,sandbox:true,revision:1}});
+    }
     await tx.teamMember.create({
       data: {
         id: ids.teamMember,
@@ -146,9 +152,9 @@ export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
         id: ids.customer,
         accountId: ids.account,
         orgId: ids.org,
-        teamId: ids.team,
-        scope: BillingAssignmentScope.TEAM,
-        scopeKey: `${ids.org}:${ids.team}`,
+        teamId: historicalTeam?ids.team:null,
+        scope: historicalTeam?BillingAssignmentScope.TEAM:BillingAssignmentScope.ORGANISATION,
+        scopeKey: historicalTeam?`${ids.org}:${ids.team}`:ids.org,
         stripeCustomerId: 'cus_funding_race',
       },
     });
@@ -211,8 +217,8 @@ export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
         accountId: ids.account,
         customerId: ids.customer,
         orgId: ids.org,
-        teamId: ids.team,
-        scopeKey: `${ids.org}:${ids.team}`,
+        teamId: historicalTeam?ids.team:null,scope:historicalTeam?'TEAM':'ORGANISATION',
+        scopeKey: historicalTeam?`${ids.org}:${ids.team}`:ids.org,
       },
     });
     const paymentMethodSummary = { type: 'card', brand: 'visa', last4: '4242' };
@@ -222,7 +228,7 @@ export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
         accountId: ids.account,
         creditAccountId: ids.creditAccount,
         orgId: ids.org,
-        teamId: ids.team,
+        teamId: historicalTeam?ids.team:null,
         serviceId: ids.service,
         appKeyId: ids.appKey,
         policyId: ids.policy,
@@ -308,7 +314,7 @@ export async function seedFundingRace(prisma: PrismaClient): Promise<void> {
 export function fundingActionContext(creditAccount: BillingCreditAccount) {
   const customer = { id: ids.customer, stripeCustomerId: 'cus_funding_race' };
   return {
-    modeRevision: 1,
+    modeRevision: 1,scopeEpoch:fundingScopeEpoch.toISOString(),
     actor: { jti: 'actor-current-action', tv: 0, exp: 2_000_000_000 },
     viewer: { billingManager: true },
     account: stripeAccount,

@@ -7,6 +7,12 @@ vi.mock('../../src/services/internal-admin-lifecycle.service.js', () => ({
   requireLifecycleActor: vi.fn().mockResolvedValue('verified-admin@example.com'),
 }));
 
+// Activation arithmetic/overlap rules are isolated here. Captured epoch/account
+// authority is exercised by billing-financial-source-binding.persistence.test.
+vi.mock('../../src/services/billing-financial-source-binding.service.js',()=>({
+  assertCurrentFinancialSource:vi.fn().mockResolvedValue(undefined),
+}));
+
 const actor = { userId: 'admin_1', tokenVersion: 0, email: 'admin@example.com' };
 
 function version(values?: Record<string, unknown>) {

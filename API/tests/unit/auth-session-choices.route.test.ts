@@ -38,7 +38,7 @@ const prismaMock = vi.hoisted(() => ({
   clientDomain: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
   orgMember: { findMany: vi.fn() },
-  teamMember: { findMany: vi.fn() },
+  team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn() },
   teamInvite: { findMany: vi.fn() },
 }));
 

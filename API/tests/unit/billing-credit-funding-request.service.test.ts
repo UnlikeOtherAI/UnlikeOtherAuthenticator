@@ -10,116 +10,25 @@ import {
 } from '../../src/services/billing-credit-funding-request.service.js';
 import { BILLING_CREDIT_ATTENTION_COPY } from '../../src/services/billing-credit-attention-copy.catalog.js';
 
-function teamMember(userId: string, options: { orgRole?: string; teamRole?: string; active?: boolean } = {}) {
-  return {
-    teamRole: options.teamRole ?? 'member',
-    user: {
-      id: userId,
-      lifecycleStatus: options.active === false ? 'DEACTIVATED' : 'ACTIVE',
-      orgMembers: [{ role: options.orgRole ?? 'member' }],
-    },
-  };
-}
-
-function prisma(rows: unknown[]) {
-  return {
-    teamMember: {
-      findMany: vi.fn().mockImplementation(async (args: { where: { status: string; teamId: string } }) =>
-        rows.filter((candidate) => {
-          const row = candidate as ReturnType<typeof teamMember> & {
-            status?: string;
-            teamId?: string;
-          };
-          return (
-            (row.status ?? 'ACTIVE') === args.where.status &&
-            (!row.teamId || row.teamId === args.where.teamId) &&
-            row.user.lifecycleStatus === 'ACTIVE' &&
-            row.user.orgMembers.length > 0
-          );
-        }),
-      ),
-    },
-  };
-}
-
 describe('billing credit funding request', () => {
-  it('selects only active authorized managers inside the selected team', async () => {
-    const database = prisma([
-      teamMember('team_admin', { teamRole: 'admin' }),
-      teamMember('org_admin', { orgRole: 'admin' }),
-      teamMember('ordinary_member'),
-      teamMember('inactive_user', { teamRole: 'owner', active: false }),
-    ]);
-
-    const recipients = await resolveBillingFundingRequestRecipients(
-      {
-        organisationId: 'org_a',
-        teamId: 'team_a',
-        requesterUserId: 'member_a',
-        organisationPays: false,
-      },
-      { prisma: database as never },
-    );
-
-    expect(recipients).toEqual(['org_admin', 'team_admin']);
-    expect(database.teamMember.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          teamId: 'team_a',
-          status: 'ACTIVE',
-          user: expect.objectContaining({
-            is: expect.objectContaining({
-              lifecycleStatus: 'ACTIVE',
-              orgMembers: { some: { orgId: 'org_a', status: 'ACTIVE' } },
-            }),
-          }),
-        }),
-      }),
-    );
+  it('returns deduplicated manager IDs selected by the fresh organisation authority query', async () => {
+    const findMany=vi.fn().mockResolvedValue([{userId:'org-admin'},{userId:'org-owner'},{userId:'org-admin'}]);
+    const database={organisation:{findFirst:vi.fn().mockResolvedValue({ownerId:'org-owner'})},orgMember:{findMany}};
+    const result=await resolveBillingFundingRequestRecipients({organisationId:'org-a',teamId:'request-team',
+      requesterUserId:'member',organisationPays:true},{prisma:database as never});
+    expect(result).toEqual(['org-admin','org-owner']);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({orgId:'org-a',
+      status:'ACTIVE',userId:{not:'member'},user:expect.objectContaining({lifecycleStatus:'ACTIVE'}),
+      OR:[{role:{in:['owner','admin']}},{userId:'org-owner'}]})}));
+    // No requester-team predicate: real-PG tests establish roles, lifecycle and foreign-org exclusion.
+    expect(JSON.stringify(findMany.mock.calls[0])).not.toContain('request-team');
   });
-
-  it('limits organization-funded requests to active organization managers', async () => {
-    const database = prisma([
-      teamMember('org_owner', { orgRole: 'owner' }),
-      teamMember('team_admin', { teamRole: 'admin' }),
-      teamMember('member'),
-    ]);
-
-    const recipients = await resolveBillingFundingRequestRecipients(
-      {
-        organisationId: 'org_a',
-        teamId: 'team_a',
-        requesterUserId: 'member_a',
-        organisationPays: true,
-      },
-      { prisma: database as never },
-    );
-
-    expect(recipients).toEqual(['org_owner']);
+  it('does not query recipient memberships for an inactive or absent organisation', async () => {
+    const findMany=vi.fn();const database={organisation:{findFirst:vi.fn().mockResolvedValue(null)},orgMember:{findMany}};
+    expect(await resolveBillingFundingRequestRecipients({organisationId:'gone',teamId:'request-team',
+      requesterUserId:'member',organisationPays:false},{prisma:database as never})).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
   });
-
-  it('excludes the requester, wrong-scope managers, revoked memberships, and inactive users', async () => {
-    const database = prisma([
-      teamMember('requester', { teamRole: 'admin' }),
-      { ...teamMember('other_team_admin', { teamRole: 'admin' }), teamId: 'team_b' },
-      { ...teamMember('revoked', { teamRole: 'admin' }), status: 'REMOVED' },
-      teamMember('inactive', { orgRole: 'admin', active: false }),
-      { ...teamMember('missing_org', { teamRole: 'owner' }), user: { id: 'missing_org', lifecycleStatus: 'ACTIVE', orgMembers: [] } },
-    ]);
-
-    const recipients = await resolveBillingFundingRequestRecipients(
-      {
-        organisationId: 'org_a',
-        teamId: 'team_a',
-        requesterUserId: 'requester',
-        organisationPays: false,
-      },
-      { prisma: database as never },
-    );
-
-    expect(recipients).toEqual([]);
-  });
-
   it('keeps a request id stable for the same source scope and UTC day without exposing identifiers', () => {
     const first = billingCreditFundingRequestId({
       accountId: 'account-a',
@@ -354,7 +263,7 @@ describe('billing credit funding request', () => {
       userId: 'member-a',
       organisationId: 'org-a',
       teamId: 'team-a',
-      billingManager: true,
+      billingManager: false,
     });
     const resolveControlledBy = vi.fn().mockResolvedValue({ can_manage: false });
     const resolveRecipients = vi.fn().mockResolvedValue(['org-manager-a']);
@@ -412,6 +321,8 @@ describe('billing credit funding request', () => {
       recipient_user_ids: ['org-manager-a'],
     });
     expect(JSON.stringify(result)).not.toContain('message');
+    expect(resolveCollection).not.toHaveBeenCalled();expect(ensureCreditAccount).not.toHaveBeenCalled();
+    expect(resolveControlledBy).not.toHaveBeenCalled();
   });
 
   it('rejects managers, missing payment collection, or a stale actor before creating a request', async () => {

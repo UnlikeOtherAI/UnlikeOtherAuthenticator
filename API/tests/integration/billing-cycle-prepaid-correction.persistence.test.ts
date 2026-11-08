@@ -37,7 +37,7 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
   let db: TestDb;
   const storage = new MemoryStorage();
   const ids = { user: '', org: '', team: '', service: '', tariff: '',
-    account: '', credit: '', runtimeKey: '' };
+    account: '', credit: '', runtimeKey: '', source: '' };
   const receipts: Array<{ dispatchId: string; receiptId: string;
     cost: string; microcredits: bigint }> = [];
   const month = '2026-08';
@@ -47,28 +47,31 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
     const created = await createTestDb();
     if (!created) throw new Error('DATABASE_URL_REQUIRED');
     db = created;
-    const user = await db.prisma.user.create({ data: {
+    // Immutable historical TEAM sources only. Actual cycle close/replay below
+    // runs every production financial guard; runtime funding is tested separately.
+    await db.prisma.$transaction(async fixture=>{
+      await fixture.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+    const user = await fixture.user.create({ data: {
       email: `${randomUUID()}@example.com`, userKey: `${randomUUID()}@example.com`,
       name: 'Cycle customer',
     } });
     ids.user = user.id;
-    const org = await db.prisma.organisation.create({ data: {
+    const org = await fixture.organisation.create({ data: {
       domain: `${randomUUID()}.example.com`, name: 'Prepaid cycle',
       slug: `prepaid-${randomUUID().slice(0, 10)}`, ownerId: user.id,
     } });
     ids.org = org.id;
-    const team = await db.prisma.team.create({ data: {
+    const team = await fixture.team.create({ data: {
       orgId: org.id, name: 'Prepaid team',
       slug: `prepaid-${randomUUID().slice(0, 10)}`,
     } });
     ids.team = team.id;
-    await db.prisma.billingTeamMode.create({ data: { teamId: team.id, sandbox: true, revision: 1 } });
-    const service = await db.prisma.billingService.create({ data: {
+    const service = await fixture.billingService.create({ data: {
       identifier: `prepaid-cycle-${randomUUID()}`, name: 'Prepaid service',
       tariffHistoryFromMonth: '2026-01',
     } });
     ids.service = service.id;
-    const tariff = await db.prisma.billingTariff.create({ data: {
+    const tariff = await fixture.billingTariff.create({ data: {
       serviceId: service.id, key: 'prepaid', version: 1, name: 'Prepaid',
       mode: BillingTariffMode.STANDARD, collectionMode: BillingCollectionMode.NONE,
       usagePaymentMode: BillingUsagePaymentMode.PREPAID,
@@ -76,21 +79,34 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
       markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD',
     } });
     ids.tariff = tariff.id;
-    const account = await db.prisma.billingStripeAccount.create({ data: {
+    const account = await fixture.billingStripeAccount.create({ data: {
       stripeAccountId: `acct_${randomUUID()}`, livemode: false,
     } });
     ids.account = account.id;
-    const customer = await db.prisma.billingStripeCustomer.create({ data: {
+    const customer = await fixture.billingStripeCustomer.create({ data: {
       accountId: account.id, orgId: org.id, teamId: team.id,
       scope: BillingAssignmentScope.TEAM, scopeKey: `${org.id}:${team.id}`,
     } });
-    const credit = await db.prisma.billingCreditAccount.create({ data: {
+    const credit = await fixture.billingCreditAccount.create({ data: {
       accountId: account.id, customerId: customer.id,
       orgId: org.id, teamId: team.id, scope: BillingAssignmentScope.TEAM,
       scopeKey: `${org.id}:${team.id}`, currency: 'USD',
     } });
     ids.credit = credit.id;
-    const key = await db.prisma.billingLedgerRuntimeKey.create({ data: {
+    const app=await fixture.billingAppKey.create({data:{serviceId:service.id,purpose:'CUSTOMER_LIFECYCLE',
+      name:'Captured cycle',keyPrefix:'cycle',secretDigest:randomUUID(),actorIssuer:'https://cycle.test',
+      actorAudience:'https://uoa.test',actorKeyId:randomUUID(),actorPublicJwk:{kty:'RSA',n:'AQAB',e:'AQAB'},checkoutReturnOrigins:['https://cycle.test']}});
+    const checkout=await fixture.billingStripeCheckoutSession.create({data:{createdAt:new Date('2026-01-01T00:00:00Z'),
+      accountId:account.id,customerId:customer.id,appKeyId:app.id,serviceId:service.id,tariffId:tariff.id,
+      tariffSource:'SERVICE_DEFAULT',orgId:org.id,teamId:team.id,scope:'TEAM',scopeKey:`${org.id}:${team.id}`,
+      actorJti:randomUUID(),requestedByUserId:user.id,successUrlDigest:'a'.repeat(64),cancelUrlDigest:'b'.repeat(64),
+      leaseExpiresAt:new Date('2026-08-01T00:00:00Z')}});
+    const sub=await fixture.billingStripeSubscription.create({data:{createdAt:new Date('2026-01-01T00:00:00Z'),
+      accountId:account.id,customerId:customer.id,checkoutId:checkout.id,serviceId:service.id,tariffId:tariff.id,
+      tariffSource:'SERVICE_DEFAULT',orgId:org.id,teamId:team.id,scope:'TEAM',scopeKey:`${org.id}:${team.id}`,
+      stripeSubscriptionId:'sub_historical_cycle',stripeUsageItemId:'si_historical_cycle',status:'active',livemode:false}});
+    ids.source=sub.id;
+    const key = await fixture.billingLedgerRuntimeKey.create({ data: {
       serviceId: service.id, secretDigest: createHash('sha256')
         .update(randomUUID()).digest('hex'),
       keyPrefix: 'cycle-proof', ledgerAudience: 'https://ledger.example',
@@ -98,10 +114,10 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
     } });
     ids.runtimeKey = key.id;
     const adminDomain = `billing-cycle-${randomUUID()}.example.test`;
-    await db.prisma.domainRole.create({ data: {
+    await fixture.domainRole.create({ data: {
       domain: adminDomain, userId: user.id, role: 'SUPERUSER',
     } });
-    await db.prisma.$transaction(async (tx) => {
+    { const tx=fixture;
       await tx.$executeRaw(Prisma.sql`SELECT set_config(
         'app.admin_auth_domain', ${adminDomain}, true)`);
       const adjustmentId = randomUUID();
@@ -123,15 +139,18 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
         sourceType: 'credit_admin_adjustment', sourceId: adjustmentId,
         occurredAt: new Date('2026-08-01T00:00:01.000Z'),
       } });
-    });
+    }
+  });
   });
 
   afterAll(async () => { await db?.cleanup(); });
 
   async function settle(cost: string, microcredits: bigint, balanceAfter: bigint) {
+    await db.prisma.$transaction(async fixture=>{
+      await fixture.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
     const dispatchId = `dispatch-${randomUUID()}`;
     const receiptId = `receipt-${randomUUID()}`;
-    const reservation = await db.prisma.billingPrepaidReservation.create({ data: {
+    const reservation = await fixture.billingPrepaidReservation.create({ data: {
       dispatchId, requestFingerprint: 'a'.repeat(64), receiptId,
       creditAccountId: ids.credit, tariffId: ids.tariff,
       serviceId: ids.service, providerServiceId: 'provider-test',
@@ -143,7 +162,7 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
       debitedMicrocredits: microcredits, status: 'SETTLED',
       terminalAt: new Date('2026-08-15T12:00:02.000Z'),
     } });
-    await db.prisma.billingCreditEntry.create({ data: {
+    await fixture.billingCreditEntry.create({ data: {
       creditAccountId: ids.credit, serviceId: ids.service,
       ledgerRuntimeKeyId: ids.runtimeKey,
       prepaidReservationId: reservation.id, attributedUserId: ids.user,
@@ -153,7 +172,7 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
       sourceType: 'prepaid_provider_receipt', sourceId: reservation.id,
       occurredAt: new Date('2026-08-15T12:00:02.000Z'),
     } });
-    await db.prisma.billingPaidUsageLiability.create({ data: {
+    await fixture.billingPaidUsageLiability.create({ data: {
       dispatchId, receiptId, serviceId: ids.service,
       providerServiceId: 'provider-test', orgId: ids.org, teamId: ids.team,
       userId: ids.user, billingMonth: month, currency: 'USD',
@@ -162,10 +181,11 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
       ratedQuanta: '0', ratedMicrocredits: microcredits,
     } });
     receipts.push({ dispatchId, receiptId, cost, microcredits });
+    });
   }
 
   const quote = () => ({
-    source: { kind: 'manual' as const, id: 'prepaid-zero-fee-source' },
+    source: { kind: 'stripe' as const, id: ids.source },
     serviceId: ids.service, tariffId: ids.tariff, organisationId: ids.org,
     teamId: ids.team, scope: BillingAssignmentScope.TEAM,
     agreementId: null, billingMonth: month,

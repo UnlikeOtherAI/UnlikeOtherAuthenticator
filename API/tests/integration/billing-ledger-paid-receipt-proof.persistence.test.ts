@@ -1,8 +1,9 @@
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 import { CompactSign, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose';
 import { BillingAssignmentScope, BillingUsagePaymentMode, type BillingTariff } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it,vi } from 'vitest';
 
 import {
   matchUoaPaidReceiptSet, verifyLedgerPaidReceiptSet,
@@ -23,7 +24,7 @@ describe.skipIf(!enabled)('signed paid receipt cohort', () => {
   let signer: CryptoKey;
   const scope = { product: `proof-${randomUUID()}`, organisationId: randomUUID(),
     teamId: randomUUID(), serviceId: randomUUID(), billingMonth: '2026-09' };
-  const tariffId = randomUUID();
+  const tariffId = randomUUID(),proofUserId=randomUUID();
   const paidRows = [
     { dispatchId: `d-${randomUUID()}`, receiptId: `r-${randomUUID()}`,
       rawCost: '0.000000000000000000', ratedMicrocredits: 0n },
@@ -35,6 +36,9 @@ describe.skipIf(!enabled)('signed paid receipt cohort', () => {
     const created = await createTestDb();
     if (!created) throw new Error('DATABASE_URL_REQUIRED');
     db = created;
+    await db.prisma.user.create({data:{id:proofUserId,email:'receipt-proof@example.test',userKey:'receipt-proof@example.test'}});
+    await db.prisma.organisation.create({data:{id:scope.organisationId,ownerId:proofUserId,domain:'proof.example',name:'Receipt proof',slug:'receipt-proof'}});
+    await db.prisma.team.create({data:{id:scope.teamId,orgId:scope.organisationId,name:'Receipt proof',slug:'receipt-proof'}});
     const pair = await generateKeyPair('RS256');
     signer = pair.privateKey as CryptoKey;
     keys = createLocalJWKSet({ keys: [{ ...(await exportJWK(pair.publicKey)),
@@ -52,7 +56,7 @@ describe.skipIf(!enabled)('signed paid receipt cohort', () => {
     }
   });
 
-  afterAll(async () => { await db?.cleanup(); });
+  afterAll(async () => { await db?.cleanup();vi.unstubAllEnvs(); });
 
   async function proof(overrides: Record<string, unknown> = {}): Promise<LedgerPaidReceiptSet> {
     const digest = createHash('sha256').update('ledger-paid-receipt-set-v1:paid\n');
@@ -106,10 +110,10 @@ describe.skipIf(!enabled)('signed paid receipt cohort', () => {
       keyPrefix: 'proof-key', ledgerAudience: 'https://ledger.example',
       sourceDomain: 'proof.example', createdByEmail: 'operator@example.com',
     } });
-    await db.prisma.billingCreditBudgetDispatch.create({ data: {
+    await db.prisma.billingCreditBudgetDispatch.create({ data: { ...await captureTestOrganisationFinancialBinding(db.prisma,scope.organisationId),
       dispatchId: row.dispatchId, contextDigest: 'a'.repeat(64), serviceId: scope.serviceId,
       providerServiceId: 'provider-model', orgId: scope.organisationId,
-      teamId: scope.teamId, userId: randomUUID(), billingMonth: scope.billingMonth,
+      teamId: scope.teamId, userId: proofUserId, billingMonth: scope.billingMonth,
       currency: 'USD', tariffId, frozenMarkupBps: 3000, tariffMode: 'STANDARD',
       paymentMode: 'PAY_AS_YOU_GO', reservedMicrocredits: 1_000_000_000n,
       status: 'SETTLED',

@@ -1,0 +1,6060 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/schemas/billing-organisation-financial-v1.json",
+  "title": "UOA explicit organisation financial lifecycle",
+  "$defs": {
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "region_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "region": {
+          "enum": [
+            "UK",
+            "US",
+            "EUROPE"
+          ]
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id"
+      ]
+    },
+    "region_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "region",
+        "currency",
+        "suggested_region",
+        "suggested_currency",
+        "can_set"
+      ],
+      "properties": {
+        "region": {
+          "oneOf": [
+            {
+              "enum": [
+                "UK",
+                "US",
+                "EUROPE"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "currency": {
+          "oneOf": [
+            {
+              "enum": [
+                "GBP",
+                "USD",
+                "EUR"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "suggested_region": {
+          "enum": [
+            "UK",
+            "US",
+            "EUROPE"
+          ]
+        },
+        "suggested_currency": {
+          "enum": [
+            "GBP",
+            "USD",
+            "EUR"
+          ]
+        },
+        "suggested_from": {
+          "oneOf": [
+            {
+              "const": "billing_country"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "can_set": {
+          "type": "boolean"
+        }
+      }
+    },
+    "top_up_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "offer_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "offer_id"
+      ]
+    },
+    "auto_top_up_setup_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "option_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "option_id"
+      ]
+    },
+    "auto_top_up_update_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "option_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "option_id"
+      ]
+    },
+    "auto_top_up_disable_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id"
+      ]
+    },
+    "auto_top_up_recover_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id"
+      ]
+    },
+    "purchase_status_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "purchase_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "purchase_id"
+      ]
+    },
+    "hosted_redirect_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "redirect_url"
+      ],
+      "properties": {
+        "purchase_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "redirect_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        }
+      }
+    },
+    "purchase_status_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purchase_id",
+        "state",
+        "title",
+        "message",
+        "awaiting_confirmation"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "purchase_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "state": {
+          "enum": [
+            "open",
+            "processing",
+            "requires_action",
+            "succeeded",
+            "failed",
+            "expired",
+            "needs_review"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "awaiting_confirmation": {
+          "type": "boolean"
+        },
+        "continuation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "redirect_url",
+            "purchase_id"
+          ],
+          "properties": {
+            "redirect_url": {
+              "type": "string",
+              "maxLength": 2048,
+              "pattern": "^https://checkout\\.stripe\\.com/"
+            },
+            "purchase_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        }
+      }
+    },
+    "checkout_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "success_url",
+        "cancel_url"
+      ],
+      "properties": {
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "success_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "cancel_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "fixed_seat_quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        }
+      }
+    },
+    "checkout_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkout_session_id",
+        "checkout_url",
+        "expires_at",
+        "tariff"
+      ],
+      "properties": {
+        "checkout_session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "checkout_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "tariff": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "collection_mode",
+            "monthly_subscription",
+            "usage_billing_enabled",
+            "usage_payment_mode",
+            "payment_collection_enabled",
+            "raw_usage_preserved"
+          ],
+          "properties": {
+            "collection_mode": {
+              "type": "string",
+              "enum": [
+                "stripe",
+                "manual",
+                "none"
+              ]
+            },
+            "monthly_subscription": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount_minor",
+                "currency",
+                "charge_basis",
+                "seat_policy",
+                "seat_timing",
+                "amount_role"
+              ],
+              "properties": {
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "charge_basis": {
+                  "enum": [
+                    "flat",
+                    "per_seat"
+                  ]
+                },
+                "seat_policy": {
+                  "enum": [
+                    "automatic",
+                    "fixed",
+                    null
+                  ]
+                },
+                "seat_timing": {
+                  "enum": [
+                    "full_month",
+                    "prorated",
+                    null
+                  ]
+                },
+                "amount_role": {
+                  "enum": [
+                    "monthly_total",
+                    "per_seat_unit"
+                  ]
+                }
+              }
+            },
+            "usage_billing_enabled": {
+              "type": "boolean"
+            },
+            "usage_payment_mode": {
+              "enum": [
+                "prepaid",
+                "pay_as_you_go"
+              ]
+            },
+            "payment_collection_enabled": {
+              "type": "boolean"
+            },
+            "raw_usage_preserved": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "portal_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "return_url"
+      ],
+      "properties": {
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "return_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        }
+      }
+    },
+    "portal_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "portal_url"
+      ],
+      "properties": {
+        "portal_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        }
+      }
+    },
+    "subscription_summary_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "subscription_summary_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "identifier": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "id",
+            "identifier"
+          ]
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "user_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "team_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "user_id",
+            "organisation_id",
+            "team_id"
+          ]
+        },
+        "tariff": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "collection_mode",
+            "monthly_subscription",
+            "usage_billing_enabled",
+            "usage_payment_mode",
+            "payment_collection_enabled",
+            "raw_usage_preserved"
+          ],
+          "properties": {
+            "collection_mode": {
+              "type": "string",
+              "enum": [
+                "stripe",
+                "manual",
+                "none"
+              ]
+            },
+            "monthly_subscription": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount_minor",
+                "currency",
+                "charge_basis",
+                "seat_policy",
+                "seat_timing",
+                "amount_role"
+              ],
+              "properties": {
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "charge_basis": {
+                  "enum": [
+                    "flat",
+                    "per_seat"
+                  ]
+                },
+                "seat_policy": {
+                  "enum": [
+                    "automatic",
+                    "fixed",
+                    null
+                  ]
+                },
+                "seat_timing": {
+                  "enum": [
+                    "full_month",
+                    "prorated",
+                    null
+                  ]
+                },
+                "amount_role": {
+                  "enum": [
+                    "monthly_total",
+                    "per_seat_unit"
+                  ]
+                }
+              }
+            },
+            "usage_billing_enabled": {
+              "type": "boolean"
+            },
+            "usage_payment_mode": {
+              "enum": [
+                "prepaid",
+                "pay_as_you_go"
+              ]
+            },
+            "payment_collection_enabled": {
+              "type": "boolean"
+            },
+            "raw_usage_preserved": {
+              "const": true
+            }
+          }
+        },
+        "assignment": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scope": {
+              "enum": [
+                "team",
+                "organisation",
+                "service_default"
+              ]
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "scope",
+            "id"
+          ]
+        },
+        "stripe_collection_enabled": {
+          "type": "boolean"
+        },
+        "stripe_mode": {
+          "enum": [
+            "live",
+            "test",
+            null
+          ]
+        },
+        "can_manage": {
+          "type": "boolean"
+        },
+        "subscription": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "status": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "scope": {
+                  "enum": [
+                    "team",
+                    "organisation"
+                  ]
+                },
+                "scope_key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "tariff_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "cancel_at_period_end": {
+                  "type": "boolean"
+                },
+                "current_period_start": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "current_period_end": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "billing_phase": {
+                  "enum": [
+                    "calendar_month",
+                    "free_alignment_period",
+                    "unknown"
+                  ]
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "synced_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "scope",
+                "scope_key",
+                "tariff_id",
+                "cancel_at_period_end",
+                "current_period_start",
+                "current_period_end",
+                "billing_phase",
+                "created_at",
+                "synced_at"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "product",
+        "subject",
+        "tariff",
+        "assignment",
+        "stripe_collection_enabled",
+        "stripe_mode",
+        "can_manage",
+        "subscription"
+      ]
+    },
+    "cancellation_preview_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id"
+      ]
+    },
+    "cancellation_preview_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "preview_token",
+        "expires_at",
+        "title",
+        "message",
+        "choice_required",
+        "choices",
+        "direct_services",
+        "indirect_services",
+        "confirm_action"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "preview_token": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 256
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "choice_required": {
+          "type": "boolean"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "description",
+              "service_ids"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "enum": [
+                  "current_service",
+                  "current_and_related_direct_services"
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "service_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "direct_services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "service_id",
+              "product",
+              "name",
+              "display_name",
+              "direct_user_count",
+              "subscription_status"
+            ],
+            "properties": {
+              "service_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "product": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "direct_user_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "subscription_status": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "indirect_services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "product",
+              "name",
+              "display_name",
+              "impact"
+            ],
+            "properties": {
+              "product": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "impact": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "confirm_action": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "path",
+            "label",
+            "idempotency_key",
+            "selection_required",
+            "default_selection"
+          ],
+          "properties": {
+            "method": {
+              "const": "POST"
+            },
+            "path": {
+              "const": "/billing/v1/cancellation/confirm"
+            },
+            "label": {
+              "type": "string"
+            },
+            "idempotency_key": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            },
+            "selection_required": {
+              "type": "boolean"
+            },
+            "default_selection": {
+              "enum": [
+                "current_service",
+                null
+              ]
+            }
+          }
+        }
+      }
+    },
+    "cancellation_confirm_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "preview_token": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 256
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 200
+        },
+        "selection": {
+          "enum": [
+            "current_service",
+            "current_and_related_direct_services",
+            null
+          ]
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "preview_token",
+        "idempotency_key",
+        "selection"
+      ]
+    },
+    "cancellation_confirmation_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "status",
+        "title",
+        "message",
+        "cancelled_services",
+        "indirect_services"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "status": {
+          "const": "confirmed"
+        },
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "cancelled_services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "service_id",
+              "product",
+              "name",
+              "display_name",
+              "status",
+              "effective_at"
+            ],
+            "properties": {
+              "service_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "product": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "effective_at": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "indirect_services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "product",
+              "display_name",
+              "impact"
+            ],
+            "properties": {
+              "product": {
+                "type": "string",
+                "minLength": 1
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "impact": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "addons_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "viewer": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "role",
+                "entitlement_visibility",
+                "description"
+              ],
+              "properties": {
+                "role": {
+                  "const": "billing_manager"
+                },
+                "entitlement_visibility": {
+                  "const": "full_team"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "can_manage_addons"
+              ],
+              "properties": {
+                "can_manage_addons": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "offers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "subscription",
+                  "actions"
+                ],
+                "properties": {
+                  "subscription": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "status",
+                          "display_status",
+                          "scope",
+                          "cancel_at_period_end",
+                          "current_period_start",
+                          "current_period_end",
+                          "id",
+                          "owner_user_id"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          },
+                          "display_status": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "enum": [
+                              "organisation",
+                              "team",
+                              "subscribing_user"
+                            ]
+                          },
+                          "cancel_at_period_end": {
+                            "type": "boolean"
+                          },
+                          "current_period_start": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "current_period_end": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "owner_user_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "viewer": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "role",
+                "entitlement_visibility",
+                "description"
+              ],
+              "properties": {
+                "role": {
+                  "const": "member"
+                },
+                "entitlement_visibility": {
+                  "const": "own_plus_team_status"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "can_manage_addons"
+              ],
+              "properties": {
+                "can_manage_addons": {
+                  "const": false
+                }
+              }
+            },
+            "offers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "subscription",
+                  "actions"
+                ],
+                "properties": {
+                  "subscription": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "status",
+                          "display_status",
+                          "scope",
+                          "cancel_at_period_end",
+                          "current_period_start",
+                          "current_period_end",
+                          "owner_relationship"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          },
+                          "display_status": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "enum": [
+                              "organisation",
+                              "team",
+                              "subscribing_user"
+                            ]
+                          },
+                          "cancel_at_period_end": {
+                            "type": "boolean"
+                          },
+                          "current_period_start": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "current_period_end": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "owner_relationship": {
+                            "enum": [
+                              "organisation",
+                              "team",
+                              "viewer",
+                              "other_team_member"
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "type": "array",
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "required": [
+        "schema_version",
+        "generated_at",
+        "product",
+        "subject",
+        "viewer",
+        "capabilities",
+        "collection",
+        "title",
+        "description",
+        "offers"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "product": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "identifier",
+            "name"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "identifier": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "user_id",
+            "organisation_id",
+            "team_id"
+          ],
+          "properties": {
+            "user_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "team_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "viewer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "role",
+            "entitlement_visibility",
+            "description"
+          ],
+          "properties": {
+            "role": {
+              "enum": [
+                "member",
+                "billing_manager"
+              ]
+            },
+            "entitlement_visibility": {
+              "enum": [
+                "own_plus_team_status",
+                "full_team"
+              ]
+            },
+            "description": {
+              "type": "string"
+            }
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "can_manage_addons"
+          ],
+          "properties": {
+            "can_manage_addons": {
+              "type": "boolean"
+            }
+          }
+        },
+        "collection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stripe_collection_enabled",
+            "stripe_mode"
+          ],
+          "properties": {
+            "stripe_collection_enabled": {
+              "type": "boolean"
+            },
+            "stripe_mode": {
+              "enum": [
+                "test",
+                "live",
+                null
+              ]
+            }
+          }
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "offers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "key",
+              "version",
+              "name",
+              "description",
+              "benefits",
+              "monthly_price",
+              "interval",
+              "available",
+              "unavailable_reason",
+              "entitlement",
+              "subscription",
+              "actions"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "benefits": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "monthly_price": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]*$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "interval": {
+                "const": "month"
+              },
+              "available": {
+                "type": "boolean"
+              },
+              "unavailable_reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "entitlement": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "state",
+                  "display_status",
+                  "description"
+                ],
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "inactive",
+                      "pending",
+                      "active",
+                      "unavailable"
+                    ]
+                  },
+                  "display_status": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                }
+              },
+              "subscription": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "status",
+                      "display_status",
+                      "scope",
+                      "cancel_at_period_end",
+                      "current_period_start",
+                      "current_period_end",
+                      "id",
+                      "owner_user_id"
+                    ],
+                    "properties": {
+                      "status": {
+                        "type": "string"
+                      },
+                      "display_status": {
+                        "type": "string"
+                      },
+                      "scope": {
+                        "enum": [
+                          "organisation",
+                          "team",
+                          "subscribing_user"
+                        ]
+                      },
+                      "cancel_at_period_end": {
+                        "type": "boolean"
+                      },
+                      "current_period_start": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "current_period_end": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "owner_user_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "status",
+                      "display_status",
+                      "scope",
+                      "cancel_at_period_end",
+                      "current_period_start",
+                      "current_period_end",
+                      "owner_relationship"
+                    ],
+                    "properties": {
+                      "status": {
+                        "type": "string"
+                      },
+                      "display_status": {
+                        "type": "string"
+                      },
+                      "scope": {
+                        "enum": [
+                          "organisation",
+                          "team",
+                          "subscribing_user"
+                        ]
+                      },
+                      "cancel_at_period_end": {
+                        "type": "boolean"
+                      },
+                      "current_period_start": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "current_period_end": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "owner_relationship": {
+                        "enum": [
+                          "organisation",
+                          "team",
+                          "viewer",
+                          "other_team_member"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "kind",
+                        "label",
+                        "description",
+                        "enabled",
+                        "disabled_reason",
+                        "request"
+                      ],
+                      "properties": {
+                        "id": {
+                          "const": "subscribe"
+                        },
+                        "kind": {
+                          "const": "hosted_redirect"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "disabled_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "request": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "method",
+                            "path",
+                            "body"
+                          ],
+                          "properties": {
+                            "method": {
+                              "const": "POST"
+                            },
+                            "path": {
+                              "const": "/billing/v1/recurring-addons/checkout"
+                            },
+                            "body": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "product",
+                                "organisation_id",
+                                "team_id",
+                                "user_id",
+                                "offer_id"
+                              ],
+                              "properties": {
+                                "product": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 100
+                                },
+                                "organisation_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "team_id": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 256
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "user_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "billing_context": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 2048
+                                },
+                                "offer_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "kind",
+                        "label",
+                        "description",
+                        "enabled",
+                        "disabled_reason",
+                        "request"
+                      ],
+                      "properties": {
+                        "id": {
+                          "const": "cancel"
+                        },
+                        "kind": {
+                          "const": "confirmation_dialog"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "disabled_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "request": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "method",
+                            "path",
+                            "body"
+                          ],
+                          "properties": {
+                            "method": {
+                              "const": "POST"
+                            },
+                            "path": {
+                              "const": "/billing/v1/recurring-addons/cancellation/preview"
+                            },
+                            "body": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "product",
+                                "organisation_id",
+                                "team_id",
+                                "user_id",
+                                "subscription_id"
+                              ],
+                              "properties": {
+                                "product": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 100
+                                },
+                                "organisation_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "team_id": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 256
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "user_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "billing_context": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 2048
+                                },
+                                "subscription_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "addons_checkout_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "offer_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "offer_id"
+      ]
+    },
+    "addon_cancellation_preview_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "billing_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "subscription_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "subscription_id"
+      ]
+    },
+    "addon_cancellation_preview_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "preview_token",
+        "idempotency_key",
+        "expires_at",
+        "title",
+        "description",
+        "subscription",
+        "confirm_action"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "preview_token": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 256
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 200
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "subscription": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "offer_name",
+            "display_status",
+            "cancellation_effective_at"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "offer_name": {
+              "type": "string"
+            },
+            "display_status": {
+              "type": "string"
+            },
+            "cancellation_effective_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "confirm_action": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "path",
+            "body"
+          ],
+          "properties": {
+            "method": {
+              "const": "POST"
+            },
+            "path": {
+              "const": "/billing/v1/recurring-addons/cancellation/confirm"
+            },
+            "body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "product",
+                "organisation_id",
+                "team_id",
+                "user_id",
+                "preview_token",
+                "idempotency_key",
+                "choice"
+              ],
+              "properties": {
+                "product": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "organisation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "team_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "preview_token": {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 256
+                },
+                "idempotency_key": {
+                  "type": "string",
+                  "minLength": 16,
+                  "maxLength": 200
+                },
+                "choice": {
+                  "const": "cancel_addon"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "addon_cancellation_confirm_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "preview_token",
+        "idempotency_key",
+        "choice"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "preview_token": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 256
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 200
+        },
+        "choice": {
+          "const": "cancel_addon"
+        }
+      }
+    },
+    "addon_cancellation_confirmation_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "status",
+        "title",
+        "description",
+        "cancellation_effective_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "status": {
+          "enum": [
+            "scheduled",
+            "already_scheduled"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "cancellation_effective_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "cycles_list_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "financial_scope"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "financial_scope": {
+          "const": "organisation"
+        },
+        "billing_mode": {
+          "enum": [
+            "live",
+            "sandbox"
+          ]
+        }
+      }
+    },
+    "cycles_list_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "generated_at",
+        "subject",
+        "cycles",
+        "next_cursor"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 2
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "team_id",
+            "user_id"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "team_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "user_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "financial_scope": {
+              "const": "organisation"
+            },
+            "billing_mode": {
+              "enum": [
+                "live",
+                "sandbox"
+              ]
+            }
+          }
+        },
+        "cycles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "cycle_id",
+              "period",
+              "state",
+              "scope",
+              "product",
+              "totals",
+              "document_available"
+            ],
+            "properties": {
+              "cycle_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "correction_of_cycle_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "period": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "month",
+                  "starts_at",
+                  "ends_at"
+                ],
+                "properties": {
+                  "month": {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+                  },
+                  "starts_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "ends_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              },
+              "state": {
+                "enum": [
+                  "open_preview",
+                  "pending_reconciliation",
+                  "finalized",
+                  "adjusted",
+                  "voided"
+                ]
+              },
+              "scope": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "organisation_id",
+                  "team_id",
+                  "cycle_scope",
+                  "payer_scope"
+                ],
+                "properties": {
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "team_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cycle_scope": {
+                    "enum": [
+                      "team",
+                      "organisation"
+                    ]
+                  },
+                  "payer_scope": {
+                    "enum": [
+                      "team",
+                      "organisation"
+                    ]
+                  }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "cycle_scope": {
+                          "const": "organisation"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "team_id": {
+                          "type": "null"
+                        },
+                        "payer_scope": {
+                          "const": "organisation"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "cycle_scope": {
+                          "const": "team"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "team_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "product": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "identifier",
+                  "name"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "identifier": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              },
+              "totals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "currency",
+                    "subscription",
+                    "usage_charge",
+                    "tax",
+                    "gross_total",
+                    "credits_applied",
+                    "total_due",
+                    "total_paid",
+                    "outstanding"
+                  ],
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "subscription": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "usage_charge": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "tax": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "gross_total": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "credits_applied": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "total_due": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "total_paid": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "outstanding": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^-?(0|[1-9][0-9]*)$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "customer_credit_due": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "amount",
+                        "amount_minor",
+                        "currency",
+                        "display"
+                      ],
+                      "properties": {
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                        },
+                        "amount_minor": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)$"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{3}$"
+                        },
+                        "display": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "document_available": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "cycle_detail_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "cycle_id",
+        "financial_scope"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "cycle_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "financial_scope": {
+          "const": "organisation"
+        },
+        "billing_mode": {
+          "enum": [
+            "live",
+            "sandbox"
+          ]
+        }
+      }
+    },
+    "cycle_detail_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cycle_id",
+        "period",
+        "state",
+        "scope",
+        "product",
+        "totals",
+        "document_available",
+        "schema_version",
+        "subscription_lines",
+        "usage_lines",
+        "credits",
+        "documents",
+        "adjustments"
+      ],
+      "properties": {
+        "cycle_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "correction_of_cycle_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "period": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "month",
+            "starts_at",
+            "ends_at"
+          ],
+          "properties": {
+            "month": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "starts_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "ends_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "state": {
+          "enum": [
+            "open_preview",
+            "pending_reconciliation",
+            "finalized",
+            "adjusted",
+            "voided"
+          ]
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "organisation_id",
+            "team_id",
+            "cycle_scope",
+            "payer_scope"
+          ],
+          "properties": {
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "team_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cycle_scope": {
+              "enum": [
+                "team",
+                "organisation"
+              ]
+            },
+            "payer_scope": {
+              "enum": [
+                "team",
+                "organisation"
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "cycle_scope": {
+                    "const": "organisation"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "team_id": {
+                    "type": "null"
+                  },
+                  "payer_scope": {
+                    "const": "organisation"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "cycle_scope": {
+                    "const": "team"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "product": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "identifier",
+            "name"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "identifier": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "totals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "currency",
+              "subscription",
+              "usage_charge",
+              "tax",
+              "gross_total",
+              "credits_applied",
+              "total_due",
+              "total_paid",
+              "outstanding"
+            ],
+            "properties": {
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              "subscription": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "usage_charge": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "tax": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "gross_total": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "credits_applied": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "total_due": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "total_paid": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "outstanding": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "customer_credit_due": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "document_available": {
+          "type": "boolean"
+        },
+        "schema_version": {
+          "const": 2
+        },
+        "subscription_lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "charge_basis",
+              "seat_policy",
+              "seat_timing",
+              "unit_price",
+              "quantity",
+              "active_seat_seconds",
+              "month_seconds",
+              "intervals",
+              "customer_charge"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "label": {
+                "type": "string"
+              },
+              "charge_basis": {
+                "enum": [
+                  "flat",
+                  "per_seat"
+                ]
+              },
+              "seat_policy": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "automatic",
+                  "fixed",
+                  null
+                ]
+              },
+              "seat_timing": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "full_month",
+                  "prorated",
+                  null
+                ]
+              },
+              "unit_price": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "quantity": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "active_seat_seconds": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "month_seconds": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "intervals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "starts_at",
+                    "ends_at",
+                    "quantity"
+                  ],
+                  "properties": {
+                    "starts_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "ends_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "quantity": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                    }
+                  }
+                }
+              },
+              "customer_charge": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "usage_lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "usage_payment_mode",
+              "customer_charge",
+              "credits_consumed"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "usage_payment_mode": {
+                "enum": [
+                  "prepaid",
+                  "pay_as_you_go"
+                ]
+              },
+              "customer_charge": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "credits_consumed": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "usage_payment_mode": {
+                      "const": "prepaid"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "customer_charge": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "credits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "consumed",
+            "opening_balance",
+            "closing_balance",
+            "status"
+          ],
+          "properties": {
+            "consumed": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "waived": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "opening_balance": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "closing_balance": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "enum": [
+                "confirmed",
+                "pending_reconciliation"
+              ]
+            }
+          }
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "document_id",
+              "kind",
+              "format",
+              "state",
+              "number",
+              "issued_at",
+              "customer_total",
+              "download_action"
+            ],
+            "properties": {
+              "document_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "kind": {
+                "enum": [
+                  "monthly_invoice",
+                  "top_up_invoice",
+                  "credit_note",
+                  "usage_breakdown"
+                ]
+              },
+              "format": {
+                "enum": [
+                  "pdf",
+                  "csv"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "pending",
+                  "available"
+                ]
+              },
+              "number": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "issued_at": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "customer_total": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^-?(0|[1-9][0-9]*)$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "download_action": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "method",
+                      "path",
+                      "body"
+                    ],
+                    "properties": {
+                      "method": {
+                        "const": "POST"
+                      },
+                      "path": {
+                        "const": "/billing/v1/cycles/download"
+                      },
+                      "body": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "product",
+                          "organisation_id",
+                          "team_id",
+                          "user_id",
+                          "cycle_id",
+                          "document_id"
+                        ],
+                        "properties": {
+                          "product": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "organisation_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "team_id": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "user_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "cycle_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "document_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "financial_scope": {
+                            "const": "organisation"
+                          },
+                          "billing_mode": {
+                            "enum": [
+                              "live",
+                              "sandbox"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "adjustments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source_cycle_id",
+              "document_id",
+              "kind",
+              "customer_amount",
+              "reason"
+            ],
+            "properties": {
+              "source_cycle_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "document_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "kind": {
+                "enum": [
+                  "charge",
+                  "credit"
+                ]
+              },
+              "customer_amount": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "cycle_download_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "cycle_id",
+        "document_id",
+        "financial_scope"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "cycle_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "document_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "financial_scope": {
+          "const": "organisation"
+        },
+        "billing_mode": {
+          "enum": [
+            "live",
+            "sandbox"
+          ]
+        }
+      }
+    },
+    "invoices_list_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "charge_month",
+        "financial_scope"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "charge_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "financial_scope": {
+          "const": "organisation"
+        },
+        "billing_mode": {
+          "enum": [
+            "live",
+            "sandbox"
+          ]
+        }
+      }
+    },
+    "invoices_list_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "generated_at",
+        "subject",
+        "charge_month",
+        "invoices",
+        "next_cursor"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "team_id",
+            "user_id"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "team_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "user_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "financial_scope": {
+              "const": "organisation"
+            },
+            "billing_mode": {
+              "enum": [
+                "live",
+                "sandbox"
+              ]
+            }
+          }
+        },
+        "charge_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        },
+        "invoices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "invoice_id",
+              "kind",
+              "status",
+              "number",
+              "charged_at",
+              "charge_month",
+              "payments_in_charge_month",
+              "issued_at",
+              "scope",
+              "product_identifiers",
+              "totals",
+              "document_available"
+            ],
+            "properties": {
+              "invoice_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "kind": {
+                "enum": [
+                  "prepaid_purchase",
+                  "monthly_service",
+                  "adjustment",
+                  "credit_note"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "pending_document",
+                  "issued",
+                  "paid",
+                  "partially_paid",
+                  "voided",
+                  "refunded",
+                  "partially_refunded",
+                  "disputed",
+                  "partially_disputed",
+                  "written_off"
+                ]
+              },
+              "number": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "charged_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "charge_month": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+              },
+              "payments_in_charge_month": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "issued_at": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "scope": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "organisation_id",
+                  "team_id",
+                  "scope_type"
+                ],
+                "properties": {
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "team_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "scope_type": {
+                    "enum": [
+                      "team",
+                      "organisation"
+                    ]
+                  }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "scope_type": {
+                          "const": "organisation"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "team_id": {
+                          "type": "null"
+                        }
+                      }
+                    },
+                    "else": {
+                      "properties": {
+                        "team_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "product_identifiers": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "uniqueItems": true
+              },
+              "totals": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "currency",
+                  "gross_total",
+                  "tax",
+                  "credits_applied",
+                  "voided_amount",
+                  "total_due",
+                  "total_paid",
+                  "refunded_amount",
+                  "disputed_amount",
+                  "write_off",
+                  "outstanding"
+                ],
+                "properties": {
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "gross_total": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "tax": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "amount",
+                          "amount_minor",
+                          "currency",
+                          "display"
+                        ],
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                          },
+                          "amount_minor": {
+                            "type": "string",
+                            "pattern": "^[0-9]+$"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "display": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "credits_applied": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "voided_amount": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "total_due": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "total_paid": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "refunded_amount": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "disputed_amount": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "write_off": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "outstanding": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "customer_credit_due": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "document_available": {
+                "type": "boolean"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "status": {
+                      "const": "pending_document"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "number": {
+                      "type": "null"
+                    },
+                    "issued_at": {
+                      "type": "null"
+                    },
+                    "document_available": {
+                      "const": false
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "number": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "issued_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "totals": {
+                      "type": "object",
+                      "properties": {
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "amount",
+                            "amount_minor",
+                            "currency",
+                            "display"
+                          ],
+                          "properties": {
+                            "amount": {
+                              "type": "string",
+                              "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                            },
+                            "amount_minor": {
+                              "type": "string",
+                              "pattern": "^[0-9]+$"
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "display": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "document_available": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "invoice_detail_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "invoice_id",
+        "financial_scope"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "invoice_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "charge_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        },
+        "financial_scope": {
+          "const": "organisation"
+        },
+        "billing_mode": {
+          "enum": [
+            "live",
+            "sandbox"
+          ]
+        }
+      }
+    },
+    "invoice_detail_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pending_document"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "number": {
+                "type": "null"
+              },
+              "issued_at": {
+                "type": "null"
+              },
+              "document_available": {
+                "const": false
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "number": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "totals": {
+                "type": "object",
+                "properties": {
+                  "tax": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "amount",
+                      "amount_minor",
+                      "currency",
+                      "display"
+                    ],
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                      },
+                      "amount_minor": {
+                        "type": "string",
+                        "pattern": "^[0-9]+$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      "display": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "document_available": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pending_document"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "document": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "document": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ],
+      "required": [
+        "invoice_id",
+        "kind",
+        "status",
+        "number",
+        "charged_at",
+        "charge_month",
+        "payments_in_charge_month",
+        "issued_at",
+        "scope",
+        "product_identifiers",
+        "totals",
+        "document_available",
+        "schema_version",
+        "payments",
+        "charges",
+        "document"
+      ],
+      "properties": {
+        "invoice_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "prepaid_purchase",
+            "monthly_service",
+            "adjustment",
+            "credit_note"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending_document",
+            "issued",
+            "paid",
+            "partially_paid",
+            "voided",
+            "refunded",
+            "partially_refunded",
+            "disputed",
+            "partially_disputed",
+            "written_off"
+          ]
+        },
+        "number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "charged_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "charge_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        },
+        "payments_in_charge_month": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "amount",
+            "amount_minor",
+            "currency",
+            "display"
+          ],
+          "properties": {
+            "amount": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?$"
+            },
+            "amount_minor": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "display": {
+              "type": "string"
+            }
+          }
+        },
+        "issued_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "organisation_id",
+            "team_id",
+            "scope_type"
+          ],
+          "properties": {
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "team_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "scope_type": {
+              "enum": [
+                "team",
+                "organisation"
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "scope_type": {
+                    "const": "organisation"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "team_id": {
+                    "type": "null"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "product_identifiers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "uniqueItems": true
+        },
+        "totals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "currency",
+            "gross_total",
+            "tax",
+            "credits_applied",
+            "voided_amount",
+            "total_due",
+            "total_paid",
+            "refunded_amount",
+            "disputed_amount",
+            "write_off",
+            "outstanding"
+          ],
+          "properties": {
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "gross_total": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "tax": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "amount_minor",
+                    "currency",
+                    "display"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                    },
+                    "amount_minor": {
+                      "type": "string",
+                      "pattern": "^[0-9]+$"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    "display": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "credits_applied": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "voided_amount": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "total_due": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "total_paid": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "refunded_amount": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "disputed_amount": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "write_off": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "outstanding": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            },
+            "customer_credit_due": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "amount_minor",
+                "currency",
+                "display"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "display": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "document_available": {
+          "type": "boolean"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "payments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "payment_id",
+              "paid_at",
+              "amount"
+            ],
+            "properties": {
+              "payment_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "paid_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "amount": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "charges": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "line_id",
+              "kind",
+              "label",
+              "amount",
+              "credits_purchased"
+            ],
+            "properties": {
+              "line_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "kind": {
+                "enum": [
+                  "prepaid_credits",
+                  "service_charge",
+                  "adjustment"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "amount": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount",
+                  "amount_minor",
+                  "currency",
+                  "display"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+                  },
+                  "amount_minor": {
+                    "type": "string",
+                    "pattern": "^-?[0-9]+$"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "display": {
+                    "type": "string"
+                  }
+                }
+              },
+              "credits_purchased": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "document": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "document_id",
+                "format",
+                "number",
+                "issued_at",
+                "download_action"
+              ],
+              "properties": {
+                "document_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "format": {
+                  "const": "pdf"
+                },
+                "number": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "issued_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "download_action": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "method",
+                    "path",
+                    "body"
+                  ],
+                  "properties": {
+                    "method": {
+                      "const": "POST"
+                    },
+                    "path": {
+                      "const": "/billing/v1/invoices/download"
+                    },
+                    "body": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "product",
+                        "organisation_id",
+                        "team_id",
+                        "user_id",
+                        "invoice_id",
+                        "document_id"
+                      ],
+                      "properties": {
+                        "product": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "organisation_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "team_id": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "user_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "invoice_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "document_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "financial_scope": {
+                          "const": "organisation"
+                        },
+                        "billing_mode": {
+                          "enum": [
+                            "live",
+                            "sandbox"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "invoice_download_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id",
+        "invoice_id",
+        "document_id",
+        "financial_scope"
+      ],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "invoice_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "document_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "financial_scope": {
+          "const": "organisation"
+        },
+        "billing_mode": {
+          "enum": [
+            "live",
+            "sandbox"
+          ]
+        }
+      }
+    },
+    "error_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "type": "string",
+          "minLength": 1
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      }
+    }
+  }
+}

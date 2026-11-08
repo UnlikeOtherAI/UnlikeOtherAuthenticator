@@ -1,7 +1,4 @@
-import type {
-  BillingStatementAction,
-  BillingStatementV1,
-} from '../contracts/billing-statement-v1.js';
+import type { BillingStatementV1, BillingOrganisationSubscriptionV1 } from '../contracts/billing-statement-v1.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingSubscriptionCopy } from './billing-subscription-copy.catalog.js';
@@ -13,7 +10,7 @@ import {
 
 type SubscriptionSummary = Awaited<ReturnType<typeof getStripeSubscriptionSummary>>;
 
-function actionBody(request: BillingSubscriptionRequest): Record<string, string> {
+function actionBody(request: BillingSubscriptionRequest): Record<string, string|null> {
   return {
     product: request.product,
     organisation_id: request.organisationId,
@@ -22,6 +19,10 @@ function actionBody(request: BillingSubscriptionRequest): Record<string, string>
   };
 }
 
+export function billingStatementActions(summary:SubscriptionSummary, request:BillingSubscriptionRequest & {teamId:string},
+  credential:VerifiedBillingAppKey,locale?:BillingCustomerLocale):Pick<BillingStatementV1,'capabilities'|'actions'>;
+export function billingStatementActions(summary:SubscriptionSummary,request:BillingSubscriptionRequest,
+  credential:VerifiedBillingAppKey,locale?:BillingCustomerLocale):Pick<BillingOrganisationSubscriptionV1,'capabilities'|'actions'>;
 export function billingStatementActions(
   summary: SubscriptionSummary,
   request: BillingSubscriptionRequest,
@@ -29,7 +30,7 @@ export function billingStatementActions(
   locale?: BillingCustomerLocale,
 ): {
   capabilities: BillingStatementV1['capabilities'];
-  actions: BillingStatementAction[];
+  actions: BillingOrganisationSubscriptionV1['actions'];
 } {
   const subscription = summary.subscription;
   const canManage = summary.can_manage;

@@ -12,6 +12,7 @@ import {
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { collectContractFundingEvidence } from './billing-contract-funding-evidence.service.js';
+import { invoiceIssuerSnapshot,invoiceBuyerSnapshot } from './billing-invoice-profile-snapshot.service.js';
 import { writeInvoiceFinancialAllocations } from './billing-invoice-financial-allocation.service.js';
 import { collectManualInvoicePaidCohort, writeManualInvoicePaidCohort } from
   './billing-invoice-paid-receipt-cohort.service.js';
@@ -57,53 +58,6 @@ export function closedBillingMonthPeriod(
     throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_MONTH_NOT_CLOSED');
   }
   return { startsAt, endsAt };
-}
-
-function profileSnapshot(profile: {
-  id: string;
-  legalName: string;
-  billingEmail: string;
-  taxIdentifier: string | null;
-  [key: string]: unknown;
-}) {
-  return {
-    profile_id: profile.id,
-    legal_name: profile.legalName,
-    billing_email: profile.billingEmail,
-    tax_identifier: profile.taxIdentifier,
-  };
-}
-
-function issuerSnapshot(profile: {
-  id: string;
-  legalName: string;
-  tradingName: string | null;
-  billingEmail: string;
-  address: Prisma.JsonValue;
-  taxIdentifier: string | null;
-  companyRegistrationNumber: string | null;
-}) {
-  return {
-    ...profileSnapshot(profile),
-    trading_name: profile.tradingName,
-    address: profile.address,
-    company_registration_number: profile.companyRegistrationNumber,
-  };
-}
-
-function buyerSnapshot(profile: {
-  id: string;
-  legalName: string;
-  billingEmail: string;
-  billingAddress: Prisma.JsonValue;
-  taxIdentifier: string | null;
-  purchaseOrderReference: string | null;
-}) {
-  return {
-    ...profileSnapshot(profile),
-    billing_address: profile.billingAddress,
-    purchase_order_reference: profile.purchaseOrderReference,
-  };
 }
 
 function digest(value: unknown): string {
@@ -156,6 +110,8 @@ export async function calculateBillingContractInvoice(
   if (!contract || !version) {
     throw new AppError('NOT_FOUND', 404, 'BILLING_CONTRACT_VERSION_NOT_EFFECTIVE');
   }
+  const accountId=contract.billingAccountId;
+  if(!accountId)throw new AppError('BAD_REQUEST',409,'BILLING_INVOICE_ACCOUNT_BINDING_RECONCILIATION_REQUIRED');
   const [issuer, buyer] = await Promise.all([
     prisma.billingInvoiceIssuerProfile.findFirst({
       where: { id: params.issuerProfileId, active: true },
@@ -193,6 +149,7 @@ export async function calculateBillingContractInvoice(
             serviceId: term.serviceId,
             tariffId: term.tariffId,
             organisationId: contract.orgId,
+            accountId,
             billingMonth: params.billingMonth,
             startsAt: period.startsAt,
             endsAt: period.endsAt,
@@ -293,10 +250,11 @@ export async function calculateBillingContractInvoice(
   if (creditsAppliedMinor > subtotalMinor) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_INVOICE_CREDIT_EXCEEDS_TOTAL');
   }
-  const issuerData = issuerSnapshot(issuer);
-  const buyerData = buyerSnapshot(buyer);
+  const issuerData = invoiceIssuerSnapshot(issuer);
+  const buyerData = invoiceBuyerSnapshot(buyer);
   const calculationDigest = digest({
     contract_id: contract.id,
+    account_id:accountId,
     contract_version_id: version.id,
     billing_month: params.billingMonth,
     currency: version.currency,

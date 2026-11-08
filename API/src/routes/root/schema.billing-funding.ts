@@ -90,23 +90,21 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/billing/v1/credits',
     description:
-      'Settle one exact team-wide Ledger portfolio cursor across every connected service and return the shared Remaining credits projection. Billing managers receive full team attribution and funding metadata; members receive only their own usage plus team-safe aggregates.',
+      'Superseded team aggregate read. Verify the current organisation billing manager, then require the organisation overview without metering or settlement side effects. Ordinary members cannot read finances.',
     auth: lifecycleAuth,
     body: fundingSubject,
     response: {
-      200: 'BillingCreditsV1 exactly matching /schemas/billing-credits-v1.json',
       '401/403': 'Invalid purpose-bound app key, actor, product, membership, or subject',
-      '409': 'The Ledger cursor conflicts with an already-pinned exact-team snapshot',
-      '502/503': 'Ledger portfolio evidence or Stripe collection context is unavailable; payment-provider account resolution failures return 503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE',
+      '409': 'BILLING_ORGANISATION_OVERVIEW_REQUIRED; use /billing/v1/organisation/overview and preserve the session',
     },
     notes:
-      'Settlement is deterministic, serializable, and cursor-idempotent. Available credits stop at zero while UOA retains the full centrally rated service/user liability; only a verified reversal may create debt. Products render the returned model and never rate or reallocate credits locally. With x-uoa-billing-credits-protocol: 2.1.0 the one-time offers are in the organisation billing region currency (USD, EUR or GBP; USD until a region is chosen) and a GBP or EUR offer carries credit_rate; older versions receive the USD offers. With 2.2.0 the automatic reload options are in that currency too, each with threshold_value (compared with the lot-valued balance) and credit_rate; older versions receive the USD options. With 2.3.0 credit_balance.value, the value of each recent entry and region_rate show what credits are worth in the region currency; charges stay in credits.',
+      'The old strict credits schema remains published. The organisation overview owns current balance, funding and attention independently of metering. Member Ask for credits uses its direct selected-team POST and needs no financial read.',
   },
   {
     method: 'POST',
     path: '/billing/v1/credits/funding-request',
     description:
-      'Resolve current eligible billing managers for a member’s exact team credit account without sending a message or claiming one was sent.',
+      'Nonfinancial selected-team member request: resolve current organisation billing managers without reading a wallet, choosing money or claiming a notification was sent.',
     auth: lifecycleAuth,
     body: fundingSubject,
     response: {
@@ -189,17 +187,17 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/billing/v1/credits/auto-top-up/disable',
     description:
-      'Disable future automatic top-ups for the exact team without changing remaining credits.',
+      'Revoke future automatic top-ups for the current organisation payer without changing confirmed credits. No Stripe, catalog or FX read is required.',
     auth: lifecycleAuth,
     body: fundingSubject,
     response: {
       204: 'Automatic top-up disabled idempotently',
-      '401/403': 'Invalid app key, actor, exact-team manager, or subject',
+      '401/403': 'Invalid app key, actor, current organisation billing manager, or selected-team admission',
       409: 'Current consent or authorization conflicts with the requested change',
-      503: 'Stripe collection context unavailable',
+      503: 'Named captured-account binding or database unavailable',
     },
     notes:
-      'An unresolved payment does not prevent disabling future automatic charges. The original attempt stays bound to its immutable consent; late verified settlement cannot reactivate automatic top-up.',
+      'The original displayed billing_context and current org authority remain required, including when collection is disabled or offer/FX discovery fails. An unresolved payment does not prevent revocation. Its original attempt and consent remain captured; late settlement cannot reactivate automatic top-up.',
   },
   {
     method: 'POST',

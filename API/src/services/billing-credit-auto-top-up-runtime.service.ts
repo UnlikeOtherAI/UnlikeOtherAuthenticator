@@ -1,11 +1,4 @@
-import {
-  BillingAppKeyPurpose,
-  BillingAssignmentScope,
-  BillingCreditAutoTopUpAttemptStatus,
-  BillingCreditAutoTopUpState,
-  Prisma,
-  type PrismaClient,
-} from '@prisma/client';
+import { BillingAppKeyPurpose, BillingCreditAutoTopUpAttemptStatus, BillingCreditAutoTopUpState, Prisma, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
 
@@ -152,8 +145,8 @@ function assertAttemptBinding(attempt: DispatchAttempt, account: StripeAccountCo
     customer.accountId !== account.id ||
     customer.orgId !== credit.orgId ||
     customer.teamId !== credit.teamId ||
-    customer.scope !== BillingAssignmentScope.TEAM ||
-    customer.scopeKey !== `${credit.orgId}:${credit.teamId}` ||
+    customer.scope !== credit.scope ||
+    customer.scopeKey !== credit.scopeKey ||
     !customer.stripeCustomerId ||
     attempt.creditAccountId !== credit.id ||
     attempt.catalog.accountId !== account.id ||

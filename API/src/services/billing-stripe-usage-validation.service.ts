@@ -6,6 +6,7 @@ import {
   type NormalizedMeteringUsage,
 } from './billing-metering.types.js';
 import { currencyMinorDigits } from './billing-money.service.js';
+import { organisationSubscriptionCustomerScopeKey } from './billing-subscription-customer-scope.service.js';
 import { rateMeteringByCaller } from './billing-rating.service.js';
 
 const STRIPE_METER_FRACTION_DIGITS = 6;
@@ -151,7 +152,9 @@ export function assertStripeUsageSubscription(
     subscription.customer.orgId !== subscription.orgId ||
     subscription.customer.teamId !== subscription.teamId ||
     subscription.customer.scope !== subscription.scope ||
-    subscription.customer.scopeKey !== subscription.scopeKey ||
+    (subscription.customer.scopeKey !== subscription.scopeKey && !(subscription.scope==='ORGANISATION'&&
+      subscription.scopeKey===subscription.orgId&&subscription.customer.scopeKey===
+        organisationSubscriptionCustomerScopeKey(subscription.orgId,subscription.tariff.currency))) ||
     !price ||
     price.accountId !== subscription.accountId ||
     price.tariffId !== subscription.tariffId ||

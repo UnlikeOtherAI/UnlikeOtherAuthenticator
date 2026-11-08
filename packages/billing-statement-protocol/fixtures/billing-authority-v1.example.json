@@ -1,0 +1,163 @@
+{
+  "capabilities": {
+    "organisation_manager": {
+      "schema_version": 2,
+      "generated_at": "2026-11-08T12:00:00.000Z",
+      "subject": {
+        "product": "nessie",
+        "organisation_id": "org_example",
+        "team_id": "team_example",
+        "user_id": "user_example"
+      },
+      "access": "organisation_manager",
+      "financial_scope": {
+        "kind": "organisation",
+        "organisation_id": "org_example",
+        "mode": "live",
+        "revision": 0,
+        "epoch": "2026-11-08T00:00:00.000Z"
+      }
+    },
+    "team_reader": {
+      "schema_version": 2,
+      "generated_at": "2026-11-08T12:00:00.000Z",
+      "subject": {
+        "product": "nessie",
+        "organisation_id": "org_example",
+        "team_id": "team_example",
+        "user_id": "user_example"
+      },
+      "access": "team_reader",
+      "team_scope": {
+        "kind": "team",
+        "product": "nessie",
+        "organisation_id": "org_example",
+        "team_id": "team_example"
+      },
+      "overview_request": {
+        "method": "POST",
+        "path": "/billing/v1/team/overview",
+        "body": {
+          "product": "nessie",
+          "organisation_id": "org_example",
+          "team_id": "team_example",
+          "user_id": "user_example"
+        }
+      }
+    },
+    "none": {
+      "schema_version": 2,
+      "generated_at": "2026-11-08T12:00:00.000Z",
+      "subject": {
+        "product": "nessie",
+        "organisation_id": "org_example",
+        "team_id": "team_example",
+        "user_id": "user_example"
+      },
+      "access": "none"
+    }
+  },
+  "team_overview": {
+    "schema_version": 1,
+    "generated_at": "2026-11-08T12:00:00.000Z",
+    "subject": {
+      "product": "nessie",
+      "organisation_id": "org_example",
+      "team_id": "team_example",
+      "user_id": "user_example"
+    },
+    "team_scope": {
+      "kind": "team",
+      "product": "nessie",
+      "organisation_id": "org_example",
+      "team_id": "team_example"
+    },
+    "title": "Team usage",
+    "description": "Read-only records for this team. Organisation owners and admins manage organisation billing.",
+    "team": {
+      "id": "team_example",
+      "name": "Example team"
+    },
+    "product": {
+      "id": "service_example",
+      "identifier": "nessie",
+      "name": "Nessie"
+    },
+    "period": {
+      "month": "2026-11",
+      "starts_at": "2026-11-01T00:00:00.000Z",
+      "ends_at": "2026-12-01T00:00:00.000Z"
+    },
+    "sections": {
+      "activity": {
+        "state": "confirmed",
+        "message": "Activity recorded for this team.",
+        "data": {
+          "as_of": "2026-11-08T12:00:00.000Z",
+          "recorded_calls": {
+            "quantity": "12",
+            "display": "12",
+            "label": "Recorded calls"
+          }
+        }
+      },
+      "recorded_credit_usage": {
+        "state": "confirmed",
+        "message": "Recorded usage is shown by its original billing source.",
+        "data": {
+          "as_of": "2026-11-08T12:00:00.000Z",
+          "sources": [
+            {
+              "source_ref": "tbs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "mode": "live",
+              "label": "Live usage",
+              "recorded_usage": {
+                "credits": "100",
+                "display": "100 credits",
+                "usd_equivalent": {
+                  "amount": "0.1",
+                  "currency": "USD",
+                  "display": "$0.10"
+                }
+              },
+              "waived_usage": {
+                "credits": "0",
+                "display": "0 credits",
+                "usd_equivalent": {
+                  "amount": "0",
+                  "currency": "USD",
+                  "display": "$0.00"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "retained_credits": {
+        "state": "confirmed",
+        "message": "Retained team credit records are history. New organisation wallets start fresh.",
+        "data": {
+          "as_of": "2026-11-08T12:00:00.000Z",
+          "records": [
+            {
+              "record_id": "legacy_team_wallet",
+              "source_ref": "tbs_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "mode": "sandbox",
+              "label": "Sandbox history",
+              "recorded_balance": {
+                "credits": "500",
+                "display": "500 credits",
+                "usd_equivalent": {
+                  "amount": "0.5",
+                  "currency": "USD",
+                  "display": "$0.50"
+                }
+              },
+              "recorded_at": "2026-11-01T00:00:00.000Z"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

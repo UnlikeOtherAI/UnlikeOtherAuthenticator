@@ -33,17 +33,26 @@ describe('embedded Kelpie original host authority with PostgreSQL', () => {
     await Promise.all(apps.map(app => app.close())); await disconnectPrisma(); await handle?.cleanup();
     process.env = previous; resetAccessTokenKeyCache(); vi.unstubAllGlobals();
   });
-  async function fixture() {
+  async function fixture(options: { orgRole?: 'owner' | 'admin' | 'member'; teamMember?: boolean } = {}) {
     const db = handle.prisma; const domain = `host-${randomUUID()}.example.com`;
     const resource = `https://${domain}/api/kelpie/connect`; process.env.KELPIE_CONNECT_RESOURCE = resource;
     const domainHash = await seedDomainSecret(db, domain, TEST_SHARED_SECRET);
     const client = await db.clientDomain.findUniqueOrThrow({ where: { domain } });
     const user = await db.user.create({ data: { email: `${randomUUID()}@example.test`, userKey: randomUUID() } });
     await db.domainRole.create({ data: { domain, userId: user.id, role: 'USER' } });
-    const org = await db.organisation.create({ data: { domain, ownerId: user.id, name: 'Host', slug: randomUUID() } });
+    const orgRole = options.orgRole ?? 'owner';
+    const owner = orgRole === 'owner' ? user : await db.user.create({ data: {
+      email: `${randomUUID()}@example.test`, userKey: randomUUID(),
+    } });
+    const org = await db.organisation.create({ data: { domain, ownerId: owner.id, name: 'Host', slug: randomUUID() } });
     const team = await db.team.create({ data: { orgId: org.id, name: 'Host', slug: randomUUID(), isDefault: true } });
-    await db.orgMember.create({ data: { orgId: org.id, userId: user.id, role: 'owner' } });
-    await db.teamMember.create({ data: { teamId: team.id, userId: user.id, teamRole: 'owner' } });
+    if (owner.id !== user.id) await db.orgMember.create({ data: {
+      orgId: org.id, userId: owner.id, role: 'owner',
+    } });
+    await db.orgMember.create({ data: { orgId: org.id, userId: user.id, role: orgRole } });
+    if (options.teamMember !== false) await db.teamMember.create({ data: {
+      teamId: team.id, userId: user.id, teamRole: orgRole === 'member' ? 'member' : 'owner',
+    } });
     const familyId = randomUUID(); const expiresAt = new Date(Date.now() + 600_000);
     await db.refreshToken.create({ data: { familyId, userId: user.id, domain, clientId: domainHash,
       configUrl: `https://${domain}/config`, orgId: org.id, teamId: team.id, tokenHash: randomUUID(),
@@ -131,7 +140,7 @@ describe('embedded Kelpie original host authority with PostgreSQL', () => {
   });
   it.each(['proof', 'family', 'epoch', 'person', 'domain', 'role', 'team', 'factor'] as const)(
     'refuses %s revocation on both account requests and existing gateway tickets', async reason => {
-      const f = await fixture(); const token = await f.session();
+      const f = await fixture({ orgRole: reason === 'team' ? 'member' : 'owner' }); const token = await f.session();
       const connected = await f.connect(token); expect(connected.statusCode).toBe(200);
       const ticket = connected.json().connection_ticket;
       if (reason === 'proof') await f.db.sessionAssurance.update({ where: { id: f.proof.assurance.id }, data: { revokedAt: new Date() } });
@@ -142,6 +151,22 @@ describe('embedded Kelpie original host authority with PostgreSQL', () => {
       if (reason === 'role') await f.db.domainRole.delete({ where: { domain_userId: { domain: f.domain, userId: f.user.id } } });
       if (reason === 'team') await f.db.teamMember.update({ where: { teamId_userId: { teamId: f.team.id, userId: f.user.id } }, data: { status: 'REMOVED' } });
       if (reason === 'factor') await f.db.user.update({ where: { id: f.user.id }, data: { twoFaEnabled: true } });
+      expect((await f.request(token)).statusCode).toBeGreaterThanOrEqual(400);
+      expect((await f.validate(ticket)).statusCode).toBeGreaterThanOrEqual(400);
+    });
+
+  it.each(['owner', 'admin'] as const)(
+    'admits current org %s without TeamMembers and refuses revoked org membership', async orgRole => {
+      const f = await fixture({ orgRole, teamMember: false });
+      expect(await f.db.teamMember.count({ where: { userId: f.user.id } })).toBe(0);
+      const token = await f.session();
+      const connected = await f.connect(token); expect(connected.statusCode).toBe(200);
+      const ticket = connected.json().connection_ticket;
+      expect((await f.request(token)).statusCode).toBe(200);
+      expect((await f.validate(ticket)).statusCode).toBe(200);
+      expect(await f.db.teamMember.count({ where: { userId: f.user.id } })).toBe(0);
+      await f.db.orgMember.update({ where: { orgId_userId: { orgId: f.org.id, userId: f.user.id } },
+        data: { status: 'REMOVED' } });
       expect((await f.request(token)).statusCode).toBeGreaterThanOrEqual(400);
       expect((await f.validate(ticket)).statusCode).toBeGreaterThanOrEqual(400);
     });

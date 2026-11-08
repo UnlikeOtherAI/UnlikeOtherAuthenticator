@@ -155,6 +155,7 @@ function prismaMock(options?: {
         ],
       ),
     },
+    team: { findMany: vi.fn().mockResolvedValue([]) },
     groupMember: {
       findMany: vi.fn(),
     },

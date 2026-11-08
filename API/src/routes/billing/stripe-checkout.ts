@@ -7,7 +7,7 @@ import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth
 import { billingCheckoutTariffJsonSchema } from '../../contracts/billing-statement-v1.js';
 import { createStripeCheckoutSession } from '../../services/billing-stripe-checkout.service.js';
 import { AppError } from '../../utils/errors.js';
-import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import { BillingFinancialSubjectRequestSchema as BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 
 const CheckoutRequestSchema = BillingSubjectRequestSchema.extend({
   billing_context: BillingContextSchema,

@@ -4,6 +4,10 @@ import {
   BillingAssignmentScope,
 } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('../../src/services/billing-financial-source-binding.service.js',()=>({
+  captureOrganisationFinancialSource:vi.fn().mockResolvedValue({billingAccountId:'captured-account',
+    billingScopeEpoch:new Date('2026-11-08T00:00:00Z'),billingModeRevision:0}),
+}));
 
 import {
   createCommercialAdjustment,
@@ -137,6 +141,7 @@ describe('UOA commercial adjustments', () => {
     findMany.mockResolvedValue([
       {
         id: 'monthly',
+        billingAccountId:'captured-account',
         cadence: BillingAdjustmentCadence.MONTHLY,
         active: false,
         startsAt: new Date('2026-06-01T00:00:00.000Z'),
@@ -144,6 +149,7 @@ describe('UOA commercial adjustments', () => {
       },
       {
         id: 'used_once',
+        billingAccountId:'captured-account',
         cadence: BillingAdjustmentCadence.ONE_TIME,
         active: false,
         startsAt: new Date('2026-07-05T00:00:00.000Z'),
@@ -164,11 +170,22 @@ describe('UOA commercial adjustments', () => {
         organisationId: 'org_1',
         teamId: 'team_1',
         startsAt: new Date('2026-07-01T00:00:00.000Z'),
+        accountId:'captured-account',
         endsAt: new Date('2026-08-01T00:00:00.000Z'),
       },
       { prisma: prisma as never },
     );
 
     expect(result.map((row) => row.id)).toEqual(['monthly', 'used_once']);
+  });
+  it('excludes another captured account and holds genuinely unbound applicable money',async()=>{
+    const {prisma,findMany}=setup(),input={serviceId:'service_1',organisationId:'org_1',teamId:'team_1',accountId:'live',
+      startsAt:new Date('2030-01-01'),endsAt:new Date('2030-02-01')};
+    const row={cadence:BillingAdjustmentCadence.MONTHLY,active:true,startsAt:new Date('2030-01-01'),deactivatedAt:null};
+    findMany.mockResolvedValue([{...row,id:'selected',billingAccountId:'live'},{...row,id:'retained',billingAccountId:'test'}]);
+    expect((await listApplicableCommercialAdjustments(input,{prisma:prisma as never})).map(row=>row.id)).toEqual(['selected']);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({OR:[{billingAccountId:'live'},{billingAccountId:null}]})}));
+    findMany.mockResolvedValue([{...row,id:'unbound',billingAccountId:null}]);
+    await expect(listApplicableCommercialAdjustments(input,{prisma:prisma as never})).rejects.toThrow('BILLING_ADJUSTMENT_BINDING_RECONCILIATION_REQUIRED');
   });
 });

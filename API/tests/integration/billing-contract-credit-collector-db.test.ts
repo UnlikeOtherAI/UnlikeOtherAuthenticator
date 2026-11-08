@@ -1,3 +1,5 @@
+import { createContractCreditWallet } from '../helpers/contract-credit-wallet.js';
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
 import {
   BillingAppKeyPurpose,
   BillingAssignmentScope,
@@ -12,7 +14,7 @@ import {
   Prisma,
   UserRole,
 } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it,vi } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -27,7 +29,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
   });
 
   afterAll(async () => {
-    await db?.cleanup();
+    await db?.cleanup();vi.unstubAllEnvs();
   });
 
   it('credits funded usage once and invoices only the uncovered remainder', async () => {
@@ -93,8 +95,9 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         scopeKey: org.id,
       },
     });
+    const binding=await captureTestOrganisationFinancialBinding(db.prisma,org.id);
     const contract = await db.prisma.billingOrganisationContract.create({
-      data: { orgId: org.id, reference: 'credit-contract', name: 'Credit Contract' },
+      data: { ...binding,orgId: org.id, reference: 'credit-contract', name: 'Credit Contract' },
     });
     const version = await db.prisma.billingOrganisationContractVersion.create({
       data: {
@@ -103,7 +106,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         usageMarkupBps: 2000,
         currency: 'USD',
         paymentTermsDays: 30,
-        effectiveFromMonth: '2026-06',
+        effectiveFromMonth: '2030-06',
       },
     });
     await db.prisma.billingContractServiceTerm.create({
@@ -119,71 +122,10 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
       where: { id: contract.id },
       data: {
         status: BillingOrganisationContractStatus.ACTIVE,
-        activatedAt: new Date('2026-06-01T00:00:00.000Z'),
+        activatedAt: new Date('2030-06-01T00:00:00.000Z'),
       },
     });
-    const stripeAccount = await db.prisma.billingStripeAccount.create({
-      data: { stripeAccountId: 'acct_credit_contract_test', livemode: false },
-    });
-    const customer = await db.prisma.billingStripeCustomer.create({
-      data: {
-        accountId: stripeAccount.id,
-        orgId: org.id,
-        teamId: team.id,
-        scope: BillingAssignmentScope.TEAM,
-        scopeKey: `${org.id}:${team.id}`,
-        stripeCustomerId: 'cus_credit_contract_test',
-      },
-    });
-    const creditAccount = await db.prisma.billingCreditAccount.create({
-      data: {
-        accountId: stripeAccount.id,
-        customerId: customer.id,
-        orgId: org.id,
-        teamId: team.id,
-        scopeKey: `${org.id}:${team.id}`,
-        currency: 'USD',
-      },
-    });
-
-    const fundingAdjustmentId = 'credit_contract_funding_adjustment';
-    const fundingEntryId = 'credit_contract_funding_entry';
-    await db.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(
-        Prisma.sql`SELECT set_config('app.admin_auth_domain', ${adminDomain}, true)`,
-      );
-      await tx.billingCreditAdminAdjustment.create({
-        data: {
-          id: fundingAdjustmentId,
-          accountId: stripeAccount.id,
-          creditAccountId: creditAccount.id,
-          orgId: org.id,
-          teamId: team.id,
-          signedAmountMicrocredits: 5_000_000_000n,
-          reason: 'Contract invoice integration funding',
-          idempotencyKey: 'credit-contract-funding',
-          createdByUserId: owner.id,
-          createdByEmail: owner.email,
-          createdByAdminDomain: adminDomain,
-          creditEntryId: fundingEntryId,
-        },
-      });
-      await tx.billingCreditEntry.create({
-        data: {
-          id: fundingEntryId,
-          creditAccountId: creditAccount.id,
-          direction: BillingCreditEntryDirection.CREDIT,
-          kind: BillingCreditEntryKind.ADJUSTMENT,
-          amountMicrocredits: 5_000_000_000n,
-          balanceAfterMicrocredits: 5_000_000_000n,
-          currency: 'USD',
-          idempotencyKey: 'credit-contract-funding',
-          sourceType: 'credit_admin_adjustment',
-          sourceId: fundingAdjustmentId,
-          occurredAt: new Date('2026-06-30T23:00:00.000Z'),
-        },
-      });
-    });
+    const {stripeAccount,creditAccount}=await createContractCreditWallet(db.prisma,binding.billingAccountId,org.id,owner,adminDomain);
 
     const snapshot = await db.prisma.billingCreditPortfolioSnapshot.create({
       data: {
@@ -193,10 +135,10 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         teamId: team.id,
         perspectiveServiceId: service.id,
         perspectiveProduct: service.identifier,
-        billingMonth: '2026-06',
+        billingMonth: '2030-06',
         ledgerSnapshotId: 'mup_credit_contract_test',
         ledgerSnapshotCursor: 'mup_credit_contract_test',
-        capturedAt: new Date('2026-07-01T00:00:00.000Z'),
+        capturedAt: new Date('2030-07-01T00:00:00.000Z'),
         sha256: 'a'.repeat(64),
       },
     });
@@ -208,7 +150,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         serviceId: service.id,
         teamId: team.id,
         appKeyId: appKey.id,
-        billingMonth: '2026-06',
+        billingMonth: '2030-06',
         currency: 'USD',
       },
     });
@@ -229,7 +171,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
           idempotencyKey: 'credit-contract-usage',
           sourceType: 'credit_usage_settlement_adjustment',
           sourceId: settlementAdjustmentId,
-          occurredAt: new Date('2026-07-01T00:00:00.000Z'),
+          occurredAt: new Date('2030-07-01T00:00:00.000Z'),
         },
       });
       await tx.billingCreditUsageSettlementAdjustment.create({
@@ -297,7 +239,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         contractVersionId: version.id,
         issuerProfileId: issuer.id,
         buyerProfileId: buyer.id,
-        billingMonth: '2026-06',
+        billingMonth: '2030-06',
         revision: 1,
         currency: 'USD',
         subtotalMinor: 1000n,
@@ -329,7 +271,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
             serviceId: service.id,
             ledgerSnapshotCursor: 'contract-invoice-metering-snapshot',
             ledgerSnapshotSha256: 'c'.repeat(64),
-            capturedAt: new Date('2026-07-01T00:00:00.000Z'),
+            capturedAt: new Date('2030-07-01T00:00:00.000Z'),
           },
         },
         creditSettlementRefs: {
@@ -351,7 +293,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
     });
     const financialData = {
       lineId: invoiceLine.id, invoiceId: invoice.id, serviceId: service.id,
-      billingMonth: '2026-06', subscriptionMinor: 1000n, usageMinor: 0n,
+      billingMonth: '2030-06', subscriptionMinor: 1000n, usageMinor: 0n,
       taxMinor: 0n, invoiceCreditMinor: 0n, totalMinor: 1000n,
       dueMinor: 1000n, currency: 'USD', calculationDigest: invoice.calculationDigest,
     };
@@ -377,14 +319,14 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
       Prisma.sql`SELECT uoa_billing_invoice_issue_ready(${invoice.id}) AS "ready"`,
     );
     expect(readyBeforeIssue).toEqual([{ ready: true }]);
-    const issueDate = new Date('2026-07-02T00:00:00.000Z');
+    const issueDate = new Date('2030-07-02T00:00:00.000Z');
     await db.prisma.billingInvoice.update({
       where: { id: invoice.id },
       data: {
         status: BillingInvoiceStatus.ISSUING,
-        invoiceNumber: 'UOAC-2026-000001',
+        invoiceNumber: 'UOAC-2030-000001',
         issueDate,
-        dueDate: new Date('2026-08-01T00:00:00.000Z'),
+        dueDate: new Date('2030-08-01T00:00:00.000Z'),
       },
     });
     await db.prisma.billingInvoice.update({
@@ -414,7 +356,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         contractVersionId: version.id,
         issuerProfileId: issuer.id,
         buyerProfileId: buyer.id,
-        billingMonth: '2026-06',
+        billingMonth: '2030-06',
         revision: 2,
         currency: 'USD',
         subtotalMinor: 1000n,
@@ -446,7 +388,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
             serviceId: service.id,
             ledgerSnapshotCursor: 'contract-invoice-correction-snapshot',
             ledgerSnapshotSha256: 'f'.repeat(64),
-            capturedAt: new Date('2026-07-01T00:00:00.000Z'),
+            capturedAt: new Date('2030-07-01T00:00:00.000Z'),
           },
         },
       },
@@ -460,9 +402,9 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice canonical credit co
         where: { id: correction.id },
         data: {
           status: BillingInvoiceStatus.ISSUING,
-          invoiceNumber: 'UOAC-2026-000002',
+          invoiceNumber: 'UOAC-2030-000002',
           issueDate,
-          dueDate: new Date('2026-08-01T00:00:00.000Z'),
+          dueDate: new Date('2030-08-01T00:00:00.000Z'),
         },
       }),
     ).rejects.toThrow(/invoice is not ready for issuance/);

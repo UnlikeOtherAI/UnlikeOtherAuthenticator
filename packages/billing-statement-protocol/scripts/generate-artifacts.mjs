@@ -5,6 +5,15 @@ import { fileURLToPath } from 'node:url';
 import { normalizeArtifactLineEndings, serializeArtifact } from './artifact-text.mjs';
 
 import {
+  billingAuthorityV1JsonSchema,
+  billingAuthorityV1OpenApiDocument,
+  billingCapabilitiesV2ConformanceFixtures,
+  billingTeamOverviewV1ConformanceFixture,
+  billingOrganisationFinancialV1JsonSchema,
+  billingOrganisationProtocolV1JsonSchema,
+  billingOrganisationV1OpenApiDocument,
+  billingOrganisationCapabilitiesV1ConformanceFixture,
+  billingOrganisationOverviewV1ConformanceFixture,
   billingSmsProtocolV1JsonSchema,
   billingSmsV1OpenApiDocument,
   billingCreditBudgetV1ConformanceFixture,
@@ -42,6 +51,18 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = new Map([
+  [resolve(packageRoot, 'schema/billing-authority-v1.json'), billingAuthorityV1JsonSchema],
+  [resolve(packageRoot, 'openapi/billing-authority-v1.openapi.json'), billingAuthorityV1OpenApiDocument],
+  [resolve(packageRoot, 'fixtures/billing-authority-v1.example.json'), {
+    capabilities: billingCapabilitiesV2ConformanceFixtures,
+    team_overview: billingTeamOverviewV1ConformanceFixture,
+  }],
+  [resolve(packageRoot, 'schema/billing-organisation-financial-v1.json'), billingOrganisationFinancialV1JsonSchema],
+  [resolve(packageRoot, 'schema/billing-organisation-v1.json'), billingOrganisationProtocolV1JsonSchema],
+  [resolve(packageRoot, 'openapi/billing-organisation-v1.openapi.json'), billingOrganisationV1OpenApiDocument],
+  [resolve(packageRoot, 'fixtures/billing-organisation-v1.example.json'), {
+    capabilities: billingOrganisationCapabilitiesV1ConformanceFixture, overview: billingOrganisationOverviewV1ConformanceFixture,
+  }],
   [resolve(packageRoot, 'schema/billing-sms-v1.json'), billingSmsProtocolV1JsonSchema],
   [resolve(packageRoot, 'openapi/billing-sms-v1.openapi.json'), billingSmsV1OpenApiDocument],
   [resolve(packageRoot, 'schema/billing-credit-funding-request-v1.json'), billingCreditFundingRequestV1JsonSchema],

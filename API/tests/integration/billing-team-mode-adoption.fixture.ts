@@ -6,8 +6,8 @@ export const physicalAccount = 'acct_1Sn2VfGY1l8e0vu2';
 export const subject = { organisationId: ids.org, teamId: ids.team };
 export const actor = { userId: ids.user, email: 'funding-race@example.com', tokenVersion: 0 };
 
-export async function seedAdoption(db: PrismaClient) {
-  await seedFundingRace(db);
+export async function seedAdoption(db: PrismaClient,currentOrganisationPayer=false) {
+  await seedFundingRace(db,true);
   // Construct the pre-policy fixture; never rewrite financial rows during adoption.
   await db.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
@@ -19,9 +19,11 @@ export async function seedAdoption(db: PrismaClient) {
   // Global LIVE configuration and dormant customer/wallet are not financial history.
   await db.billingStripeAccount.create({ data: { id: 'adoption-live', stripeAccountId: physicalAccount, livemode: true } });
   await db.billingStripeCustomer.create({ data: { id: 'adoption-live-customer', accountId: 'adoption-live',
-    orgId: ids.org, teamId: ids.team, scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`, stripeCustomerId: 'cus_live_empty' } });
+    orgId: ids.org, teamId: currentOrganisationPayer?null:ids.team, scope: currentOrganisationPayer?'ORGANISATION':'TEAM',
+    scopeKey: currentOrganisationPayer?ids.org:`${ids.org}:${ids.team}`, stripeCustomerId: 'cus_live_empty' } });
   await db.billingCreditAccount.create({ data: { id: 'adoption-live-wallet', accountId: 'adoption-live',
-    customerId: 'adoption-live-customer', orgId: ids.org, teamId: ids.team, scopeKey: `${ids.org}:${ids.team}` } });
+    customerId: 'adoption-live-customer', orgId: ids.org, teamId: currentOrganisationPayer?null:ids.team,
+    scope:currentOrganisationPayer?'ORGANISATION':'TEAM',scopeKey: currentOrganisationPayer?ids.org:`${ids.org}:${ids.team}` } });
   await db.billingCreditTopUpCatalog.create({ data: { id: 'adoption-live-catalog', accountId: 'adoption-live',
     key: 'funding-race', version: 1, currency: 'USD', paymentAmountMinor: 500n, creditsReceivedMicrocredits: 5_000_000_000n,
     stripeLookupKey: 'live-race', stripeProductId: 'prod_live', stripePriceId: 'price_live' } });

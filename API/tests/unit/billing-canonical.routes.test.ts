@@ -1,6 +1,7 @@
 import { BillingAppKeyPurpose } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AppError } from '../../src/utils/errors.js';
 import { createApp } from '../../src/app.js';
 import {
   BILLING_STATEMENT_PROTOCOL_VERSION,
@@ -57,6 +58,12 @@ vi.mock('../../src/services/billing-cancellation-confirm.service.js', async () =
   return { ...actual, ...confirmService };
 });
 
+const legacyAuthority=vi.hoisted(()=>({authorizeBillingCycle:vi.fn()}));
+vi.mock('../../src/services/billing-cycle-authority.service.js',async()=>({
+  ...await vi.importActual<typeof import('../../src/services/billing-cycle-authority.service.js')>('../../src/services/billing-cycle-authority.service.js'),
+  ...legacyAuthority,
+}));
+
 const originalSharedSecret = process.env.SHARED_SECRET;
 const originalDatabaseUrl = process.env.DATABASE_URL;
 const credential = {
@@ -96,6 +103,7 @@ afterAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  legacyAuthority.authorizeBillingCycle.mockResolvedValue({billingManager:true});
   appKeyService.verifyBillingAppKey.mockResolvedValue(credential);
   statementService.getCanonicalBillingStatement.mockResolvedValue({
     schema_version: 1,
@@ -289,89 +297,25 @@ describe('canonical customer billing routes', () => {
     });
   });
 
-  it('binds a lifecycle key and actor to one statement subject and month', async () => {
-    await withApp(async (app) => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/billing/v1/customer-statement',
-        headers: {
-          'x-uoa-app-key': 'uoa_app_product_key',
-          'x-uoa-actor': 'signed-actor',
-        },
-        payload: { ...subject, billing_month: '2026-07' },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.headers['cache-control']).toBe('private, no-store');
-      expect(statementService.getCanonicalBillingStatement).toHaveBeenCalledWith({
-        credential,
-        actorToken: 'signed-actor',
-        endpoint: '/billing/v1/customer-statement',
-        billingMonth: '2026-07',
-        request: {
-          product: 'deepwater',
-          organisationId: 'org_1',
-          teamId: 'team_1',
-          userId: 'user_1',
-        },
-      });
+  it.each(['/billing/v1/customer-statement','/billing/v2/customer-statement'])('authenticates %s before requiring the ORG overview',async(path)=>{
+    await withApp(async app=>{
+      const response=await app.inject({method:'POST',url:path,headers:{'x-uoa-app-key':'uoa_app_product_key','x-uoa-actor':'signed-actor'},
+        payload:{...subject,billing_month:'2026-07'}});
+      expect(response.statusCode).toBe(409);expect(response.body).toContain('BILLING_ORGANISATION_OVERVIEW_REQUIRED');
+      expect(legacyAuthority.authorizeBillingCycle).toHaveBeenCalledWith({credential,actorToken:'signed-actor',endpoint:path,
+        request:{product:'deepwater',organisationId:'org_1',teamId:'team_1',userId:'user_1'}});
+      expect(statementService.getCanonicalBillingStatement).not.toHaveBeenCalled();
+      expect(statementService.getCanonicalBillingStatementV2).not.toHaveBeenCalled();
     });
   });
 
-  it('binds the V2 SSO-filled portfolio to the same exact lifecycle subject', async () => {
-    await withApp(async (app) => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/billing/v2/customer-statement',
-        headers: {
-          'x-uoa-app-key': 'uoa_app_product_key',
-          'x-uoa-actor': 'signed-actor',
-        },
-        payload: { ...subject, billing_month: '2026-07' },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.headers['cache-control']).toBe('private, no-store');
-      expect(response.json()).toEqual(billingStatementV2ConformanceFixture);
-      expect(statementService.getCanonicalBillingStatementV2).toHaveBeenCalledWith({
-        credential,
-        actorToken: 'signed-actor',
-        endpoint: '/billing/v2/customer-statement',
-        billingMonth: '2026-07',
-        request: {
-          product: 'deepwater',
-          organisationId: 'org_1',
-          teamId: 'team_1',
-          userId: 'user_1',
-        },
-      });
-    });
-  });
-
-  it('fails closed when the V2 service returns a missing or locally extended field', async () => {
-    const injectStatement = (app: Awaited<ReturnType<typeof createApp>>) =>
-      app.inject({
-        method: 'POST',
-        url: '/billing/v2/customer-statement',
-        headers: { 'x-uoa-app-key': 'uoa_app_product_key', 'x-uoa-actor': 'signed-actor' },
-        payload: subject,
-      });
-
-    statementService.getCanonicalBillingStatementV2.mockResolvedValueOnce({
-      schema_version: 2,
-    });
-    await withApp(async (app) => {
-      const response = await injectStatement(app);
-      expect(response.statusCode).toBe(500);
-    });
-
-    statementService.getCanonicalBillingStatementV2.mockResolvedValueOnce({
-      ...billingStatementV2ConformanceFixture,
-      locally_calculated_total: 'forbidden',
-    });
-    await withApp(async (app) => {
-      const response = await injectStatement(app);
-      expect(response.statusCode).toBe(500);
+  it('preserves a current authority refusal before the legacy overview instruction',async()=>{
+    legacyAuthority.authorizeBillingCycle.mockRejectedValueOnce(new AppError('FORBIDDEN',403,'BILLING_MANAGER_REQUIRED'));
+    await withApp(async app=>{
+      const response=await app.inject({method:'POST',url:'/billing/v2/customer-statement',
+        headers:{'x-uoa-app-key':'uoa_app_product_key','x-uoa-actor':'signed-actor'},payload:subject});
+      expect(response.statusCode).toBe(403);
+      expect(statementService.getCanonicalBillingStatementV2).not.toHaveBeenCalled();
     });
   });
 

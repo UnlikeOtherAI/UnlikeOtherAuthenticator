@@ -7,6 +7,7 @@ import {
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { captureOrganisationFinancialSource } from './billing-financial-source-binding.service.js';
 
 const KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
@@ -105,6 +106,7 @@ export async function createCommercialAdjustment(
   return prisma.$transaction(async (tx) => {
     const adjustment = await tx.billingCommercialAdjustment.create({
       data: {
+        ...await captureOrganisationFinancialSource(tx,input.organisationId),
         serviceId: input.serviceId,
         orgId: input.organisationId,
         teamId: input.teamId ?? null,
@@ -146,6 +148,7 @@ export async function listApplicableCommercialAdjustments(
   params: {
     serviceId: string;
     organisationId: string;
+    accountId:string;
     teamId: string;
     startsAt: Date;
     endsAt: Date;
@@ -156,6 +159,7 @@ export async function listApplicableCommercialAdjustments(
     where: {
       serviceId: params.serviceId,
       orgId: params.organisationId,
+      OR:[{billingAccountId:params.accountId},{billingAccountId:null}],
       AND: [
         {
           OR: [
@@ -184,12 +188,14 @@ export async function listApplicableCommercialAdjustments(
     },
     orderBy: [{ kind: 'asc' }, { key: 'asc' }, { startsAt: 'asc' }],
   });
-  return rows.filter(
+  const applicable=rows.filter(
     (row) =>
       row.cadence !== BillingAdjustmentCadence.ONE_TIME ||
       row.active ||
       Boolean(row.deactivatedAt && row.deactivatedAt > row.startsAt),
   );
+  if(applicable.some(row=>!row.billingAccountId))throw new AppError('BAD_REQUEST',409,'BILLING_ADJUSTMENT_BINDING_RECONCILIATION_REQUIRED');
+  return applicable.filter(row=>row.billingAccountId===params.accountId);
 }
 
 /**
@@ -201,6 +207,7 @@ export async function listApplicableOrganisationInvoiceAdjustments(
   params: {
     serviceId: string;
     organisationId: string;
+    accountId:string;
     startsAt: Date;
     endsAt: Date;
   },
@@ -210,6 +217,7 @@ export async function listApplicableOrganisationInvoiceAdjustments(
     where: {
       serviceId: params.serviceId,
       orgId: params.organisationId,
+      OR:[{billingAccountId:params.accountId},{billingAccountId:null}],
       AND: [
         {
           OR: [
@@ -239,12 +247,14 @@ export async function listApplicableOrganisationInvoiceAdjustments(
       { startsAt: 'asc' },
     ],
   });
-  return rows.filter(
+  const applicable=rows.filter(
     (row) =>
       row.cadence !== BillingAdjustmentCadence.ONE_TIME ||
       row.active ||
       Boolean(row.deactivatedAt && row.deactivatedAt > row.startsAt),
   );
+  if(applicable.some(row=>!row.billingAccountId))throw new AppError('BAD_REQUEST',409,'BILLING_ADJUSTMENT_BINDING_RECONCILIATION_REQUIRED');
+  return applicable.filter(row=>row.billingAccountId===params.accountId);
 }
 
 export async function deactivateCommercialAdjustment(

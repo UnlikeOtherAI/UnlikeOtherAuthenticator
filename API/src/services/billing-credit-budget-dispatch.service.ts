@@ -3,6 +3,7 @@ import { BillingTariffMode, Prisma } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
 import { maximumRatedMicrocredits } from './billing-paid-liability.service.js';
+import { captureOrganisationFinancialSource } from './billing-financial-source-binding.service.js';
 import { memoizedBudgetProof, proveHistoricalBudgetScope } from
   './billing-credit-budget-baseline.service.js';
 
@@ -225,6 +226,7 @@ export async function reserveBudgetDispatch(tx: Prisma.TransactionClient, input:
     }
   }
   const row = await tx.billingCreditBudgetDispatch.create({ data: {
+    ...(input.tariffMode===BillingTariffMode.FREE?{}:await captureOrganisationFinancialSource(tx,input.orgId)),
     dispatchId: input.dispatchId, contextDigest,
     serviceId: input.serviceId, providerServiceId: input.providerServiceId,
     orgId: input.orgId, teamId: input.teamId, userId: input.userId,
@@ -265,6 +267,7 @@ export async function attachLegacyBudgetDispatch(tx: Prisma.TransactionClient, i
   await lockBudgetOrganisation(tx, input.orgId);
   const source = await tx.billingPrepaidReservation.findUnique({
     where: { dispatchId: input.dispatchId },
+    include:{creditAccount:{select:{accountId:true}}},
   });
   const service = await tx.billingService.findUnique({
     where: { id: input.serviceId }, select: { identifier: true },
@@ -285,7 +288,7 @@ export async function attachLegacyBudgetDispatch(tx: Prisma.TransactionClient, i
   if (prior) return prior;
   const contextDigest = createHash('sha256').update(`legacy:${input.dispatchId}`).digest('hex');
   const row = await tx.billingCreditBudgetDispatch.create({ data: {
-    dispatchId: input.dispatchId, contextDigest, isLegacy: true,
+    dispatchId: input.dispatchId, contextDigest, isLegacy: true,billingAccountId:source.creditAccount.accountId,
     serviceId: input.serviceId,
     providerServiceId: input.providerServiceId, orgId: input.orgId,
     teamId: input.teamId, userId: input.userId,

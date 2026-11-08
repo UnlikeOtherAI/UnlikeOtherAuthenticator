@@ -176,6 +176,7 @@ describe('Team service: self-join & visibility', () => {
             OR: [
               { NOT: { joinPolicy: 'HIDDEN' } },
               { members: { some: { userId: 'u-actor', status: 'ACTIVE' } } },
+              expect.objectContaining({AND:[expect.objectContaining({lifecycleStatus:'ACTIVE'})],org:expect.any(Object)}),
             ],
           },
         }),

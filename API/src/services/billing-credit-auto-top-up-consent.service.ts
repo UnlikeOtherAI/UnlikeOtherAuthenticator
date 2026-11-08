@@ -8,6 +8,7 @@ import {
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { disabledAutoTopUpState } from './billing-credit-auto-top-up-disabled-state.js';
+import { resolveCreditDisableContext } from './billing-credit-disable-context.service.js';
 import { AppError } from '../utils/errors.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
@@ -319,7 +320,7 @@ export async function disableBillingCreditAutoTopUp(
   deps?: Pick<Dependencies, 'prisma' | 'resolveContext'>,
 ): Promise<void> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const context = await (deps?.resolveContext ?? resolveCreditFundingActionContext)(
+  const context = await (deps?.resolveContext ?? resolveCreditDisableContext)(
     {
       ...params,
       action: {

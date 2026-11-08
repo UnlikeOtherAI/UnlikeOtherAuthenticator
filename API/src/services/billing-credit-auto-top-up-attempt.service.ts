@@ -18,6 +18,7 @@ import {
   type CreditPurchaseRateClient,
 } from './billing-credit-purchase-rate.service.js';
 import type { CreditPurchaseCurrency } from './billing-stripe-catalog-provisioning-spec.js';
+import { captureOrganisationFinancialSource } from './billing-financial-source-binding.service.js';
 
 const OPEN_ATTEMPT_STATUSES = [
   BillingCreditAutoTopUpAttemptStatus.PENDING,
@@ -108,8 +109,8 @@ function activeConfigurationIsExact(
     customer.accountId === accountId &&
     customer.orgId === credit.orgId &&
     customer.teamId === credit.teamId &&
-    customer.scope === BillingAssignmentScope.TEAM &&
-    customer.scopeKey === `${credit.orgId}:${credit.teamId}` &&
+    customer.scope === BillingAssignmentScope.ORGANISATION && customer.teamId===null&&
+    customer.scopeKey === credit.orgId &&
     Boolean(customer.stripeCustomerId) &&
     credit.autoTopUpPolicyId === policy.id &&
     credit.autoTopUpServiceId === policy.serviceId &&
@@ -209,12 +210,10 @@ export async function listCreditAutoTopUpCandidateIds(
       FROM "billing_credit_accounts" AS credit
       WHERE credit."account_id" = ${params.accountId}
         AND credit."currency" = 'USD'
-        AND NOT EXISTS (SELECT 1 FROM teams t
-          LEFT JOIN billing_team_modes m ON m.team_id = t.id
-          JOIN billing_stripe_accounts a ON a.id = credit.account_id
-          WHERE t.org_id = credit.org_id AND t.lifecycle_status = 'ACTIVE'
-            AND (credit.team_id IS NULL OR t.id = credit.team_id)
-            AND COALESCE(m.sandbox, false) = a.livemode)
+        AND credit.scope = 'ORGANISATION' AND credit.team_id IS NULL
+        AND EXISTS (SELECT 1 FROM billing_stripe_accounts a
+          LEFT JOIN billing_organisation_modes m ON m.org_id=credit.org_id
+          WHERE a.id=credit.account_id AND COALESCE(m.sandbox,false)<>a.livemode)
         AND credit."auto_top_up_state" = 'ACTIVE'
         AND credit."auto_top_up_threshold_microcredits" IS NOT NULL
         -- A GBP or EUR threshold is a value the claim computes from the lots.
@@ -345,7 +344,8 @@ export async function claimCreditAutoTopUpAttempt(
             : 'configuration_inactive',
       };
     }
-    if (!activeConfigurationIsExact(credit, params.accountId, clock.currentTime)) {
+    if (credit.scope !== BillingAssignmentScope.ORGANISATION || credit.teamId !== null ||
+      !activeConfigurationIsExact(credit, params.accountId, clock.currentTime)) {
       return { kind: 'skipped', creditAccountId: credit.id, reason: 'configuration_invalid' };
     }
     const revision = credit.autoTopUpConsentRevision;
@@ -353,6 +353,10 @@ export async function claimCreditAutoTopUpAttempt(
     if (!revision || !offer) {
       return { kind: 'skipped', creditAccountId: credit.id, reason: 'configuration_invalid' };
     }
+    // Existing attempts above recover their captured tuple. Only a NEW attempt
+    // must match the current named organisation account under its write fence.
+    const binding=await captureOrganisationFinancialSource(tx,credit.orgId);
+    if(binding.billingAccountId!==params.accountId)return {kind:'skipped',creditAccountId:credit.id,reason:'configuration_invalid'};
     const catalog = await tx.billingCreditTopUpCatalog.findUnique({
       where: {
         accountId_key_version: {

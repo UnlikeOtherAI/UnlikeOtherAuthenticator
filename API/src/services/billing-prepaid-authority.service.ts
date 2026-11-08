@@ -2,6 +2,7 @@ import { MembershipStatus, Prisma } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
 import { isActiveUser } from './entity-lifecycle.service.js';
+import { activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
 import { isAuthenticationEpochMismatchError, lockAndAssertAuthenticationEpochShared } from
   './authentication-epoch.service.js';
 
@@ -39,8 +40,7 @@ export async function assertActivePrepaidSubject(
     tx.orgMember.findUnique({ where: { orgId_userId: {
       orgId: input.organisationId, userId: input.userId } }, select: { status: true } }),
     tx.team.findFirst({ where: { id: input.teamId, orgId: input.organisationId,
-      lifecycleStatus: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE' },
-      members: { some: { userId: input.userId, status: MembershipStatus.ACTIVE } } },
+      AND:[activeTeamAuthorityWhere(input.userId)] },
     select: { id: true } }),
   ]);
   if (!user || !isActiveUser(user) || user.tokenVersion !== tokenVersion ||

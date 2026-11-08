@@ -6,8 +6,18 @@ import { assertUnambiguousCreditPayer } from '../../src/services/billing-credit-
 const when = (iso: string) => new Date(iso);
 
 describe('dated credit payer lineage', () => {
+  it('holds the inclusive org installation month and requires ORG later without reinterpreting legacy responsibility',async()=>{
+    const prisma={$queryRaw:vi.fn().mockResolvedValue([{activatedAt:when('2026-11-01T00:00:00Z')}]),billingOrgResponsibility:{findUnique:vi.fn()}};
+    await expect(assertUnambiguousCreditPayer(prisma as never,{orgId:'org_1',billingMonth:'2026-11',scope:BillingAssignmentScope.ORGANISATION}))
+      .rejects.toThrow('BILLING_MODE_TRANSITION_RECONCILIATION_REQUIRED');
+    await expect(assertUnambiguousCreditPayer(prisma as never,{orgId:'org_1',billingMonth:'2026-12',scope:BillingAssignmentScope.TEAM}))
+      .rejects.toThrow('BILLING_ORGANISATION_SCOPE_REQUIRED');
+    await expect(assertUnambiguousCreditPayer(prisma as never,{orgId:'org_1',billingMonth:'2026-12',scope:BillingAssignmentScope.ORGANISATION}))
+      .resolves.toBeUndefined();
+    expect(prisma.billingOrgResponsibility.findUnique).not.toHaveBeenCalled();
+  });
   it('keeps older organisation months with the organisation after release and re-assumption', async () => {
-    const prisma = { billingOrgResponsibility: { findUnique: vi.fn().mockResolvedValue({
+    const prisma = { $queryRaw:vi.fn().mockResolvedValue([{activatedAt:when('2026-11-08T00:00:00Z')}]),billingOrgResponsibility: { findUnique: vi.fn().mockResolvedValue({
       createdAt: when('2026-01-15T12:00:00.000Z'),
       transitions: [
         { kind: 'ASSUMED', effectiveAt: when('2026-01-15T12:00:00.000Z'), source: 'customer_action' },
@@ -27,7 +37,7 @@ describe('dated credit payer lineage', () => {
   });
 
   it('holds legacy prehistory when an old mutable responsibility row lost earlier intervals', async () => {
-    const prisma = { billingOrgResponsibility: { findUnique: vi.fn().mockResolvedValue({
+    const prisma = { $queryRaw:vi.fn().mockResolvedValue([{activatedAt:when('2026-11-08T00:00:00Z')}]),billingOrgResponsibility: { findUnique: vi.fn().mockResolvedValue({
       createdAt: when('2026-01-15T12:00:00.000Z'),
       transitions: [{ kind: 'ASSUMED', effectiveAt: when('2026-05-10T12:00:00.000Z'), source: 'legacy_backfill' }],
     }) } };
@@ -37,7 +47,7 @@ describe('dated credit payer lineage', () => {
   });
 
   it('holds legacy backdates and a one-second creation-boundary gap', async () => {
-    const prisma = { billingOrgResponsibility: { findUnique: vi.fn().mockResolvedValue({
+    const prisma = { $queryRaw:vi.fn().mockResolvedValue([{activatedAt:when('2026-11-08T00:00:00Z')}]),billingOrgResponsibility: { findUnique: vi.fn().mockResolvedValue({
       createdAt: when('2026-03-01T00:00:00.100Z'),
       transitions: [{
         kind: 'ASSUMED', effectiveAt: when('2026-02-28T23:59:59.900Z'),

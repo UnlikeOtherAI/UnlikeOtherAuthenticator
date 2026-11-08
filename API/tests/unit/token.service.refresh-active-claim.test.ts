@@ -26,7 +26,9 @@ describe('exchangeRefreshTokenForTokens active-claim re-validation (unit)', () =
       now,
       prisma: {
         organisation: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
-        team: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', orgId: params.storedOrgId }) },
+        team: { findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', orgId: params.storedOrgId }),
+          findFirst: vi.fn(async ({where}:{where:{id:string;org?:{domain?:string}}}) =>
+            params.crossDomain && where.org?.domain ? null : params.contextTeamIds.includes(where.id)?{id:where.id}:null) },
         $executeRaw: vi.fn().mockResolvedValue(1),
         enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
         orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },

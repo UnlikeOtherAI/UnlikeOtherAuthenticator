@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { configureSyntheticStripeMode } from './stripe-mode-config.js';
 import type { VerifiedBillingAppKey } from '../../src/services/billing-app-key.service.js';
 import { BillingSmsProvider } from '../../src/services/billing-sms-provider.service.js';
 
@@ -13,9 +14,11 @@ export const smsCredential: VerifiedBillingAppKey = {
   actorPublicJwk: {}, checkoutReturnOrigins: [], service: { id: smsIds.service, identifier: 'nessie', name: 'Nessie' },
 };
 export async function seedSmsFinance(prisma: PrismaClient, createNumber = true): Promise<void> {
+  configureSyntheticStripeMode('acct_SmsFixture',false);
   const id = smsIds;
   await prisma.$transaction(async (tx) => {
-    // Existing test convention: establish synthetic canonical wallet opening evidence only.
+    // Fresh synthetic ORG payer with an opening balance, never an adopted TEAM
+    // source. Runtime reservations/settlements below keep all DB guards enabled.
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
     await tx.$executeRaw(Prisma.sql`INSERT INTO users(id,email,user_key,name)
       VALUES (${id.user},'sms@example.test','sms@example.test','SMS fixture')`);
@@ -23,8 +26,10 @@ export async function seedSmsFinance(prisma: PrismaClient, createNumber = true):
       VALUES (${id.org},'sms.example.test','SMS','sms',${id.user},CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO teams(id,org_id,name,slug,updated_at)
       VALUES (${id.team},${id.org},'SMS','sms',CURRENT_TIMESTAMP)`);
-    // Explicit sandbox policy for this synthetic TEST wallet.
-    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_team_modes(team_id,sandbox,revision,updated_at) VALUES (${id.team},true,1,CURRENT_TIMESTAMP - INTERVAL '2 minutes')`);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_organisation_modes(org_id,sandbox,revision,updated_at)
+      VALUES (${id.org},true,1,CURRENT_TIMESTAMP)`);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_organisation_mode_events(org_id,sandbox,revision,effective_at)
+      VALUES (${id.org},true,1,CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO org_members(id,org_id,user_id,domain,role,updated_at)
       VALUES ('sms-org-member',${id.org},${id.user},'sms.example.test','owner',CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO team_members(id,team_id,user_id,team_role,updated_at)
@@ -32,12 +37,12 @@ export async function seedSmsFinance(prisma: PrismaClient, createNumber = true):
     await tx.$executeRaw(Prisma.sql`INSERT INTO billing_services(id,identifier,name,updated_at)
       VALUES (${id.service},'nessie','Nessie',CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO billing_stripe_accounts(id,stripe_account_id,livemode,updated_at)
-      VALUES (${id.account},'acct_sms_fixture',false,CURRENT_TIMESTAMP)`);
+      VALUES (${id.account},'acct_SmsFixture',false,CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO billing_stripe_customers(id,account_id,org_id,team_id,scope,scope_key,updated_at)
-      VALUES (${id.customer},${id.account},${id.org},${id.team},'TEAM',${`${id.org}:${id.team}`},CURRENT_TIMESTAMP)`);
+      VALUES (${id.customer},${id.account},${id.org},NULL,'ORGANISATION',${id.org},CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO billing_credit_accounts
       (id,account_id,customer_id,org_id,team_id,scope,scope_key,currency,balance_microcredits,updated_at)
-      VALUES (${id.credit},${id.account},${id.customer},${id.org},${id.team},'TEAM',${`${id.org}:${id.team}`},
+      VALUES (${id.credit},${id.account},${id.customer},${id.org},NULL,'ORGANISATION',${id.org},
         'USD',100000000,CURRENT_TIMESTAMP)`);
   });
   for (const [key, purpose] of [[id.runtime, 'SMS_RUNTIME'], [id.lifecycle, 'CUSTOMER_LIFECYCLE']] as const) {
@@ -47,11 +52,11 @@ export async function seedSmsFinance(prisma: PrismaClient, createNumber = true):
       actorIssuer: smsCredential.actorIssuer, actorAudience: smsCredential.actorAudience,
       actorKeyId: 'synthetic', actorPublicJwk: {} } });
   }
-  const created = new Date(Date.now() - 60_000);
+  const created = new Date();
   const expiry = new Date(Date.now() + 3_600_000);
   await prisma.billingSmsFxSnapshot.create({ data: { id: id.fx, policy: 'ECB_REFERENCE_USD_PER_EUR_V1',
     source: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml', sourceDigest: 'a'.repeat(64),
-    rateDate: created, observedAt: created, acceptedAt: created, expiresAt: expiry,
+    rateDate: created, observedAt: new Date(created.getTime()-1000), acceptedAt: new Date(created.getTime()-1000), expiresAt: expiry,
     usdPerEur: '1.1', acceptedByUserId: id.user, acceptanceReason: 'Synthetic fixture' } });
   await prisma.billingSmsRoutePolicy.create({ data: { id: id.policy, accountSid: smsAccount,
     country: 'CZ', direction: 'inbound', currency: 'USD', additionalPerSegment: '0.002', additionalPerMessage: '0.001',
@@ -86,7 +91,7 @@ export function smsReceiptProvider(amount: string | null, segments: string | nul
     return new Response(JSON.stringify({ sid, account_sid: smsAccount, from: '+420777000002',
       to: smsPhone, direction: 'inbound', status: 'received', price: amount === null ? null : `-${amount}`,
       price_unit: amount === null ? null : 'usd', num_segments: segments,
-      date_created: (created ?? new Date(Date.now() - 5000)).toUTCString() }), { status: 200 });
+      date_created: (created ?? new Date()).toUTCString() }), { status: 200 });
   });
   return provider;
 }

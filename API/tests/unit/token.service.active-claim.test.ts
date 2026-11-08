@@ -50,7 +50,8 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       clientDomain: { findUnique: vi.fn() },
       billingAppKey: { findMany: vi.fn() },
       organisation: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }) },
-      team: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', orgId: 'org-active' }) },
+      team: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue({id:'team-active'}),
+        findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', orgId: 'org-active' }) },
     } as unknown as PrismaClient;
   }
 
@@ -158,6 +159,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       tokenVersion: 0,
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.team.findFirst.mockImplementation(async ({where})=>where.org?.domain?null:{id:where.id});
     prisma.orgMember.findFirst.mockImplementation(async (args: { where: { org?: { domain?: string } } }) =>
       args.where.org?.domain ? null : { id: 'org-member-nessie', orgId: 'org-nessie', role: 'member' },
     );
@@ -249,6 +251,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       teamId: 'team-nessie',
     });
     prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+    prisma.team.findFirst.mockImplementation(async ({where})=>where.org?.domain?null:{id:where.id});
     prisma.orgMember.findFirst.mockImplementation(async (args: { where: { org?: { domain?: string } } }) =>
       args.where.org?.domain ? null : { id: 'org-member-nessie', orgId: 'org-nessie', role: 'member' },
     );
@@ -404,6 +407,7 @@ describe('exchangeAuthorizationCodeForTokens active claim (unit)', () => {
       teamId: 'team-inactive',
     });
     prisma.orgMember.findFirst.mockResolvedValue(null);
+    prisma.team.findFirst.mockResolvedValue(null);
     prisma.teamMember.findFirst.mockResolvedValue({ id: 'team-member-inactive' });
 
     await expect(

@@ -10,7 +10,9 @@ import { compareBillingCycleUtf8 } from './billing-cycle-binary-order.service.js
 type MonthlyQuote = Awaited<ReturnType<typeof quoteSubscriptionMonthlyCharge>>;
 
 export function cycleMoney(amountMinor: bigint, currency: string): BillingCycleMoney {
-  return { ...exactMoney(minorAmountToMajor(amountMinor.toString(), currency), currency),
+  const absolute=amountMinor<0n?-amountMinor:amountMinor;
+  const amount=minorAmountToMajor(absolute.toString(),currency);
+  return { ...exactMoney(amountMinor<0n?`-${amount}`:amount, currency),
     amount_minor: amountMinor.toString() };
 }
 

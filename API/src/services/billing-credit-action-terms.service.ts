@@ -9,10 +9,10 @@ import type { BillingCreditProjectionData } from './billing-credit-projection-da
 import type { CreditPurchaseRate } from './billing-credit-purchase-rate.service.js';
 
 /** The subject a product relays unchanged in every credit action body. */
-export type BillingCreditActionSubject = {
+export type BillingCreditActionSubject<TeamId extends string|null=string> = {
   product: string;
   organisation_id: string;
-  team_id: string;
+  team_id: TeamId;
   user_id: string;
 };
 

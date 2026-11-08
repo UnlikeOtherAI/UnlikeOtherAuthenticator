@@ -10,6 +10,16 @@ import type {
 } from '../../src/services/billing-metering.types.js';
 import { getCanonicalBillingStatementV2 } from '../../src/services/billing-statement.service.js';
 
+// These retained projection arithmetic tests do not prove public admission.
+// Superseded HTTP reads refuse; current ORG authority is covered by signed PG HTTP.
+vi.mock('../../src/services/billing-financial-authority.service.js',()=>({
+  requireBillingManager:vi.fn().mockResolvedValue({billingManager:true}),
+}));
+vi.mock('../../src/services/billing-organisation-history.service.js',async()=>({
+  ...await vi.importActual<typeof import('../../src/services/billing-organisation-history.service.js')>('../../src/services/billing-organisation-history.service.js'),
+  organisationHistoryAccount:vi.fn().mockResolvedValue({id:'projection-account',stripeAccountId:'acct_projection',livemode:false}),
+}));
+
 const now = new Date('2026-07-20T12:00:00.000Z');
 const credential = {
   id: 'app_key_deepwater_lifecycle',

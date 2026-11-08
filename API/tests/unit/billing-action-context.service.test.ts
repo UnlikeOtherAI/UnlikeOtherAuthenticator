@@ -70,4 +70,22 @@ describe('displayed billing context', () => {
     expect(() => readBillingModeProtocol({ 'x-uoa-billing-mode-protocol': ['1.0.0', '1.0.0'] }))
       .toThrow('BILLING_CONTEXT_INVALID');
   });
+  it('pins captured subscription/customer identity without changing the public action body',()=>{
+    const portal='/billing/v1/stripe/portal-session',epoch='2026-11-08T00:00:00.000Z';
+    const original={...binding,scopeEpoch:epoch,objectBinding:'captured-subscription/customer'};
+    const token=mintBillingActionContext(original,portal,body,now);
+    expect(()=>assertBillingActionContext(token,original,portal,body,now)).not.toThrow();
+    expect(()=>assertBillingActionContext(token,{...original,objectBinding:'replacement-subscription/customer'},portal,body,now))
+      .toThrow('BILLING_CONTEXT_STALE');
+    expect(()=>assertBillingActionContext(mintBillingActionContext({...binding,scopeEpoch:epoch},portal,body,now),original,portal,body,now))
+      .toThrow('BILLING_CONTEXT_STALE');
+    expect(()=>assertBillingActionContext(undefined,original,portal,body,now)).toThrow('BILLING_CONTEXT_REQUIRED');
+    const input={actions:[{request:{method:'POST',path:portal,body}},{request:{method:'POST',path,body}}]};
+    const frozen=freezeDisplayedBillingActions(input,original,true,'Refresh',now);
+    expect(()=>assertBillingActionContext((frozen.actions[0]!.request.body as typeof body&{billing_context:string}).billing_context,
+      original,portal,body,now)).not.toThrow();
+    expect(()=>assertBillingActionContext((frozen.actions[1]!.request.body as typeof body&{billing_context:string}).billing_context,
+      {...binding,scopeEpoch:epoch},path,body,now)).not.toThrow();
+    expect(input.actions[0]!.request.body).not.toHaveProperty('billing_context');
+  });
 });

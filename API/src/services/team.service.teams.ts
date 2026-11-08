@@ -4,6 +4,8 @@ import { getPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { resolveTeamCreatorTeamRole } from './role-grants.js';
+import { lockOrganisationMemberships } from './organisation-membership-lock.service.js';
+import { activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
 
 import {
   assertDatabaseEnabled,
@@ -83,6 +85,8 @@ export async function listTeams(
             OR: [
               { NOT: { joinPolicy: 'HIDDEN' } },
               { members: { some: { userId: actorUserId, status: 'ACTIVE' } } },
+              { AND:[activeTeamAuthorityWhere(actorUserId)],org:{OR:[{ownerId:actorUserId},
+                {members:{some:{userId:actorUserId,status:'ACTIVE',role:{in:['owner','admin']}}}}]} },
             ],
           }
         : {}),
@@ -158,7 +162,11 @@ export async function createTeam(
   });
 
   const createdTeam = await runInTransaction(prisma, async (tx) => {
-    const teamCount = await tx.team.count({ where: { orgId: org.id } });
+    await lockOrganisationMemberships(tx,org.id,actorUserId?[actorUserId]:[]);
+    await resolveAndAuthorizeTeamOrg(tx,{orgId:org.id,actorUserId});
+    await requireTeamCapability(tx,'teams.manage',{orgId:org.id,actorUserId,config:params.config});
+    // Restricted financial tombstones are evidence, not current teams consuming quota.
+    const teamCount = await tx.team.count({ where: { orgId: org.id,lifecycleStatus:{not:'DELETED'} } });
     if (teamCount >= maxTeams) {
       throw new AppError('BAD_REQUEST', 400);
     }
@@ -181,6 +189,7 @@ export async function createTeam(
           orgId: org.id,
           name,
           slug,
+          isDefault:teamCount===0,
           ...(description === undefined ? {} : { description }),
           ...(joinPolicy === undefined ? {} : { joinPolicy }),
         },

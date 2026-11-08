@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { BillingTariffMode, Prisma } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
+import { assertCapturedPrepaidSource } from './billing-paid-prepaid-source.service.js';
 
 const DENOMINATOR = 10_000n * 10n ** 18n;
 const MICRO_FACTOR = 1_000_000_000n;
@@ -23,6 +24,14 @@ export function maximumRatedMicrocredits(raw: Prisma.Decimal, markupBps: number)
     throw new AppError('BAD_REQUEST', 400, 'PAID_LIABILITY_RATE_INVALID');
   }
   return roundedCumulative(scaledRaw(raw) * BigInt(10_000 + markupBps));
+}
+
+export function paidUsageRatingScopeKey(input:{creditAccountId?:string;billingAccountId:string|null;
+  orgId:string;teamId:string;currency:string}) {
+  if(input.creditAccountId)return `prepaid:${input.creditAccountId}`;
+  return `payg:${createHash('sha256').update(JSON.stringify([
+    input.billingAccountId??'frozen-free',input.orgId,input.teamId,input.currency,
+  ])).digest('hex')}`;
 }
 
 /** One frozen-rated liability delta is shared by cycles and all budget scopes. */
@@ -50,11 +59,13 @@ export async function recordPaidUsageLiability(
   if ((hold.paymentMode === 'PREPAID') !== Boolean(params.creditAccountId)) {
     throw new AppError('BAD_REQUEST', 409, 'PAID_RATING_SCOPE_MISSING');
   }
-  const ratingScopeKey = params.creditAccountId
-    ? `prepaid:${params.creditAccountId}`
-    : `payg:${createHash('sha256').update(JSON.stringify([
-      hold.orgId, hold.teamId, hold.currency,
-    ])).digest('hex')}`;
+  if(hold.tariffMode!==BillingTariffMode.FREE&&!hold.billingAccountId&&!params.creditAccountId) {
+    throw new AppError('BAD_REQUEST',409,'BILLING_CAPTURED_ACCOUNT_RECONCILIATION_REQUIRED');
+  }
+  if(params.creditAccountId){
+    await assertCapturedPrepaidSource(tx,hold,params.creditAccountId,params.receiptId);
+  }
+  const ratingScopeKey = paidUsageRatingScopeKey({...hold,creditAccountId:params.creditAccountId});
   await tx.$queryRaw(Prisma.sql`SELECT pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(${`billing-paid-rating:${ratingScopeKey}`}, 0))::text`);
   const bucket = await tx.billingPaidRatingBucket.findUnique({ where: { ratingScopeKey } });

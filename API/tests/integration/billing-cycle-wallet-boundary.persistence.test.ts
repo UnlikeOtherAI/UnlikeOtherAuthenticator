@@ -15,6 +15,7 @@ describe.skipIf(!enabled)('funded wallet UTC boundary proof', () => {
   let orgId: string;
   let teamId: string;
   let creditAccountId: string;
+  let capturedAccountId: string;
 
   beforeAll(async () => {
     const created = await createTestDb();
@@ -35,6 +36,7 @@ describe.skipIf(!enabled)('funded wallet UTC boundary proof', () => {
     const stripe = await db.prisma.billingStripeAccount.create({ data: {
       stripeAccountId: `acct_${randomUUID()}`, livemode: false,
     } });
+    capturedAccountId = stripe.id;
     const customer = await db.prisma.billingStripeCustomer.create({ data: {
       accountId: stripe.id, orgId, teamId, scope: BillingAssignmentScope.TEAM,
       scopeKey: `${orgId}:${teamId}`,
@@ -53,7 +55,7 @@ describe.skipIf(!enabled)('funded wallet UTC boundary proof', () => {
     endsAt: new Date('2026-11-01T00:00:00.000Z') };
   async function boundary() {
     return readCycleWalletBoundary(db.prisma, { orgId, teamId,
-      payer: BillingAssignmentScope.TEAM, ...october });
+      payer: BillingAssignmentScope.TEAM, capturedAccountId, ...october });
   }
 
   // This fixture simulates already verified immutable funding entries. Trigger
@@ -97,7 +99,35 @@ describe.skipIf(!enabled)('funded wallet UTC boundary proof', () => {
       opening_microcredits: '0', closing_microcredits: '80', entry_count: '3' });
     expect(revised.fingerprint).not.toBe(first.fingerprint);
     expect(await readCycleWalletBoundary(db.prisma, { orgId, teamId,
-      payer: BillingAssignmentScope.ORGANISATION, ...october }))
+      payer: BillingAssignmentScope.ORGANISATION, capturedAccountId, ...october }))
       .toMatchObject({ status: 'pending_reconciliation', opening_microcredits: null });
+  });
+
+  it('selects the exact captured account despite opposing-mode and replacement wallets', async () => {
+    const original = await db.prisma.billingStripeAccount.findUniqueOrThrow({
+      where: { id: capturedAccountId } });
+    for (const source of [
+      { stripeAccountId: original.stripeAccountId, livemode: true },
+      { stripeAccountId: `acct_${randomUUID()}`, livemode: false },
+    ]) {
+      const account = await db.prisma.billingStripeAccount.create({ data: source });
+      const customer = await db.prisma.billingStripeCustomer.create({ data: {
+        accountId: account.id, orgId, teamId, scope: 'TEAM', scopeKey: `${orgId}:${teamId}`,
+      } });
+      await db.prisma.billingCreditAccount.create({ data: {
+        accountId: account.id, customerId: customer.id, orgId, teamId,
+        scope: 'TEAM', scopeKey: `${orgId}:${teamId}`, currency: 'USD',
+      } });
+    }
+    expect(await boundary()).toMatchObject({ account_id: creditAccountId,
+      closing_microcredits: '80', status: 'confirmed' });
+    expect(await readCycleWalletBoundary(db.prisma, { orgId, teamId,
+      payer: 'TEAM', capturedAccountId: null, ...october })).toMatchObject({
+      opening_microcredits: null, closing_microcredits: null, status: 'pending_reconciliation',
+    });
+    expect(await readCycleWalletBoundary(db.prisma, { orgId, teamId,
+      payer: 'TEAM', capturedAccountId: 'unbound-account', ...october })).toMatchObject({
+      account_id: null, closing_microcredits: null, status: 'pending_reconciliation',
+    });
   });
 });

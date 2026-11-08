@@ -1,3 +1,5 @@
+import { requireBillingManager } from './billing-financial-authority.service.js';
+import { organisationSubscriptionCustomerScopeKey } from './billing-subscription-customer-scope.service.js';
 import { requireTeamStripeBilling, assertOrganisationBillingMode } from './billing-team-mode.service.js';
 import { assertBillingActionContext } from './billing-action-context.service.js';
 import { withLiveTeamBillingEffect } from './team-billing-effect.service.js';
@@ -25,7 +27,7 @@ import {
 } from './billing-customer-action-intent.service.js';
 import {
   customerBillingTariff,
-  resolveEffectiveTariffContext,
+  resolveFinancialTariffContext,
   type EffectiveTariffPayload,
 } from './billing-entitlement.service.js';
 import { ensureStripeCatalog, ensureStripeTariffPrice } from './billing-stripe-catalog.service.js';
@@ -46,14 +48,14 @@ import {
   assertStripeObjectLivemode,
   resolveStripeAccountContext,
 } from './billing-stripe-client.service.js';
-import { isBillingManager } from './billing-stripe-manager.service.js';
+
 import { normalizeStripeReturnUrl } from './billing-stripe-return-url.service.js';
 
 type CheckoutRequest = {
   billingContext?: string;
   product: string;
   organisationId: string;
-  teamId: string;
+  teamId: string | null;
   userId: string;
   successUrl: string;
   cancelUrl: string;
@@ -75,7 +77,7 @@ function externalId(value: string | { id: string } | null): string | null {
   return typeof value === 'string' ? value : value.id;
 }
 
-function openSessionResult(session: Stripe.Checkout.Session, payload: EffectiveTariffPayload) {
+function openSessionResult(session: Stripe.Checkout.Session, payload: EffectiveTariffPayload<string|null>) {
   if (session.status !== 'open' || !session.url) {
     throw new AppError('BAD_REQUEST', 409, 'STRIPE_CHECKOUT_NOT_OPEN');
   }
@@ -103,7 +105,7 @@ export async function createStripeCheckoutSession(
     prisma?: PrismaClient;
     stripe?: StripeCheckoutClient;
     stripeLivemode?: boolean;
-    resolveTariff?: typeof resolveEffectiveTariffContext;
+    resolveTariff?: typeof resolveFinancialTariffContext;
     authorizeAction?: typeof authorizeBillingCustomerAction;
     now?: () => Date;
     afterStripeSessionCreated?: () => void | Promise<void>;
@@ -120,6 +122,14 @@ export async function createStripeCheckoutSession(
   const successUrlDigest = digestUrl(successUrl);
   const cancelUrlDigest = digestUrl(cancelUrl);
   const prisma = deps?.prisma ?? getAdminPrisma();
+  // Authenticate the exact actor before role lookup or provider/account IO.
+  const { actor, payload } = await (deps?.resolveTariff ?? resolveFinancialTariffContext)({
+    request: params.request,
+    actorToken: params.actorToken,
+    credential: params.credential,
+    endpoint: params.endpoint,
+  }, { prisma });
+  await requireBillingManager(params.request,prisma);
   const configured = deps?.stripe ? undefined : await requireTeamStripeBilling(params.request, prisma);
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) {
@@ -128,12 +138,6 @@ export async function createStripeCheckoutSession(
   const livemode = deps?.stripeLivemode ?? configured?.livemode ?? false;
   const account = await resolveStripeAccountContext(stripe, livemode, prisma);
   const modeRevision = configured?.selection.revision ?? 0;
-  const { actor, payload } = await (deps?.resolveTariff ?? resolveEffectiveTariffContext)({
-    request: params.request,
-    actorToken: params.actorToken,
-    credential: params.credential,
-    endpoint: params.endpoint,
-  });
   if (
     payload.tariff.collection_mode !== 'stripe' ||
     payload.tariff.mode === 'free' ||
@@ -144,7 +148,7 @@ export async function createStripeCheckoutSession(
 
   const selectedScope = billingScope(payload);
   if (!deps?.stripe || params.request.billingContext !== undefined) {
-    assertBillingActionContext(params.request.billingContext, { account, revision: modeRevision,
+    assertBillingActionContext(params.request.billingContext, { account, revision: modeRevision, scopeEpoch: configured?.selection.epoch,
       appKeyId: params.credential.id }, params.endpoint, {
       product: params.request.product, organisation_id: params.request.organisationId,
       team_id: params.request.teamId, user_id: params.request.userId,
@@ -213,12 +217,7 @@ export async function createStripeCheckoutSession(
     (selectedScope.teamId &&
       (!details.team ||
         details.team.orgId !== details.org.id ||
-        details.teamMember?.status !== MembershipStatus.ACTIVE)) ||
-    !isBillingManager({
-      scope: selectedScope.scope,
-      orgRole: details.orgMember.role,
-      teamRole: details.teamMember?.teamRole,
-    })
+        details.teamMember?.status !== MembershipStatus.ACTIVE))
   ) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_MANAGER_REQUIRED');
   }
@@ -268,16 +267,20 @@ export async function createStripeCheckoutSession(
     { prisma },
   );
 
-  let customer = await prisma.billingStripeCustomer.upsert({
+  const customerScopeKey=organisationSubscriptionCustomerScopeKey(payload.subject.organisation_id,details.tariff.currency);
+  let checkout = await prisma.billingStripeCheckoutSession.findFirst({where:overlappingCheckoutScope(
+    account.id,params.credential.service.id,payload.subject.organisation_id,selectedScope.scope,selectedScope.scopeKey)});
+  let customer = checkout ? await prisma.billingStripeCustomer.findUniqueOrThrow({where:{id:checkout.customerId}}):
+    await prisma.billingStripeCustomer.upsert({
     where: {
-      accountId_scopeKey: { accountId: account.id, scopeKey: selectedScope.scopeKey },
+      accountId_scopeKey: { accountId: account.id, scopeKey: customerScopeKey },
     },
     create: {
       accountId: account.id,
       orgId: payload.subject.organisation_id,
       teamId: selectedScope.teamId,
       scope: selectedScope.scope,
-      scopeKey: selectedScope.scopeKey,
+      scopeKey: customerScopeKey,
     },
     update: {},
   });
@@ -298,7 +301,7 @@ export async function createStripeCheckoutSession(
       orgId: payload.subject.organisation_id,
       teamId: selectedScope.teamId,
       scope: selectedScope.scope,
-      scopeKey: selectedScope.scopeKey,
+      scopeKey: customer.scopeKey,
     },
     { prisma, stripe },
   );
@@ -307,15 +310,6 @@ export async function createStripeCheckoutSession(
   }
 
   const now = deps?.now?.() ?? new Date();
-  let checkout = await prisma.billingStripeCheckoutSession.findFirst({
-    where: overlappingCheckoutScope(
-      account.id,
-      params.credential.service.id,
-      payload.subject.organisation_id,
-      selectedScope.scope,
-      selectedScope.scopeKey,
-    ),
-  });
   if (checkout) {
     assertCheckoutBinding(checkout, {
       account,
@@ -332,13 +326,15 @@ export async function createStripeCheckoutSession(
       { prisma, stripe },
     );
     if (recovered.session) return openSessionResult(recovered.session, payload);
-    checkout = recovered.abandoned ? null : recovered.checkout;
+    if(recovered.abandoned)throw new AppError('BAD_REQUEST',409,'BILLING_CONTEXT_STALE');
+    checkout = recovered.checkout;
   }
 
   if (!checkout) {
     const createData = {
       billingModeTeamId: params.request.teamId,
       billingModeRevision: modeRevision,
+      billingScopeEpoch: configured?.selection.epoch ? new Date(configured.selection.epoch) : null,
       accountId: account.id,
       appKeyId: params.credential.id,
       checkoutLocale: params.locale ?? null,
@@ -390,7 +386,8 @@ export async function createStripeCheckoutSession(
           { prisma, stripe },
         );
         if (recovered.session) return openSessionResult(recovered.session, payload);
-        checkout = recovered.abandoned ? null : recovered.checkout;
+        if(recovered.abandoned)throw new AppError('BAD_REQUEST',409,'BILLING_CONTEXT_STALE');
+        checkout = recovered.checkout;
       }
     }
     if (!checkout) {

@@ -20,14 +20,14 @@ import {
   type BillingCustomerActionRequest,
 } from './billing-customer-action-intent.service.js';
 import { resolveCreditAccount } from './billing-credit-account.service.js';
-import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import { resolveFinancialTariffContext } from './billing-entitlement.service.js';
 import {
   isOrganisationBillingManager,
   resolveOrgBillingResponsibility,
 } from './billing-org-responsibility.service.js';
 import {
   resolveBillingFundingViewer,
-  type BillingFundingViewer,
+  type OrganisationBillingFundingViewer,
 } from './billing-funding-viewer.service.js';
 import {
   assertStripeObjectLivemode,
@@ -44,7 +44,7 @@ import {
 export type CreditFundingActionRequest = {
   product: string;
   organisationId: string;
-  teamId: string;
+  teamId: string | null;
   userId: string;
   billingContext?: string;
 };
@@ -56,8 +56,9 @@ export type CreditFundingStripeClient = Pick<
 
 export type CreditFundingActionContext = {
   modeRevision?: number;
+  scopeEpoch?: string;
   actor: BillingActor;
-  viewer: BillingFundingViewer;
+  viewer: OrganisationBillingFundingViewer;
   account: StripeAccountContext;
   creditAccount: Awaited<ReturnType<typeof resolveCreditAccount>>;
   customer: BillingStripeCustomer;
@@ -70,7 +71,7 @@ type ContextDependencies = {
   prisma?: PrismaClient;
   stripe?: CreditFundingStripeClient;
   stripeLivemode?: boolean;
-  resolveTariff?: typeof resolveEffectiveTariffContext;
+  resolveTariff?: typeof resolveFinancialTariffContext;
   resolveViewer?: typeof resolveBillingFundingViewer;
   resolveAccount?: typeof resolveStripeAccountContext;
   ensureCreditAccount?: typeof resolveCreditAccount;
@@ -95,7 +96,7 @@ export async function resolveCreditFundingActionContext(
 ): Promise<CreditFundingActionContext> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const [{ actor }, viewer] = await Promise.all([
-    (deps?.resolveTariff ?? resolveEffectiveTariffContext)(params, { prisma }),
+    (deps?.resolveTariff ?? resolveFinancialTariffContext)(params, { prisma }),
     (deps?.resolveViewer ?? resolveBillingFundingViewer)(
       {
         userId: params.request.userId,
@@ -105,26 +106,7 @@ export async function resolveCreditFundingActionContext(
       { prisma },
     ),
   ]);
-  // While the organisation has taken billing over, a team billing manager has
-  // nothing to manage: the money is the organisation's, so the authority must
-  // be the organisation's too. Checked here, in UOA, never trusted from the
-  // product (Docs/plans/2026-08-15-org-billing-override.md §6).
-  const responsibility = await (
-    deps?.resolveResponsibility ?? resolveOrgBillingResponsibility
-  )({ organisationId: params.request.organisationId }, { prisma });
-  if (responsibility.active) {
-    const organisationManager = await (
-      deps?.isOrganisationManager ?? isOrganisationBillingManager
-    )(
-      { organisationId: params.request.organisationId, userId: params.request.userId },
-      { prisma },
-    );
-    if (!organisationManager) {
-      throw new AppError('FORBIDDEN', 403, 'BILLING_ORG_MANAGER_REQUIRED');
-    }
-  } else if (!viewer.billingManager) {
-    throw new AppError('FORBIDDEN', 403, 'BILLING_MANAGER_REQUIRED');
-  }
+  if (!viewer.billingManager) throw new AppError('FORBIDDEN',403,'BILLING_MANAGER_REQUIRED');
   const configured = deps?.stripe ? null : await requireTeamStripeBilling(params.request, prisma);
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
@@ -145,7 +127,7 @@ export async function resolveCreditFundingActionContext(
     if (['/billing/v1/credits/auto-top-up/setup', '/billing/v1/credits/auto-top-up/update'].includes(params.endpoint)
       && 'optionId' in params.request) displayed.option_id = params.request.optionId;
     assertBillingActionContext(params.request.billingContext, {
-      account, revision: modeRevision, appKeyId: params.credential.id,
+      account, revision: modeRevision, scopeEpoch: configured?.selection.epoch, appKeyId: params.credential.id,
     }, params.endpoint, displayed);
   }
   const creditAccount = await (deps?.ensureCreditAccount ?? resolveCreditAccount)(
@@ -166,12 +148,11 @@ export async function resolveCreditFundingActionContext(
       where: { id: params.request.organisationId },
       select: { id: true, name: true },
     }),
-    prisma.team.findFirst({
-      where: { id: params.request.teamId, orgId: params.request.organisationId },
-      select: { id: true, name: true },
+    params.request.teamId===null ? Promise.resolve(null) : prisma.team.findFirst({
+      where:{id:params.request.teamId,orgId:params.request.organisationId},select:{id:true,name:true},
     }),
   ]);
-  if (!localCustomer || !user || !organisation || !team) {
+  if (!localCustomer || !user || !organisation || (params.request.teamId!==null && !team)) {
     throw new AppError('FORBIDDEN', 403, 'BILLING_SUBJECT_NOT_ENTITLED');
   }
   const authorizeAction = async (tx?: Prisma.TransactionClient): Promise<void> => {
@@ -181,9 +162,7 @@ export async function resolveCreditFundingActionContext(
         organisationId: params.request.organisationId,
         teamId: params.request.teamId,
         userId: params.request.userId,
-        authorityScope: responsibility.active
-          ? BillingAssignmentScope.ORGANISATION
-          : BillingAssignmentScope.TEAM,
+        authorityScope: BillingAssignmentScope.ORGANISATION,
         operation: params.action.operation,
         actor,
         request: params.action.request,
@@ -198,7 +177,7 @@ export async function resolveCreditFundingActionContext(
         customer: localCustomer,
         account,
         email: requireIdentityEmail(user.email),
-        name: localCustomer.teamId === null ? organisation.name : team.name || organisation.name,
+        name: localCustomer.teamId === null ? organisation.name : team?.name || organisation.name,
         orgId: organisation.id,
         teamId: localCustomer.teamId,
         scope: localCustomer.scope,
@@ -212,7 +191,7 @@ export async function resolveCreditFundingActionContext(
     return customer;
   };
   return {
-    modeRevision,
+    modeRevision, scopeEpoch: configured?.selection.epoch,
     actor,
     viewer,
     account,

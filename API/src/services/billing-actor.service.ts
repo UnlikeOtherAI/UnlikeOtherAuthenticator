@@ -3,6 +3,10 @@ import { decodeProtectedHeader, jwtVerify } from 'jose';
 import { z } from 'zod';
 
 import { AppError } from '../utils/errors.js';
+import { ORGANISATION_FINANCIAL_ENDPOINTS } from './billing-financial-endpoints.service.js';
+import { requireBillingManager } from './billing-financial-authority.service.js';
+import { getAdminPrisma } from '../db/prisma.js';
+import { financialAssuranceCustodyTeam } from './billing-financial-assurance.service.js';
 import { importClientJwkKey, jwkToPublic } from './client-jwk.service.js';
 import {
   assertBillingActorAudience,
@@ -23,7 +27,8 @@ const BillingActorSchema = z
     sub: z.string().trim().min(1).max(256),
     product: z.string().trim().min(1).max(100),
     organisation_id: z.string().trim().min(1).max(256),
-    team_id: z.string().trim().min(1).max(256),
+    team_id: z.string().trim().min(1).max(256).nullable(),
+    financial_scope: z.literal('organisation').optional(),
     tv: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     assurance_ref: z.string().min(32).max(256).optional(),
     jti: z.string().trim().min(1).max(256),
@@ -44,13 +49,26 @@ export async function verifyBillingActor(
     request: {
       product: string;
       organisationId: string;
-      teamId: string;
+      teamId: string | null;
       userId: string;
     };
   },
   deps?: { now?: () => number; prisma?: PrismaClient | Prisma.TransactionClient },
 ): Promise<BillingActor> {
   const actor = await verifyBillingActorSignature(params, deps);
+  if(actor.financial_scope==='organisation'&&!ORGANISATION_FINANCIAL_ENDPOINTS.has(params.endpoint)) {
+    throw new AppError('UNAUTHORIZED',401,'INVALID_BILLING_ACTOR');
+  }
+
+  if (actor.team_id === null) {
+    if (actor.financial_scope !== 'organisation' || !ORGANISATION_FINANCIAL_ENDPOINTS.has(params.endpoint)) {
+      throw new AppError('UNAUTHORIZED',401,'INVALID_BILLING_ACTOR');
+    }
+    await requireBillingManager(params.request, deps?.prisma as PrismaClient | undefined);
+    const user = await (deps?.prisma ?? getAdminPrisma()).user.findFirst({where:{id:actor.sub,
+      lifecycleStatus:'ACTIVE',tokenVersion:actor.tv},select:{id:true}});
+    if (!user) throw new AppError('FORBIDDEN',403,'BILLING_SUBJECT_NOT_ENTITLED');
+  }
 
   // Audience is checked after the signature so an unauthenticated caller learns
   // nothing, and outside the catch-all below so a mismatch keeps its own code.
@@ -60,6 +78,9 @@ export async function verifyBillingActor(
     legacyAudience: params.credential.actorAudience,
   });
   if (outcome === 'legacy') {
+    if(actor.financial_scope==='organisation') {
+      throw new AppError('UNAUTHORIZED',401,'BILLING_ACTOR_AUDIENCE_MISMATCH');
+    }
     logLegacyBillingActorAudience({
       endpoint: params.endpoint,
       presented: actor.aud,
@@ -74,9 +95,13 @@ export async function verifyBillingActor(
     }
     const clientDomain = issuer.hostname + (issuer.pathname === '/' ? '' : issuer.pathname);
     const artifact = credentialArtifactSource(actor, 'reference');
+    const custodyTeam=actor.team_id===null && actor.assurance_ref ? await financialAssuranceCustodyTeam({
+      reference:actor.assurance_ref,userId:actor.sub,organisationId:actor.organisation_id,
+      clientDomain,credentialEpoch:actor.tv},deps?.prisma??getAdminPrisma()) : actor.team_id;
     await authorizeCredentialSurfaceWhenAvailable('billing_actor', { artifact, method: artifact.method,
       assuranceReference: actor.assurance_ref, clientDomain, userId: actor.sub,
-      credentialEpoch: actor.tv, orgId: actor.organisation_id, teamId: actor.team_id }, deps?.prisma);
+      credentialEpoch: actor.tv, orgId: actor.organisation_id,
+      teamId:custodyTeam }, deps?.prisma);
   }
   return actor;
 }
@@ -88,7 +113,7 @@ async function verifyBillingActorSignature(
     request: {
       product: string;
       organisationId: string;
-      teamId: string;
+      teamId: string | null;
       userId: string;
     };
   },

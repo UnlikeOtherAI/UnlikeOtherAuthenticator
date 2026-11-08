@@ -1,3 +1,4 @@
+import { billingOrganisationFinancialV1Schemas } from '../../contracts/billing-statement-v1.js';
 import { BillingContextSchema, readBillingModeProtocol } from './billing-mode-protocol.js';
 import { readBillingPresentation } from './billing-presentation.js';
 import type { FastifyInstance } from 'fastify';
@@ -11,9 +12,6 @@ import {
   BILLING_RECURRING_ADDONS_CHECKOUT_PATH,
   BILLING_RECURRING_ADDONS_READ_PATH,
   billingHostedRedirectResponseJsonSchema,
-  billingRecurringAddonCancellationConfirmationV1JsonSchema,
-  billingRecurringAddonCancellationPreviewV1JsonSchema,
-  billingRecurringAddonsV1JsonSchema,
 } from '../../contracts/billing-statement-v1.js';
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import { confirmRecurringAddonCancellation } from '../../services/billing-recurring-addon-cancellation-confirm.service.js';
@@ -21,17 +19,17 @@ import { createRecurringAddonCancellationPreview } from '../../services/billing-
 import { createRecurringAddonCheckout } from '../../services/billing-recurring-addon-checkout.service.js';
 import { getBillingRecurringAddons } from '../../services/billing-recurring-addons.service.js';
 import { AppError } from '../../utils/errors.js';
-import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import { BillingFinancialSubjectRequestSchema as BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 
 const validator = new Ajv2020({ allErrors: true, strict: true });
 ajvFormats.default.default(validator);
-const validateBillingRecurringAddons = validator.compile(billingRecurringAddonsV1JsonSchema);
+const validateBillingRecurringAddons = validator.compile(billingOrganisationFinancialV1Schemas.addons_response);
 const validateHostedRedirect = validator.compile(billingHostedRedirectResponseJsonSchema);
 const validateCancellationPreview = validator.compile(
-  billingRecurringAddonCancellationPreviewV1JsonSchema,
+  billingOrganisationFinancialV1Schemas.addon_cancellation_preview_response,
 );
 const validateCancellationConfirmation = validator.compile(
-  billingRecurringAddonCancellationConfirmationV1JsonSchema,
+  billingOrganisationFinancialV1Schemas.addon_cancellation_confirmation_response,
 );
 
 const CheckoutRequestSchema = BillingSubjectRequestSchema.extend({
@@ -124,7 +122,7 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
     BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH,
     {
       preHandler: [requireBillingLifecycleAppKey],
-      schema: { response: { 200: billingRecurringAddonCancellationPreviewV1JsonSchema } },
+      schema: { response: { 200: billingOrganisationFinancialV1Schemas.addon_cancellation_preview_response } },
     },
     async (request, reply) => {
       const body = CancellationPreviewRequestSchema.parse(request.body);
@@ -155,7 +153,7 @@ export function registerBillingRecurringAddonsRoute(app: FastifyInstance): void 
     BILLING_RECURRING_ADDONS_CANCELLATION_CONFIRM_PATH,
     {
       preHandler: [requireBillingLifecycleAppKey],
-      schema: { response: { 200: billingRecurringAddonCancellationConfirmationV1JsonSchema } },
+      schema: { response: { 200: billingOrganisationFinancialV1Schemas.addon_cancellation_confirmation_response } },
     },
     async (request, reply) => {
       const body = CancellationConfirmRequestSchema.parse(request.body);

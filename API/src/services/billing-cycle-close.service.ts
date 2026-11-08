@@ -28,6 +28,7 @@ import {
 } from './billing-ledger-paid-receipt-proof.service.js';
 import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
 import { readCycleWalletBoundary } from './billing-cycle-wallet-boundary.service.js';
+import { monthlyCycleAccount } from './billing-cycle-account-binding.service.js';
 import {
   quoteSubscriptionMonthlyCharge, type MonthlyChargeSource,
 } from './billing-monthly-subscription-quote.service.js';
@@ -91,6 +92,9 @@ export async function prepareBillingCycleClose(
       billingMonth: params.billingMonth,
     }) : null;
   const teams = initial.teamId ? [initial.teamId] : discovery?.teamIds ?? [];
+  const capturedAccountId = await monthlyCycleAccount(prisma, {
+    orgId: initial.organisationId, serviceId: initial.serviceId, teamId: initial.teamId,
+  }, initial.source);
 
   const ledgerSnapshots: CycleUsageEvidence[] = [];
   const creditEvidence: VerifiedCycleCreditEvidence[] = [];
@@ -113,7 +117,7 @@ export async function prepareBillingCycleClose(
     const proof = await (deps?.fetchPaidReceiptSet ?? fetchVerifiedLedgerPaidReceiptSet)(scope);
     proofs.set(teamId, proof);
     const teamCreditEvidence = await readVerifiedCycleCreditEvidence(prisma, {
-      scope, proof, payer: initial.scope, tariff,
+      scope, proof, payer: initial.scope, tariff, accountId: capturedAccountId ?? undefined,
       rawLines: projected.evidence.raw_lines,
     });
     const collectible = BigInt(teamCreditEvidence.consumed_microcredits) -
@@ -134,7 +138,7 @@ export async function prepareBillingCycleClose(
     sum + BigInt(row.waived_microcredits), 0n);
   const walletBoundary = await readCycleWalletBoundary(prisma, {
     orgId: initial.organisationId, teamId: initial.teamId, payer: initial.scope,
-    startsAt, endsAt,
+    startsAt, endsAt, capturedAccountId,
   });
   if (initial.teamId === null) {
     usageLines = aggregateOrganisationCycleUsage(organisationUsageLines);
@@ -155,6 +159,9 @@ export async function prepareBillingCycleClose(
     if (quoteFingerprint(initial, startsAt, endsAt) !==
       quoteFingerprint(quote, startsAt, endsAt)) hold('BILLING_CYCLE_QUOTE_CHANGED');
     const fingerprint = quoteFingerprint(quote, startsAt, endsAt);
+    const lockedAccountId = await monthlyCycleAccount(tx, { orgId: quote.organisationId,
+      serviceId: quote.serviceId, teamId: quote.teamId }, quote.source);
+    if (lockedAccountId !== capturedAccountId) hold('BILLING_CYCLE_ACCOUNT_BINDING_CHANGED');
     const lockedCreditEvidence = await Promise.all(teams.map((teamId) => {
       const raw = ledgerSnapshots.find((row) => row.team_id === teamId)?.raw_lines;
       const proof = proofs.get(teamId);
@@ -163,6 +170,7 @@ export async function prepareBillingCycleClose(
         scope: { product: service.identifier, organisationId: quote.organisationId,
           teamId, billingMonth: params.billingMonth, serviceId: service.id },
         proof, payer: quote.scope, tariff, rawLines: raw,
+        accountId: capturedAccountId ?? undefined,
       });
     }));
     if (lockedCreditEvidence.some((row, index) =>
@@ -171,7 +179,7 @@ export async function prepareBillingCycleClose(
     }
     const lockedWallet = await readCycleWalletBoundary(tx, {
       orgId: quote.organisationId, teamId: quote.teamId, payer: quote.scope,
-      startsAt, endsAt,
+      startsAt, endsAt, capturedAccountId,
     });
     if (lockedWallet.fingerprint !== walletBoundary.fingerprint) {
       hold('BILLING_CYCLE_WALLET_BOUNDARY_CHANGED');

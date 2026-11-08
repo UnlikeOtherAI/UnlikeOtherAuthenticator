@@ -12,7 +12,7 @@ import {
   type BillingSubscriptionRequest,
 } from '../../services/billing-stripe-subscription.service.js';
 import { AppError } from '../../utils/errors.js';
-import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import { BillingFinancialSubjectRequestSchema as BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 import type { BillingActorEndpoint } from '../../services/billing-actor-audience.service.js';
 
 const PortalRequestSchema = BillingSubjectRequestSchema.extend({
@@ -26,7 +26,7 @@ const subjectSchema = {
   properties: {
     user_id: { type: 'string' },
     organisation_id: { type: 'string' },
-    team_id: { type: 'string' },
+    team_id: { type: ['string','null'] },
   },
 } as const;
 

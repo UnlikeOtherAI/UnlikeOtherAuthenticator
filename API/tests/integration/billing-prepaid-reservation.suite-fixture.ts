@@ -1,7 +1,8 @@
+import { configureSyntheticStripeMode } from '../helpers/stripe-mode-config.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { BillingAppKeyPurpose, Prisma, type PrismaClient } from '@prisma/client';
 import { CompactSign, createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type KeyLike } from 'jose';
-import { afterAll, beforeAll } from 'vitest';
+import { afterAll, beforeAll,vi } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
 import { resetAccessTokenKeyCache } from '../../src/services/oauth/access-token.service.js';
@@ -41,7 +42,7 @@ export async function delegation(overrides: Record<string, unknown> = {}) {
     tv: 0, email: 'prepaid@example.com', source_domain: 'deepwater.example.com',
     azp: 'deepwater.example.com', product: 'deepwater', scope: 'ai.invoke',
     active: { orgId: ids.org, teamId: ids.team },
-    org: { org_id: ids.org, org_role: 'owner', teams: [ids.team],
+    org: { org_id: ids.org, org_role: 'member', teams: [ids.team],
       team_roles: { [ids.team]: 'admin' } }, ...overrides,
   }).setProtectedHeader({ alg: 'RS256', typ: 'at+jwt', kid: 'prepaid-test-key' })
     .setIssuer(issuer).setAudience('https://ledger.example.com').setSubject(ids.user)
@@ -135,21 +136,24 @@ export function beforeFinalAdmission(action: () => Promise<unknown>) {
 }
 
 export async function seed(): Promise<void> {
+  configureSyntheticStripeMode('acct_PrepaidRating',false);
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
     await tx.$executeRaw(Prisma.sql`INSERT INTO "users" ("id", "email", "user_key", "name")
-      VALUES (${ids.user}, 'prepaid@example.com', 'prepaid@example.com', 'Prepaid')`);
+      VALUES (${ids.user}, 'prepaid@example.com', 'prepaid@example.com', 'Prepaid'),
+      ('usr_prepaid_owner','prepaid-owner@example.test','prepaid-owner@example.test','Org owner')`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "organisations"
       ("id", "domain", "name", "slug", "owner_id", "updated_at")
-      VALUES (${ids.org}, 'prepaid.example.com', 'Prepaid', 'prepaid', ${ids.user}, CURRENT_TIMESTAMP)`);
+      VALUES (${ids.org}, 'prepaid.example.com', 'Prepaid', 'prepaid', 'usr_prepaid_owner', CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "teams"
       ("id", "org_id", "name", "slug", "updated_at")
       VALUES (${ids.team}, ${ids.org}, 'Prepaid', 'prepaid', CURRENT_TIMESTAMP)`);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_organisation_mode_events(org_id,sandbox,revision) VALUES (${ids.org},true,1)`);
     // Explicit sandbox policy for this synthetic TEST wallet.
-    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_team_modes(team_id,sandbox,revision) VALUES (${ids.team},true,1)`);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_organisation_modes(org_id,sandbox,revision) VALUES (${ids.org},true,1)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO org_members
       (id, org_id, user_id, domain, role, updated_at)
-      VALUES ('org-member-prepaid', ${ids.org}, ${ids.user}, 'prepaid.example.com', 'owner', CURRENT_TIMESTAMP)`);
+      VALUES ('org-member-prepaid', ${ids.org}, ${ids.user}, 'prepaid.example.com', 'member', CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO team_members
       (id, team_id, user_id, team_role, updated_at)
       VALUES ('team-member-prepaid', ${ids.team}, ${ids.user}, 'admin', CURRENT_TIMESTAMP)`);
@@ -163,16 +167,16 @@ export async function seed(): Promise<void> {
         'NONE', 0, 'USD', 'PREPAID')`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "billing_stripe_accounts"
       ("id", "stripe_account_id", "livemode", "updated_at")
-      VALUES (${ids.account}, 'acct_prepaid_rating', false, CURRENT_TIMESTAMP)`);
+      VALUES (${ids.account}, 'acct_PrepaidRating', false, CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "billing_stripe_customers"
       ("id", "account_id", "org_id", "team_id", "scope", "scope_key", "updated_at")
-      VALUES (${ids.customer}, ${ids.account}, ${ids.org}, ${ids.team}, 'TEAM',
-        ${`${ids.org}:${ids.team}`}, CURRENT_TIMESTAMP)`);
+      VALUES (${ids.customer}, ${ids.account}, ${ids.org}, NULL, 'ORGANISATION',
+        ${ids.org}, CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "billing_credit_accounts"
       ("id", "account_id", "customer_id", "org_id", "team_id", "scope", "scope_key",
        "currency", "balance_microcredits", "updated_at")
-      VALUES (${ids.credit}, ${ids.account}, ${ids.customer}, ${ids.org}, ${ids.team},
-        'TEAM', ${`${ids.org}:${ids.team}`}, 'USD', 100, CURRENT_TIMESTAMP)`);
+      VALUES (${ids.credit}, ${ids.account}, ${ids.customer}, ${ids.org}, NULL,
+        'ORGANISATION', ${ids.org}, 'USD', 100, CURRENT_TIMESTAMP)`);
   });
   await prisma.billingLedgerRuntimeKey.create({ data: {
     id: ids.key, serviceId: ids.service,
@@ -231,6 +235,6 @@ afterAll(async () => {
       else process.env[key] = value;
     }
     resetAccessTokenKeyCache();
-    if (cleanup) await cleanup();
+    if (cleanup) await cleanup();vi.unstubAllEnvs();
   });
 }

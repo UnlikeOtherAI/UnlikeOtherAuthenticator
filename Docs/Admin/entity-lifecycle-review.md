@@ -1,5 +1,14 @@
 # Entity lifecycle review and rollout
 
+The 8 November 2026 user clarification supersedes the earlier last-team cascade:
+explicit TEAM deletion preserves the organisation. Before deploying this change,
+check the count of unfinished legacy TEAM jobs whose stored preview has
+`effectiveScope != TEAM`. The product delivery and executor refuse those old
+expanded scopes with `DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED`. Do not cancel,
+delete or edit a job to hide it; inspect its committed product acknowledgements
+and completed stages before a separately reviewed reconciliation. Completed
+historical erasure is not reversible and is never represented as restored.
+
 ## Decisions
 
 UOA remains the authority for human identities, organisations, teams, membership, and invitations. Products retain stable UOA references and their own content. Entity access state is separate from membership: disabling an organisation denies access through its teams without overwriting their independent state. Reactivating a parent does not reactivate an independently disabled child.
@@ -15,7 +24,7 @@ Two account deletion modes are exposed:
 
 Neither mode allows the old identity to authenticate or regain membership. Registering the same email creates a fresh identity. Ownership of a surviving organisation must be transferred before deleting its owner.
 
-Team deletion removes data in the selected team and includes accounts only when they have no dependency elsewhere. Organisation deletion covers its nested teams. Shared accounts and accounts with personal or protected dependencies survive. Deleting the last team includes its now-empty organisation in the preview; the executor must never silently widen a confirmed scope.
+Team deletion removes data in the selected team and includes accounts only when they have no dependency elsewhere. Organisation deletion covers its nested teams. Shared accounts and accounts with personal or protected dependencies survive. Deleting the last team preserves the now-empty organisation and its active memberships/owner/admin authority for Create team recovery. The executor never expands TEAM consent into organisation deletion; captured financial evidence and holds remain authoritative.
 
 Invoices, signed agreements, and other protected historical evidence remain under their existing restricted access and immutability rules. Operational grants and unsigned capabilities are not automatically treated as protected evidence. Live collection capabilities must be closed or transferred before confirmation. Completion states explicitly distinguish operational deletion from retained evidence.
 
@@ -49,6 +58,17 @@ This repository implements the UOA side of deletion. Each consuming product must
 Unknown inventory or an unacknowledged product is a visible blocker, not success. UOA cannot attest to content a product never associated with its identity or organisation references. Inventory and adapter deployment must therefore be verified for each consuming product. Existing offline JWTs also need online revocation/introspection or bounded expiry; changing UOA state cannot rewrite a token already delivered to a product.
 
 ## Verification record
+
+The 2026-11-08 organisation billing change supersedes the former last-team
+cascade: explicit TEAM deletion preserves the organisation and its active
+people for Create team recovery. It adds a database deployment fence as well as
+delivery/executor checks. Before applying the migration, inspect unfinished TEAM
+jobs; the migration repeats the check under a write-conflicting table lock.
+An incompatible preview or missing `preserve-org-v2` policy blocks installation.
+No pending job is rewritten or erased. Fresh previews and executor leases carry
+that policy marker so an old Cloud Run revision cannot create or execute the
+former destructive semantics during overlap. Completed historical jobs stay
+intact. Authentication does not depend on the deletion executor.
 
 The implementation is reviewed in an isolated integration branch with a separate Sol worker branch. Required delivery gates include workspace builds, lint/type checks, API unit and real PostgreSQL integration tests, and durable desktop/mobile browser flows. The final pull request records the exact completed checks and any environment limits. No production identity or organisation deletion is performed as part of development verification.
 

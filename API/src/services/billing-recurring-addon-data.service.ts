@@ -1,4 +1,4 @@
-import { BillingRecurringAddonSubscriptionScope, type PrismaClient } from '@prisma/client';
+import { type PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 
 export async function loadAddonData(
@@ -6,12 +6,13 @@ export async function loadAddonData(
     accountId: string;
     serviceId: string;
     organisationId: string;
-    teamId: string;
+    teamId: string|null;
   },
   deps?: { prisma?: PrismaClient },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const [offers, subscriptions, checkouts] = await Promise.all([
+  const currentCustomer={accountId:params.accountId,orgId:params.organisationId,scope:'ORGANISATION' as const,teamId:null};
+  const [offers, subscriptions, checkouts,retainedSubscriptions] = await Promise.all([
     prisma.billingRecurringAddonOffer.findMany({
       where: { serviceId: params.serviceId, active: true, resourceKind: null },
       orderBy: [{ key: 'asc' }, { version: 'desc' }],
@@ -25,24 +26,8 @@ export async function loadAddonData(
         accountId: params.accountId,
         serviceId: params.serviceId,
         orgId: params.organisationId,
+        customer:currentCustomer,
         offer: { resourceKind: null },
-        OR: [
-          {
-            scope: BillingRecurringAddonSubscriptionScope.ORGANISATION,
-            teamId: null,
-            subscribingUserId: null,
-          },
-          {
-            scope: BillingRecurringAddonSubscriptionScope.TEAM,
-            teamId: params.teamId,
-            subscribingUserId: null,
-          },
-          {
-            scope: BillingRecurringAddonSubscriptionScope.SUBSCRIBING_USER,
-            teamId: params.teamId,
-            subscribingUserId: { not: null },
-          },
-        ],
       },
       orderBy: { updatedAt: 'desc' },
     }),
@@ -51,13 +36,16 @@ export async function loadAddonData(
         accountId: params.accountId,
         serviceId: params.serviceId,
         orgId: params.organisationId,
-        requestedTeamId: params.teamId,
+        customer:currentCustomer,
         offer: { resourceKind: null },
         status: { in: ['CREATING', 'OPEN', 'NEEDS_REVIEW'] },
       },
       orderBy: { updatedAt: 'desc' },
     }),
+    prisma.billingRecurringAddonSubscription.findMany({where:{orgId:params.organisationId,serviceId:params.serviceId,
+      offer:{resourceKind:null},status:{notIn:['canceled','incomplete_expired']},
+      NOT:{accountId:params.accountId,customer:currentCustomer}},select:{offerKey:true}}),
   ]);
-  return { offers, subscriptions, checkouts };
+  return { offers, subscriptions, checkouts,retainedSubscriptions };
 }
 

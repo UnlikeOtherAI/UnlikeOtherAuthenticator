@@ -162,36 +162,40 @@ async function seed(prisma: PrismaClient) {
       VALUES (${ids.account}, 'acct_credit_stripe_race', false, CURRENT_TIMESTAMP)
     `);
   });
-  await prisma.billingTeamMode.create({ data: { teamId: ids.team, sandbox: true, revision: 1 } });
-  await prisma.billingStripeCustomer.create({
+  // Captured pre-epoch TEST sources only; the actual collector race below uses
+  // all production fences and never creates current TEAM financial work.
+  await prisma.$transaction(async tx=>{
+    await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+  await tx.billingTeamMode.create({ data: { teamId: ids.team, sandbox: true, revision: 1 } });
+  await tx.billingStripeCustomer.create({
     data: { id: ids.customer, accountId: ids.account, orgId: ids.org, teamId: ids.team,
       scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`, stripeCustomerId: 'cus_credit_stripe_race' },
   });
-  await prisma.billingCreditAccount.create({
+  await tx.billingCreditAccount.create({
     data: {
       createdAt: new Date('2026-01-01T00:00:00Z'), id: ids.credit, accountId: ids.account, customerId: ids.customer,
       orgId: ids.org, teamId: ids.team, scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`,
       currency, balanceMicrocredits: 0n },
   });
-  const catalog = await prisma.billingStripeCatalog.create({
+  const catalog = await tx.billingStripeCatalog.create({
     data: { accountId: ids.account, serviceId: ids.service, currency,
       meterEventName: 'uoa_race_usage', stripeProductId: 'prod_credit_stripe_race',
       stripeMeterId: 'mtr_credit_stripe_race', stripeUsagePriceId: 'price_credit_stripe_race' },
   });
-  await prisma.billingStripeTariffPrice.create({
+  await tx.billingStripeTariffPrice.create({
     data: { accountId: ids.account, tariffId: ids.tariff, catalogId: catalog.id,
       monthlyAmountMinor: 0n },
   });
-  await prisma.billingStripeCheckoutSession.create({
+  await tx.billingStripeCheckoutSession.create({
     data: {
-      billingModeTeamId: ids.team, billingModeRevision: 1, id: ids.checkout, accountId: ids.account, appKeyId: ids.appKey,
+      createdAt:new Date('2026-01-01T00:00:00Z'),billingModeTeamId: ids.team, billingModeRevision: 1, id: ids.checkout, accountId: ids.account, appKeyId: ids.appKey,
       customerId: ids.customer, serviceId: ids.service, tariffId: ids.tariff,
       tariffSource: 'SERVICE_DEFAULT', orgId: ids.org, teamId: ids.team,
       scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`, actorJti: 'race-checkout',
       requestedByUserId: ids.user, successUrlDigest: 'a'.repeat(64),
       cancelUrlDigest: 'b'.repeat(64), leaseExpiresAt: new Date('2026-10-05T00:00:00.000Z') },
   });
-  await prisma.billingStripeSubscription.create({
+  await tx.billingStripeSubscription.create({
     data: {
       createdAt: new Date('2026-01-01T00:00:00Z'), id: ids.subscription, accountId: ids.account, checkoutId: ids.checkout,
       customerId: ids.customer, serviceId: ids.service, tariffId: ids.tariff,
@@ -201,6 +205,7 @@ async function seed(prisma: PrismaClient) {
       stripeUsageItemId: 'si_credit_stripe_race', status: 'active', livemode: false,
       currentPeriodStart: new Date('2026-10-01T00:00:00.000Z'),
       currentPeriodEnd: new Date('2026-11-01T00:00:00.000Z') },
+  });
   });
   await prisma.billingStripeUsageExport.create({
     data: { accountId: ids.account, subscriptionId: ids.subscription,

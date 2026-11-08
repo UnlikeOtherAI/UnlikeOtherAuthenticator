@@ -21,6 +21,7 @@ import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js'
 import { fetchVerifiedLedgerPaidReceiptSet } from './billing-ledger-paid-receipt-proof.service.js';
 import { fetchLedgerHistoricalBillingTeams } from './billing-ledger-team-discovery.service.js';
 import { readCycleWalletBoundary } from './billing-cycle-wallet-boundary.service.js';
+import { capturedCycleAccount, paidCycleAccount } from './billing-cycle-account-binding.service.js';
 import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 
 function hold(code: string): never {
@@ -44,7 +45,8 @@ async function historicalPayer(
     return BillingAssignmentScope.TEAM;
   } catch (error) {
     if (!(error instanceof AppError) ||
-      error.message !== 'BILLING_CREDIT_HISTORICAL_PAYER_MISMATCH') throw error;
+      !['BILLING_CREDIT_HISTORICAL_PAYER_MISMATCH',
+        'BILLING_ORGANISATION_SCOPE_REQUIRED'].includes(error.message)) throw error;
   }
   await assertUnambiguousCreditPayer(reader, {
     orgId, scope: BillingAssignmentScope.ORGANISATION, billingMonth: month,
@@ -97,13 +99,16 @@ export async function prepareBillingTeamUsageCycle(
   const scope = { product: service.identifier, organisationId: params.organisationId,
     teamId: params.teamId, billingMonth: params.billingMonth, serviceId: params.serviceId };
   const proof = await (deps?.fetchPaidReceiptSet ?? fetchVerifiedLedgerPaidReceiptSet)(scope);
+  const accountScope = { orgId: params.organisationId, serviceId: params.serviceId,
+    teamId: params.teamId, billingMonth: params.billingMonth };
+  const capturedAccountId = await paidCycleAccount(prisma, accountScope);
   const creditEvidence = await readVerifiedCycleCreditEvidence(prisma, {
-    scope, proof, payer, tariff: terms.tariff,
+    scope, proof, payer, tariff: terms.tariff, accountId: capturedAccountId ?? undefined,
     rawLines: projected.evidence.raw_lines,
   });
   const walletBoundary = await readCycleWalletBoundary(prisma, {
     orgId: params.organisationId, teamId: params.teamId, payer,
-    startsAt, endsAt,
+    startsAt, endsAt, capturedAccountId,
   });
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -120,8 +125,11 @@ export async function prepareBillingTeamUsageCycle(
           frozenTerms.assignmentId !== terms.assignmentId || frozenPayer !== payer) {
           hold('BILLING_CYCLE_HISTORICAL_TERMS_CHANGED');
         }
+        if (await paidCycleAccount(tx, accountScope) !== capturedAccountId) {
+          hold('BILLING_CYCLE_ACCOUNT_BINDING_CHANGED');
+        }
         const lockedCredits = await readVerifiedCycleCreditEvidence(tx, {
-          scope, proof, payer, tariff: terms.tariff,
+          scope, proof, payer, tariff: terms.tariff, accountId: capturedAccountId ?? undefined,
           rawLines: projected.evidence.raw_lines,
         });
         if (lockedCredits.fingerprint !== creditEvidence.fingerprint) {
@@ -129,11 +137,12 @@ export async function prepareBillingTeamUsageCycle(
         }
         const lockedWallet = await readCycleWalletBoundary(tx, {
           orgId: params.organisationId, teamId: params.teamId, payer,
-          startsAt, endsAt,
+          startsAt, endsAt, capturedAccountId,
         });
         if (lockedWallet.fingerprint !== walletBoundary.fingerprint) {
           hold('BILLING_CYCLE_WALLET_BOUNDARY_CHANGED');
         }
+        let cycleAccountId = capturedAccountId;
         if (organisationSubscription) {
           const orgCycleId = params.organisationCycleId;
           if (!orgCycleId) hold('BILLING_CYCLE_ORGANISATION_SOURCE_RECONCILIATION_REQUIRED');
@@ -147,7 +156,7 @@ export async function prepareBillingTeamUsageCycle(
             Record<string, unknown> | undefined;
           const orgQuote = orgEvidence?.quote as Record<string, unknown> | undefined;
           const orgSnapshots = orgEvidence?.ledger_snapshots;
-          if (!organisationCycle || organisationCycle.serviceId !== params.serviceId ||
+          if (!organisationCycle || !orgEvidence || organisationCycle.serviceId !== params.serviceId ||
             organisationCycle.orgId !== params.organisationId ||
             organisationCycle.teamId !== null ||
             organisationCycle.billingMonth !== params.billingMonth ||
@@ -160,6 +169,11 @@ export async function prepareBillingTeamUsageCycle(
               row.content_sha256 === projected.evidence.content_sha256)) {
             hold('BILLING_CYCLE_ORGANISATION_SOURCE_RECONCILIATION_REQUIRED');
           }
+          const parentAccountId = await capturedCycleAccount(tx, organisationCycle, orgEvidence);
+          if (!parentAccountId || (capturedAccountId && capturedAccountId !== parentAccountId)) {
+            hold('BILLING_CYCLE_ACCOUNT_BINDING_RECONCILIATION_REQUIRED');
+          }
+          cycleAccountId = parentAccountId;
         }
         const existing = await tx.billingCustomerCycle.findFirst({ where: {
           serviceId: params.serviceId, orgId: params.organisationId,
@@ -220,6 +234,7 @@ export async function prepareBillingTeamUsageCycle(
           documents: [], adjustments: [],
         };
         const privateEvidence = { source: 'team_usage_only', tariff_id: terms.tariff.id,
+          billing_account_id: cycleAccountId,
           tariff_source: terms.source, assignment_id: terms.assignmentId,
           organisation_cycle_id: params.organisationCycleId ?? null,
           team_discovery: discovery.snapshot,

@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 import { vi } from 'vitest';
+import { configureSyntheticStripeMode } from './stripe-mode-config.js';
 import { disableBillingCreditAutoTopUp } from '../../src/services/billing-credit-auto-top-up-consent.service.js';
 
 export const ids = {
@@ -21,12 +22,13 @@ export const ids = {
 
 export const stripeAccount = {
   id: ids.account,
-  stripeAccountId: 'acct_auto_top_up_runtime',
+  stripeAccountId: 'acct_AutoTopUpRuntime',
   livemode: false,
 };
 
 export function scopedIds(suffix: string) {
   return {
+    org: suffix==='concurrency'?ids.org:`${ids.org}_${suffix}`,
     team: `team_auto_top_up_${suffix}`,
     teamMember: `tm_auto_top_up_${suffix}`,
     customer: `bsc_auto_top_up_${suffix}`,
@@ -47,16 +49,27 @@ export async function seedCreditAccount(
   suffix: string,
   balanceMicrocredits: bigint,
   active: boolean,
+  historicalTeam=false,
 ): Promise<void> {
-  const row = scopedIds(suffix);
+  const row = scopedIds(suffix),organisationId=historicalTeam?ids.org:row.org;
+  // Independent ORG financial scenarios, not several wallets inside one org.
+  // Historical TEAM recovery opts in below and keeps its original sources.
+  if(!historicalTeam&&suffix!=='concurrency'){
+    await tx.organisation.create({data:{id:organisationId,domain:'auto-top-up.example.com',name:suffix,slug:'auto-'+suffix,ownerId:ids.user}});
+    await tx.orgMember.create({data:{orgId:organisationId,userId:ids.user,role:'owner'}});
+  }
+  if(!historicalTeam){
+    await tx.billingOrganisationMode.create({data:{orgId:organisationId,sandbox:true,revision:1}});
+    await tx.billingOrganisationModeEvent.create({data:{orgId:organisationId,sandbox:true,revision:1}});
+  }
   await tx.$executeRaw(Prisma.sql`
     INSERT INTO "teams" ("id", "org_id", "name", "slug", "updated_at")
     VALUES (
-      ${row.team}, ${ids.org}, ${`Auto Top Up ${suffix}`}, ${`auto-top-up-${suffix}`},
+      ${row.team}, ${organisationId}, ${`Auto Top Up ${suffix}`}, ${`auto-top-up-${suffix}`},
       CURRENT_TIMESTAMP
     )
   `);
-  await tx.billingTeamMode.create({ data: { teamId: row.team, sandbox: true, revision: 1 } });
+  if(historicalTeam)await tx.billingTeamMode.create({ data: { teamId: row.team, sandbox: true, revision: 1 } });
   await tx.$executeRaw(Prisma.sql`
     INSERT INTO "team_members" (
       "id", "team_id", "user_id", "team_role", "status", "updated_at"
@@ -69,8 +82,8 @@ export async function seedCreditAccount(
       "id", "account_id", "org_id", "team_id", "scope", "scope_key",
       "stripe_customer_id", "updated_at"
     ) VALUES (
-      ${row.customer}, ${ids.account}, ${ids.org}, ${row.team}, 'TEAM',
-      ${`${ids.org}:${row.team}`}, ${`cus_auto_top_up_${suffix}`}, CURRENT_TIMESTAMP
+      ${row.customer}, ${ids.account}, ${organisationId}, ${historicalTeam?row.team:null}, ${historicalTeam?'TEAM':'ORGANISATION'}::"BillingAssignmentScope",
+      ${historicalTeam?`${organisationId}:${row.team}`:organisationId}, ${`cus_auto_top_up_${suffix}`}, CURRENT_TIMESTAMP
     )
   `);
   if (!active) {
@@ -79,8 +92,8 @@ export async function seedCreditAccount(
         "id", "account_id", "customer_id", "org_id", "team_id", "scope", "scope_key", "currency",
         "balance_microcredits", "updated_at"
       ) VALUES (
-        ${row.creditAccount}, ${ids.account}, ${row.customer}, ${ids.org}, ${row.team},
-        'TEAM', ${`${ids.org}:${row.team}`}, 'USD', ${balanceMicrocredits}, CURRENT_TIMESTAMP
+        ${row.creditAccount}, ${ids.account}, ${row.customer}, ${organisationId}, ${historicalTeam?row.team:null},
+        ${historicalTeam?'TEAM':'ORGANISATION'}::"BillingAssignmentScope", ${historicalTeam?`${organisationId}:${row.team}`:organisationId}, 'USD', ${balanceMicrocredits}, CURRENT_TIMESTAMP
       )
     `);
     return;
@@ -96,7 +109,7 @@ export async function seedCreditAccount(
       "monthly_charge_cap_minor", "stripe_payment_method_id", "payment_method_summary",
       "consented_at"
     ) VALUES (
-      ${row.revision}, ${ids.account}, ${row.creditAccount}, ${ids.org}, ${row.team},
+      ${row.revision}, ${ids.account}, ${row.creditAccount}, ${organisationId}, ${historicalTeam?row.team:null},
       ${ids.service}, ${ids.appKey}, ${ids.policy}, ${ids.option}, ${ids.offer},
       'CUSTOMER_UPDATE', ${`actor-auto-top-up-${suffix}`}, ${ids.user}, 'auto-top-up-v1',
       200000000, 5000000000, 500, 1500, ${`pm_auto_top_up_${suffix}`},
@@ -114,8 +127,8 @@ export async function seedCreditAccount(
       "auto_top_up_consented_by_user_id", "stripe_payment_method_id",
       "payment_method_summary", "updated_at"
     ) VALUES (
-      ${row.creditAccount}, ${ids.account}, ${row.customer}, ${ids.org}, ${row.team},
-      'TEAM', ${`${ids.org}:${row.team}`}, 'USD',
+      ${row.creditAccount}, ${ids.account}, ${row.customer}, ${organisationId}, ${historicalTeam?row.team:null},
+      ${historicalTeam?'TEAM':'ORGANISATION'}::"BillingAssignmentScope", ${historicalTeam?`${organisationId}:${row.team}`:organisationId}, 'USD',
       ${balanceMicrocredits}, 'ACTIVE', ${ids.policy}, ${ids.service}, ${ids.appKey},
       ${row.revision}, ${ids.option}, 200000000, ${ids.offer}, 1500, 'auto-top-up-v1',
       ${consentedAt}, ${ids.user}, ${`pm_auto_top_up_${suffix}`},
@@ -124,7 +137,8 @@ export async function seedCreditAccount(
   `);
 }
 
-export async function seed(prisma: PrismaClient): Promise<void> {
+export async function seed(prisma: PrismaClient,accountName=stripeAccount.stripeAccountId,historicalTeam=false): Promise<void> {
+  configureSyntheticStripeMode(accountName,false);
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
     await tx.$executeRaw(Prisma.sql`
@@ -193,7 +207,7 @@ export async function seed(prisma: PrismaClient): Promise<void> {
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_stripe_accounts" (
         "id", "stripe_account_id", "livemode", "updated_at"
-      ) VALUES (${ids.account}, ${stripeAccount.stripeAccountId}, false, CURRENT_TIMESTAMP)
+      ) VALUES (${ids.account}, ${accountName}, false, CURRENT_TIMESTAMP)
     `);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_credit_funding_policies" (
@@ -235,12 +249,12 @@ export async function seed(prisma: PrismaClient): Promise<void> {
         'price_auto_top_up', CURRENT_TIMESTAMP
       )
     `);
-    await seedCreditAccount(tx, 'concurrency', 100_000_000n, true);
-    await seedCreditAccount(tx, 'recovery', 100_000_000n, true);
-    await seedCreditAccount(tx, 'embedded', 100_000_000n, true);
-    await seedCreditAccount(tx, 'above', 300_000_000n, true);
-    await seedCreditAccount(tx, 'disabled', 100_000_000n, false);
-    await seedCreditAccount(tx, 'pending-disabled', 100_000_000n, true);
+    await seedCreditAccount(tx, 'concurrency', 100_000_000n, true,historicalTeam);
+    await seedCreditAccount(tx, 'recovery', 100_000_000n, true,historicalTeam);
+    await seedCreditAccount(tx, 'embedded', 100_000_000n, true,historicalTeam);
+    await seedCreditAccount(tx, 'above', 300_000_000n, true,historicalTeam);
+    await seedCreditAccount(tx, 'disabled', 100_000_000n, false,historicalTeam);
+    await seedCreditAccount(tx, 'pending-disabled', 100_000_000n, true,historicalTeam);
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "users" ("id", "email", "user_key", "name")
       VALUES (
@@ -252,7 +266,7 @@ export async function seed(prisma: PrismaClient): Promise<void> {
       INSERT INTO "org_members" (
         "id", "org_id", "user_id", "role", "status", "updated_at"
       ) VALUES (
-        'om_auto_top_up_non_manager', ${ids.org}, ${ids.nonManagerUser}, 'member',
+        'om_auto_top_up_non_manager', ${historicalTeam?ids.org:embeddedError.org}, ${ids.nonManagerUser}, 'member',
         'ACTIVE', CURRENT_TIMESTAMP
       )
     `);
@@ -300,7 +314,7 @@ export async function disableCreditAccountWithAuditEvidence(
   });
   const request = {
     product: actor.product,
-    organisationId: ids.org,
+    organisationId: original.orgId,
     teamId: requestTeamId,
     userId,
   };
@@ -322,7 +336,7 @@ export async function disableCreditAccountWithAuditEvidence(
             data: {
               appKeyId: actor.appKeyId,
               serviceId: actor.serviceId,
-              orgId: ids.org,
+              orgId: original.orgId,
               teamId: requestTeamId,
               requestedByUserId: userId,
               authorityScope,

@@ -76,7 +76,7 @@ export function creditPaymentMethodView(
 
 function optionActions(
   data: BillingCreditProjectionData,
-  requestBody: BillingCreditActionSubject,
+  requestBody: BillingCreditActionSubject<string|null>,
   manager: boolean,
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,
@@ -180,7 +180,7 @@ function optionActions(
 
 export function creditAutomaticTopUpView(
   data: BillingCreditProjectionData,
-  requestBody: BillingCreditActionSubject,
+  requestBody: BillingCreditActionSubject<string|null>,
   manager: boolean,
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,

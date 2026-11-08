@@ -8,6 +8,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { isBillingManager } from './billing-stripe-manager.service.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingSubscriptionCopy, billingSubscriptionText } from './billing-subscription-copy.catalog.js';
+import { activeAuthorityUserWhere } from './organisation-team-authority.service.js';
 
 /**
  * Who pays for a team's usage, and who may say so.
@@ -49,13 +50,9 @@ export async function resolveOrgBillingResponsibility(
 }
 
 /**
- * Is this caller an ORGANISATION billing manager?
- *
- * Deliberately the existing primitive with the organisation scope, not a new
- * rule: `isBillingManager` returns true for a team owner/admin only at TEAM
- * scope, so an organisation question is answered by organisation roles alone.
- * A team billing manager keeps the role and simply has nothing to manage while
- * the override is on — which is what `can_manage: false` says on their surface.
+ * Current organisation financial authority: active organisation owner/admin only.
+ * A team-only administrator has separate read-only own-team records, never money
+ * authority. The selected team still supplies current actor admission context.
  */
 export async function isOrganisationBillingManager(
   params: { organisationId: string; userId: string },
@@ -63,14 +60,17 @@ export async function isOrganisationBillingManager(
 ): Promise<boolean> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const membership = await prisma.orgMember.findUnique({
-    where: { orgId_userId: { orgId: params.organisationId, userId: params.userId } },
-    select: { role: true, status: true },
+    where: { orgId_userId: { orgId: params.organisationId, userId: params.userId },user:activeAuthorityUserWhere() },
+    select: { role: true, status: true,org:{select:{ownerId:true,lifecycleStatus:true}} },
   });
   if (membership?.status !== MembershipStatus.ACTIVE) return false;
-  return isBillingManager({
+  if(membership.org?.lifecycleStatus && membership.org.lifecycleStatus!=='ACTIVE')return false;
+  if(membership.org?.ownerId===params.userId)return true;
+  if (isBillingManager({
     scope: BillingAssignmentScope.ORGANISATION,
     orgRole: membership.role,
-  });
+  })) return true;
+  return false;
 }
 
 /**

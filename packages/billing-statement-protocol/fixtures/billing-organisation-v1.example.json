@@ -1,0 +1,436 @@
+{
+  "capabilities": {
+    "schema_version": 1,
+    "generated_at": "2026-11-07T22:00:01.000Z",
+    "subject": {
+      "product": "deepwater",
+      "organisation_id": "org_example",
+      "team_id": "team_example",
+      "user_id": "user_example"
+    },
+    "financial_scope": {
+      "kind": "organisation",
+      "organisation_id": "org_example",
+      "mode": "live",
+      "revision": 0,
+      "epoch": "2026-11-07T22:00:00.000Z"
+    },
+    "capabilities": {
+      "can_view_billing": true,
+      "can_manage_billing": true
+    }
+  },
+  "overview": {
+    "schema_version": 1,
+    "generated_at": "2026-11-07T22:00:01.000Z",
+    "subject": {
+      "product": "deepwater",
+      "organisation_id": "org_example",
+      "team_id": "team_example",
+      "user_id": "user_example"
+    },
+    "financial_scope": {
+      "kind": "organisation",
+      "organisation_id": "org_example",
+      "mode": "live",
+      "revision": 0,
+      "epoch": "2026-11-07T22:00:00.000Z"
+    },
+    "sections": {
+      "accrued_bill": {
+        "state": "pending_reconciliation",
+        "code": "BILLING_MODE_TRANSITION_RECONCILIATION_REQUIRED",
+        "message": "This month’s bill is pending reconciliation. Confirmed credits and payment controls remain available."
+      },
+      "credits": {
+        "state": "confirmed",
+        "message": "Confirmed organisation credits.",
+        "data": {
+          "credit_account_id": "organisation_wallet",
+          "confirmed_balance": {
+            "credits": "34125",
+            "display": "34,125 credits",
+            "usd_equivalent": {
+              "amount": "34.125",
+              "currency": "USD",
+              "display": "US$34.125"
+            }
+          },
+          "reserved_credits": {
+            "credits": "0",
+            "display": "0 credits",
+            "usd_equivalent": {
+              "amount": "0",
+              "currency": "USD",
+              "display": "$0.00"
+            }
+          },
+          "spendable_balance": {
+            "credits": "34125",
+            "display": "34,125 credits",
+            "usd_equivalent": {
+              "amount": "34.125",
+              "currency": "USD",
+              "display": "US$34.125"
+            }
+          },
+          "as_of": "2026-11-07T22:00:01.000Z",
+          "billing_status": {
+            "settlement_state": "pending_reconciliation",
+            "message": "Unconfirmed usage is pending reconciliation."
+          }
+        }
+      },
+      "funding": {
+        "state": "confirmed",
+        "message": "Organisation funding controls.",
+        "data": {
+          "capabilities": {
+            "can_top_up": true,
+            "can_manage_automatic_top_up": true
+          },
+          "funding_policy": {
+            "top_up_enabled": true,
+            "automatic_top_up_enabled": true,
+            "title": "Add team credits",
+            "description": "Credits fund metered usage across connected services. Subscriptions and add-ons remain separate.",
+            "offers": [
+              {
+                "id": "cto_deepwater_20000",
+                "key": "credits-20000",
+                "name": "20,000 credits",
+                "description": "Pay US$20.00 and receive exactly 20,000 credits.",
+                "payment_amount": {
+                  "amount": "20",
+                  "amount_minor": "2000",
+                  "currency": "USD",
+                  "display": "US$20.00"
+                },
+                "credits_received": {
+                  "credits": "20000",
+                  "display": "20,000 credits",
+                  "usd_equivalent": {
+                    "amount": "20",
+                    "currency": "USD",
+                    "display": "US$20.00"
+                  }
+                },
+                "available": true,
+                "unavailable_reason": null,
+                "action": {
+                  "id": "top_up",
+                  "kind": "hosted_redirect",
+                  "label": "Buy 20,000 credits for US$20.00",
+                  "description": "Open secure Checkout; credits become available only after UOA verifies payment.",
+                  "enabled": true,
+                  "disabled_reason": null,
+                  "request": {
+                    "method": "POST",
+                    "path": "/billing/v1/credits/top-up-checkout",
+                    "body": {
+                      "product": "deepwater",
+                      "organisation_id": "org_example",
+                      "team_id": "team_example",
+                      "user_id": "user_example",
+                      "offer_id": "cto_deepwater_20000"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "automatic_top_up": {
+            "state": "active",
+            "display_status": "Automatic top-up is active",
+            "description": "When the team balance falls below 5,000 credits, UOA may charge US$20.00 for 20,000 credits, up to US$100.00 monthly.",
+            "threshold": {
+              "credits": "5000",
+              "display": "5,000 credits",
+              "usd_equivalent": {
+                "amount": "5",
+                "currency": "USD",
+                "display": "US$5.00"
+              }
+            },
+            "refill_offer_id": "cto_deepwater_20000",
+            "monthly_cap": {
+              "amount": "100",
+              "amount_minor": "10000",
+              "currency": "USD",
+              "display": "US$100.00"
+            },
+            "charged_this_month": {
+              "amount": "40",
+              "amount_minor": "4000",
+              "currency": "USD",
+              "display": "US$40.00"
+            },
+            "remaining_monthly_cap": {
+              "amount": "60",
+              "amount_minor": "6000",
+              "currency": "USD",
+              "display": "US$60.00"
+            },
+            "payment_method": {
+              "status": "ready",
+              "display": "Visa ending in 4242"
+            },
+            "consent": {
+              "status": "current",
+              "version": "credits-auto-top-up-2026-07",
+              "consented_at": "2026-07-21T10:00:00.000Z",
+              "consented_by": {
+                "display_name": "Example User"
+              },
+              "description": "Consent covers the displayed threshold, refill offer, and monthly cap."
+            },
+            "options": [
+              {
+                "selected": true,
+                "label": "20,000 below 5,000; US$100 monthly cap",
+                "description": "A bounded UOA option; products cannot submit arbitrary amounts.",
+                "threshold": {
+                  "credits": "5000",
+                  "display": "5,000 credits",
+                  "usd_equivalent": {
+                    "amount": "5",
+                    "currency": "USD",
+                    "display": "US$5.00"
+                  }
+                },
+                "refill_offer_id": "cto_deepwater_20000",
+                "refill_payment_amount": {
+                  "amount": "20",
+                  "amount_minor": "2000",
+                  "currency": "USD",
+                  "display": "US$20.00"
+                },
+                "refill_credits_received": {
+                  "credits": "20000",
+                  "display": "20,000 credits",
+                  "usd_equivalent": {
+                    "amount": "20",
+                    "currency": "USD",
+                    "display": "US$20.00"
+                  }
+                },
+                "monthly_cap": {
+                  "amount": "100",
+                  "amount_minor": "10000",
+                  "currency": "USD",
+                  "display": "US$100.00"
+                },
+                "setup_action": {
+                  "id": "auto_top_up_setup",
+                  "kind": "hosted_redirect",
+                  "label": "Set up automatic top-up",
+                  "description": "Review and consent to this exact option in secure Checkout.",
+                  "enabled": false,
+                  "disabled_reason": "Automatic top-up already has a verified payment method.",
+                  "request": {
+                    "method": "POST",
+                    "path": "/billing/v1/credits/auto-top-up/setup",
+                    "body": {
+                      "product": "deepwater",
+                      "organisation_id": "org_example",
+                      "team_id": "team_example",
+                      "user_id": "user_example",
+                      "option_id": "cto_deepwater_5000_20000_100"
+                    }
+                  }
+                },
+                "update_action": {
+                  "id": "auto_top_up_update",
+                  "kind": "mutation",
+                  "label": "Use this automatic top-up option",
+                  "description": "Select only this UOA-defined threshold, refill, and cap combination.",
+                  "enabled": true,
+                  "disabled_reason": null,
+                  "request": {
+                    "method": "POST",
+                    "path": "/billing/v1/credits/auto-top-up/update",
+                    "body": {
+                      "product": "deepwater",
+                      "organisation_id": "org_example",
+                      "team_id": "team_example",
+                      "user_id": "user_example",
+                      "option_id": "cto_deepwater_5000_20000_100"
+                    }
+                  }
+                }
+              }
+            ],
+            "disable_action": {
+              "id": "auto_top_up_disable",
+              "kind": "mutation",
+              "label": "Turn off automatic top-up",
+              "description": "Stop future automatic charges without changing available credits.",
+              "enabled": true,
+              "disabled_reason": null,
+              "request": {
+                "method": "POST",
+                "path": "/billing/v1/credits/auto-top-up/disable",
+                "body": {
+                  "product": "deepwater",
+                  "organisation_id": "org_example",
+                  "team_id": "team_example",
+                  "user_id": "user_example"
+                }
+              }
+            },
+            "recover_action": {
+              "id": "auto_top_up_recover",
+              "kind": "hosted_redirect",
+              "label": "Review payment",
+              "description": "Open UOA recovery when a payment requires customer action or review.",
+              "enabled": false,
+              "disabled_reason": "No automatic top-up currently requires recovery.",
+              "request": {
+                "method": "POST",
+                "path": "/billing/v1/credits/auto-top-up/recover",
+                "body": {
+                  "product": "deepwater",
+                  "organisation_id": "org_example",
+                  "team_id": "team_example",
+                  "user_id": "user_example"
+                }
+              }
+            }
+          },
+          "conversion": {
+            "credits_per_usd": "1000",
+            "settlement_currency": "USD",
+            "description": "1,000 credits always equal US$1.00. Usage and balances retain microcredit precision."
+          },
+          "collection": {
+            "stripe_collection_enabled": true,
+            "stripe_mode": "live"
+          }
+        }
+      },
+      "subscription": {
+        "state": "confirmed",
+        "message": "Organisation plan and subscription controls.",
+        "data": {
+          "plan": {
+            "display_name": "Monthly subscription",
+            "collection_mode": "stripe",
+            "usage_payment_mode": "prepaid",
+            "monthly_subscription": {
+              "amount": "20",
+              "amount_minor": "2000",
+              "currency": "GBP",
+              "display": "£20",
+              "charge_basis": "flat",
+              "seat_policy": null,
+              "seat_timing": null,
+              "amount_role": "monthly_total"
+            },
+            "assignment": {
+              "scope": "team",
+              "id": "assignment_example"
+            }
+          },
+          "collection": {
+            "payment_collection_enabled": true,
+            "stripe_collection_enabled": true,
+            "stripe_mode": "live"
+          },
+          "subscription": null,
+          "capabilities": {
+            "can_upgrade": false,
+            "can_open_portal": true,
+            "can_cancel": true
+          },
+          "actions": [
+            {
+              "id": "upgrade",
+              "kind": "hosted_redirect",
+              "label": "Change plan",
+              "description": "Plan changes are unavailable for this tariff.",
+              "enabled": false,
+              "disabled_reason": "No alternative tariff is available.",
+              "request": {
+                "method": "POST",
+                "path": "/billing/v1/stripe/checkout-session",
+                "body": {
+                  "product": "deepwater",
+                  "organisation_id": "org_example",
+                  "team_id": "team_example",
+                  "user_id": "user_example"
+                }
+              }
+            },
+            {
+              "id": "portal",
+              "kind": "hosted_redirect",
+              "label": "Manage payment method",
+              "description": "Open the hosted Stripe billing portal.",
+              "enabled": true,
+              "disabled_reason": null,
+              "request": {
+                "method": "POST",
+                "path": "/billing/v1/stripe/portal-session",
+                "body": {
+                  "product": "deepwater",
+                  "organisation_id": "org_example",
+                  "team_id": "team_example",
+                  "user_id": "user_example"
+                }
+              }
+            },
+            {
+              "id": "cancel",
+              "kind": "confirmation_dialog",
+              "label": "Cancel subscription",
+              "description": "Review the exact direct subscriptions before confirming.",
+              "enabled": true,
+              "disabled_reason": null,
+              "request": {
+                "method": "POST",
+                "path": "/billing/v1/cancellation/preview",
+                "body": {
+                  "product": "deepwater",
+                  "organisation_id": "org_example",
+                  "team_id": "team_example",
+                  "user_id": "user_example"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "history": {
+        "state": "confirmed",
+        "message": "Organisation billing history.",
+        "data": {
+          "cycles_request": {
+            "method": "POST",
+            "path": "/billing/v1/cycles/list",
+            "body": {
+              "product": "deepwater",
+              "organisation_id": "org_example",
+              "team_id": "team_example",
+              "user_id": "user_example",
+              "financial_scope": "organisation",
+              "billing_mode": "live"
+            }
+          },
+          "invoices_request": {
+            "method": "POST",
+            "path": "/billing/v1/invoices/list",
+            "body": {
+              "product": "deepwater",
+              "organisation_id": "org_example",
+              "team_id": "team_example",
+              "user_id": "user_example",
+              "financial_scope": "organisation",
+              "billing_mode": "live",
+              "charge_month": "2026-11"
+            }
+          }
+        }
+      }
+    }
+  }
+}

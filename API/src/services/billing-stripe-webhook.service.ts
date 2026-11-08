@@ -251,7 +251,7 @@ export async function handleStripeWebhook(
   const cashInvoiceId = event.type === 'invoice_payment.paid'
     ? stripeExternalId((event.data.object as Stripe.InvoicePayment).invoice)
     : cashEvent ? (event.data.object as Stripe.Invoice).id : null;
-  const subscriptionPaymentInvoice = !recurringAddon && !creditFunding && cashInvoiceId
+  const subscriptionPaymentInvoice = !creditFunding && cashInvoiceId
     ? await prepareStripePaymentInvoice(cashInvoiceId, account, prisma, stripe) : null;
   const subscriptionPaymentAdjustment = !recurringAddon && !creditFunding
     ? await prepareStripePaymentAdjustment(event, stripe, account, prisma) : null;

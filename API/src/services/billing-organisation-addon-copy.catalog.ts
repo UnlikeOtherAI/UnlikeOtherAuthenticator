@@ -1,0 +1,14 @@
+import type { BillingCustomerLocale } from './billing-copy-locale.js';
+import { billingLocaleText,type BillingLocaleCatalog } from './billing-copy-locale.js';
+const en={description:'These controls target the selected team or the shown subscribing user. The organisation is the payer. They do not list every add-on instance in the organisation.',
+  targetRequired:'Select an active team to manage team or subscribing-user add-ons.',
+  retained:'An existing subscription on a retained billing source must be reconciled before starting this offer.'};
+const copy={
+  'en-US':en,'en-GB':en,
+  cs:{description:'Tyto ovládací prvky se vztahují na vybraný tým nebo zobrazeného předplatitele. Plátcem je organizace. Nejde o seznam všech doplňků v organizaci.',targetRequired:'Pro správu týmových nebo uživatelských doplňků vyberte aktivní tým.',retained:'Před zahájením této nabídky je nutné odsouhlasit existující předplatné na zachovaném zdroji účtování.'},
+  de:{description:'Diese Einstellungen gelten für das ausgewählte Team oder den angezeigten Abonnenten. Die Organisation zahlt. Dies ist keine Liste aller Zusatzabonnements der Organisation.',targetRequired:'Wählen Sie ein aktives Team, um team- oder benutzerbezogene Zusatzabonnements zu verwalten.',retained:'Vor Abschluss dieses Angebots muss ein bestehendes Abonnement auf einer aufbewahrten Abrechnungsquelle abgeglichen werden.'},
+  es:{description:'Estos controles corresponden al equipo seleccionado o al suscriptor mostrado. La organización paga. No se muestran todas las instancias de complementos de la organización.',targetRequired:'Seleccione un equipo activo para gestionar complementos del equipo o del suscriptor.',retained:'Debe conciliarse una suscripción existente en una fuente de facturación conservada antes de contratar esta oferta.'},
+  fr:{description:'Ces commandes concernent l’équipe sélectionnée ou l’abonné affiché. L’organisation paie. Elles ne répertorient pas tous les abonnements complémentaires de l’organisation.',targetRequired:'Sélectionnez une équipe active pour gérer les compléments de l’équipe ou de l’abonné.',retained:'Un abonnement existant sur une source de facturation conservée doit être rapproché avant de souscrire cette offre.'},
+  it:{description:'Questi controlli riguardano il team selezionato o l’abbonato mostrato. Paga l’organizzazione. Non sono elencate tutte le istanze dei componenti aggiuntivi dell’organizzazione.',targetRequired:'Seleziona un team attivo per gestire i componenti aggiuntivi del team o dell’abbonato.',retained:'Prima di sottoscrivere questa offerta occorre riconciliare un abbonamento esistente su una fonte di fatturazione conservata.'},
+} satisfies BillingLocaleCatalog<typeof en>;
+export const organisationAddonCopy=(locale?:BillingCustomerLocale)=>billingLocaleText(copy,locale);

@@ -1,15 +1,16 @@
+import type { BillingOrganisationFinancialDto as FinancialDto } from '../contracts/billing-statement-v1.js';
 import { createHash } from 'node:crypto';
 
-import { BillingAssignmentScope, type Prisma, type PrismaClient } from '@prisma/client';
+import { type Prisma, type PrismaClient } from '@prisma/client';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import * as ajvFormats from 'ajv-formats';
 
 import {
   BILLING_CYCLES_DOWNLOAD_PATH,
-  billingCycleDetailV2JsonSchema,
-  type BillingCycleDetailV2,
-  type BillingCycleSummaryV2,
-  type BillingCyclesListV2,
+  billingCycleDetailV2JsonSchema, billingOrganisationFinancialV1Schemas,
+  type BillingCycleDetailV2 as PublicBillingCycleDetailV2,
+  type BillingCycleSummaryV2 as PublicBillingCycleSummaryV2,
+  type BillingCyclesListV2 as PublicBillingCyclesListV2,
 } from '../contracts/billing-statement-v1.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -17,16 +18,19 @@ import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { localizeBillingCycleDetail } from './billing-cycle-display.service.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
-import { authorizeBillingCycle, type BillingCycleSubject } from './billing-cycle-authority.service.js';
+import type { BillingCycleSubject } from './billing-cycle-authority.service.js';
 import { compareBillingCycleUtf8 } from './billing-cycle-binary-order.service.js';
 import { createBillingInvoicePdfStorage } from './billing-invoice-storage.service.js';
-import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
+import { listOrganisationCycles,readOrganisationCycle,downloadOrganisationCycle } from './billing-organisation-cycles.service.js';
+import { organisationHistorySubject } from './billing-organisation-history.service.js';
+import type { OrganisationHistorySelection } from './billing-organisation-history.service.js';
 
 const validator = new Ajv2020({ allErrors: true, strict: true });
 ajvFormats.default.default(validator);
 const validate = validator.compile(billingCycleDetailV2JsonSchema);
+const validateFinancial=validator.compile(billingOrganisationFinancialV1Schemas.cycle_detail_response);
 
-export type BillingCycleContext = {
+export type BillingCycleContext = OrganisationHistorySelection & {
   credential: VerifiedBillingAppKey;
   actorToken: string;
   locale?: BillingCustomerLocale;
@@ -60,7 +64,8 @@ export function billingCycleSnapshotDigest(publicSnapshot: unknown, privateEvide
   return createHash('sha256').update(canonicalJson({ publicSnapshot, privateEvidence })).digest('hex');
 }
 
-function hydrate(row: CycleRow, context: BillingCycleContext): BillingCycleDetailV2 {
+export function hydrateBillingCycle(row: CycleRow, context: BillingCycleContext,
+  product:Pick<typeof context.credential.service,'id'|'identifier'>=context.credential.service): BillingCycleDetailV2 {
   if (billingCycleSnapshotDigest(row.publicSnapshot, row.privateEvidence) !== row.snapshotSha256) {
     throw new AppError('INTERNAL', 503, 'BILLING_CYCLE_SNAPSHOT_INTEGRITY');
   }
@@ -75,7 +80,7 @@ function hydrate(row: CycleRow, context: BillingCycleContext): BillingCycleDetai
       value.scope.payer_scope !== row.payerScope.toLowerCase() ||
       value.correction_of_cycle_id === row.id ||
       value.state !== row.state || value.product.id !== row.serviceId ||
-      value.product.identifier !== context.credential.service.identifier ||
+      value.product.identifier !== product.identifier || value.product.id !== product.id ||
       value.documents.length !== row.documents.length ||
       value.document_available !== (row.documents.length > 0)) {
     throw new AppError('INTERNAL', 503, 'BILLING_CYCLE_SNAPSHOT_BINDING');
@@ -100,16 +105,16 @@ function hydrate(row: CycleRow, context: BillingCycleContext): BillingCycleDetai
         download_action: {
           method: 'POST' as const,
           path: BILLING_CYCLES_DOWNLOAD_PATH,
-          body: { ...publicSubject(context), cycle_id: row.id, document_id: recorded.id },
+          body: { ...(context.financialScope?organisationHistorySubject(context):publicSubject(context)), cycle_id: row.id, document_id: recorded.id },
         },
       };
     }),
   };
-  if (!validate(detail)) throw new AppError('INTERNAL', 503, 'BILLING_CYCLE_CONTRACT_INVALID');
+  if (!(context.financialScope?validateFinancial:validate)(detail)) throw new AppError('INTERNAL', 503, 'BILLING_CYCLE_CONTRACT_INVALID');
   return localizeBillingCycleDetail(detail, context.locale);
 }
 
-function summary(detail: BillingCycleDetailV2): BillingCycleSummaryV2 {
+export function billingCycleSummary(detail: BillingCycleDetailV2): BillingCycleSummaryV2 {
   return {
     cycle_id: detail.cycle_id,
     ...(detail.correction_of_cycle_id ?
@@ -123,165 +128,20 @@ function summary(detail: BillingCycleDetailV2): BillingCycleSummaryV2 {
   };
 }
 
-function currentMonth(now: Date): string {
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+/** History is organisation-wide. The selected team remains actor context. */
+export async function listBillingCycles(context:BillingCycleContext,params:{limit?:number;cursor?:string},
+  deps?:{prisma?:PrismaClient;now?:Date}):Promise<BillingCyclesListV2> {
+  return listOrganisationCycles(context,params,deps?.prisma??getAdminPrisma(),deps?.now);
 }
-
-const cursorPattern = /^(\d{4}-(?:0[1-9]|1[0-2])):(preview|team|organisation)$/;
-
-function cycleOrder(row: CycleRow): number {
-  return row.teamId === null ? 1 : 0;
+export async function getBillingCycleDetail(context:BillingCycleContext,id:string,
+  deps?:{prisma?:PrismaClient;now?:Date}):Promise<BillingCycleDetailV2> {
+  return (await readOrganisationCycle(context,id,deps?.prisma??getAdminPrisma())).detail;
 }
-
-function cycleCursor(row: CycleRow): string {
-  return `${row.billingMonth}:${row.teamId === null ? 'organisation' : 'team'}`;
+export async function downloadBillingCycleDocument(context:BillingCycleContext,id:string,documentId:string,
+  deps?:{prisma?:PrismaClient;storage?:ReturnType<typeof createBillingInvoicePdfStorage>}):
+Promise<{bytes:Buffer;contentType:'application/pdf'|'text/csv';filename:string}> {
+  return downloadOrganisationCycle(context,id,documentId,deps?.prisma??getAdminPrisma(),deps?.storage);
 }
-
-function preview(
-  context: BillingCycleContext, now: Date, payerScope: 'team' | 'organisation',
-): BillingCycleDetailV2 {
-  const month = currentMonth(now);
-  const startsAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const endsAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-  return {
-    schema_version: 2,
-    cycle_id: `preview:${month}:team`,
-    period: { month, starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString() },
-    state: 'open_preview',
-    scope: { organisation_id: context.request.organisationId,
-      team_id: context.request.teamId, cycle_scope: 'team', payer_scope: payerScope },
-    product: { id: context.credential.service.id, identifier: context.request.product,
-      name: context.credential.service.name },
-    totals: [], document_available: false, subscription_lines: [], usage_lines: [],
-    credits: { consumed: null, opening_balance: null, closing_balance: null,
-      status: 'pending_reconciliation' },
-    documents: [], adjustments: [],
-  };
-}
-
-export async function listBillingCycles(
-  context: BillingCycleContext,
-  params: { limit?: number; cursor?: string },
-  deps?: { prisma?: PrismaClient; now?: Date },
-): Promise<BillingCyclesListV2> {
-  const prisma = deps?.prisma ?? getAdminPrisma();
-  const viewer = await authorizeBillingCycle(context, { prisma });
-  const now = deps?.now ?? new Date();
-  const limit = params.limit ?? 12;
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 24) {
-    throw new AppError('BAD_REQUEST', 400, 'BILLING_CYCLE_LIMIT_INVALID');
-  }
-  if (params.cursor && !cursorPattern.test(params.cursor)) {
-    throw new AppError('BAD_REQUEST', 400, 'BILLING_CYCLE_CURSOR_INVALID');
-  }
-  const orgManager = viewer.organisationRole === 'owner' || viewer.organisationRole === 'admin';
-  const cursor = params.cursor?.match(cursorPattern);
-  const scope = { serviceId: context.credential.service.id,
-    orgId: context.request.organisationId,
-    ...(cursor ? { billingMonth: { lte: cursor[1] } } : {}) };
-  const findScope = (teamId: string | null) => prisma.billingCustomerCycle.findMany({
-    where: { ...scope, teamId,
-      ...(!orgManager ? { payerScope: BillingAssignmentScope.TEAM } : {}) },
-    orderBy: [{ billingMonth: 'desc' }, { revision: 'desc' }],
-    distinct: ['billingMonth'], take: limit + 2, include: { documents: true },
-  });
-  const [teamRows, orgRows] = await Promise.all([
-    findScope(context.request.teamId), orgManager ? findScope(null) : Promise.resolve([]),
-  ]);
-  const rows = [...teamRows, ...orgRows]
-    .sort((a, b) => b.billingMonth.localeCompare(a.billingMonth) || cycleOrder(a) - cycleOrder(b))
-    .filter((row) => !cursor || row.billingMonth < cursor[1] ||
-      (row.billingMonth === cursor[1] && cursor[2] === 'preview') ||
-      (row.billingMonth === cursor[1] && cycleOrder(row) >
-        (cursor[2] === 'team' ? 0 : 1)));
-  const controlledBy = params.cursor ? null : await resolveBillingControlledBy({
-    organisationId: context.request.organisationId, userId: context.request.userId,
-  }, { prisma });
-  const previewScope = controlledBy ? 'organisation' : 'team';
-  const hasCurrent = rows.some((row) => row.billingMonth === currentMonth(now) &&
-    row.teamId === context.request.teamId);
-  const includePreview = !params.cursor && !hasCurrent;
-  const selected = rows.slice(0, includePreview ? Math.max(0, limit - 1) : limit);
-  const cycles = selected.map((row) => summary(hydrate(row, context)));
-  if (includePreview) cycles.unshift(summary(preview(context, now, previewScope)));
-  const hasMore = rows.length > selected.length;
-  const last = selected.at(-1);
-  return {
-    schema_version: 2, generated_at: now.toISOString(), subject: publicSubject(context),
-    cycles,
-    next_cursor: hasMore ? last ? cycleCursor(last) :
-      `${currentMonth(now)}:preview` : null,
-  };
-}
-
-export async function getBillingCycleDetail(
-  context: BillingCycleContext,
-  cycleId: string,
-  deps?: { prisma?: PrismaClient; now?: Date },
-): Promise<BillingCycleDetailV2> {
-  const prisma = deps?.prisma ?? getAdminPrisma();
-  await authorizeBillingCycle(context, { prisma });
-  const now = deps?.now ?? new Date();
-  if (cycleId === `preview:${currentMonth(now)}:team`) {
-    const controlledBy = await resolveBillingControlledBy({
-      organisationId: context.request.organisationId, userId: context.request.userId,
-    }, { prisma });
-    if (controlledBy) {
-      await authorizeBillingCycle({ ...context, payerScope: BillingAssignmentScope.ORGANISATION },
-        { prisma });
-    }
-    return preview(context, now, controlledBy ? 'organisation' : 'team');
-  }
-  const row = await prisma.billingCustomerCycle.findFirst({
-    where: { id: cycleId, serviceId: context.credential.service.id,
-      orgId: context.request.organisationId,
-      OR: [{ teamId: context.request.teamId }, { teamId: null }] },
-    include: { documents: true },
-  });
-  if (!row) throw new AppError('NOT_FOUND', 404, 'BILLING_CYCLE_NOT_FOUND');
-  if (row.teamId === null || row.payerScope === BillingAssignmentScope.ORGANISATION) {
-    await authorizeBillingCycle({ ...context, payerScope: row.payerScope }, { prisma });
-  }
-  return hydrate(row, context);
-}
-
-export async function downloadBillingCycleDocument(
-  context: BillingCycleContext,
-  cycleId: string,
-  documentId: string,
-  deps?: { prisma?: PrismaClient; storage?: ReturnType<typeof createBillingInvoicePdfStorage> },
-): Promise<{ bytes: Buffer; contentType: 'application/pdf' | 'text/csv'; filename: string }> {
-  const prisma = deps?.prisma ?? getAdminPrisma();
-  await authorizeBillingCycle(context, { prisma });
-  const document = await prisma.billingCustomerCycleDocument.findFirst({
-    where: { id: documentId, cycleId, cycle: { serviceId: context.credential.service.id,
-      orgId: context.request.organisationId,
-      OR: [{ teamId: context.request.teamId }, { teamId: null }] } },
-    include: { cycle: { include: { documents: true } } },
-  });
-  if (!document) throw new AppError('NOT_FOUND', 404, 'BILLING_CYCLE_DOCUMENT_NOT_FOUND');
-  if (document.cycle.teamId === null ||
-      document.cycle.payerScope === BillingAssignmentScope.ORGANISATION) {
-    await authorizeBillingCycle({ ...context, payerScope: document.cycle.payerScope }, { prisma });
-  }
-  hydrate(document.cycle, context);
-  const bytes = await (deps?.storage ?? createBillingInvoicePdfStorage()).read(document.objectKey);
-  if (bytes.length === 0 || bytes.length > 20 * 1024 * 1024 ||
-      (document.format === 'pdf' && bytes.subarray(0, 5).toString() !== '%PDF-') ||
-      (document.format === 'csv' && bytes.subarray(0, 3).toString('hex') !== 'efbbbf') ||
-      createHash('sha256').update(bytes).digest('hex') !== document.sha256) {
-    throw new AppError('INTERNAL', 503, 'BILLING_CYCLE_DOCUMENT_INTEGRITY');
-  }
-  // Storage reads may block while membership or a token epoch is revoked.
-  // Recheck the current selected-team and payer authority before disclosing bytes.
-  await authorizeBillingCycle(context, { prisma });
-  if (document.cycle.teamId === null ||
-      document.cycle.payerScope === BillingAssignmentScope.ORGANISATION) {
-    await authorizeBillingCycle({ ...context, payerScope: document.cycle.payerScope },
-      { prisma });
-  }
-  return {
-    bytes, contentType: document.format === 'pdf' ? 'application/pdf' : 'text/csv',
-    filename: `billing-${document.cycle.billingMonth}-${document.kind}.${document.format}`,
-  };
-}
+type BillingCycleDetailV2=FinancialDto<PublicBillingCycleDetailV2>;
+type BillingCycleSummaryV2=FinancialDto<PublicBillingCycleSummaryV2>;
+type BillingCyclesListV2=FinancialDto<PublicBillingCyclesListV2>;

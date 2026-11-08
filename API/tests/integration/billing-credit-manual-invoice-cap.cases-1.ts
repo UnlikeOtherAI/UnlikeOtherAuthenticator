@@ -1,3 +1,4 @@
+import { createTestCapturedPaidLiability } from '../helpers/organisation-financial-binding.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { expect, it, vi } from 'vitest';
@@ -20,7 +21,7 @@ export function registerCases1() {
         'app.admin_auth_domain', ${getAdminAuthDomain()}, true)`);
       await tx.billingCreditAdminAdjustment.create({ data: {
         id: fundingId, accountId: ids.account, creditAccountId: ids.creditAccount,
-        orgId: ids.org, teamId: ids.team, signedAmountMicrocredits: 2_600_000_000n,
+        orgId: ids.org, teamId: null, signedAmountMicrocredits: 2_600_000_000n,
         reason: 'Late top-up fixture', idempotencyKey: fundingId,
         createdByUserId: ids.user, createdByEmail: ids.userEmail,
         createdByAdminDomain: getAdminAuthDomain(), creditEntryId: entryId,
@@ -30,17 +31,17 @@ export function registerCases1() {
         kind: 'ADJUSTMENT', amountMicrocredits: 2_600_000_000n,
         balanceAfterMicrocredits: 2_600_000_000n, currency: 'USD',
         idempotencyKey: fundingId, sourceType: 'credit_admin_adjustment',
-        sourceId: fundingId, occurredAt: new Date('2026-09-04T00:00:01.000Z'),
+        sourceId: fundingId, occurredAt: new Date('2030-09-04T00:00:01.000Z'),
       } });
     });
     await settleCreditPortfolio({ creditAccountId: ids.creditAccount,
       credential, portfolio: portfolio('mup_manual_old_12345678901234567',
-        '1', '2026-09-04T00:01:00.000Z') }, { prisma: db.prisma });
+        '1', '2030-09-04T00:01:00.000Z') }, { prisma: db.prisma });
     const first = await db.prisma.billingCreditUsageSettlement.findFirstOrThrow({ where: {
       creditAccountId: ids.creditAccount, billingMonth: month, serviceId: ids.service,
     } });
     expect(first.cumulativeCreditsConsumedMicrocredits).toBe(0n);
-    await db.prisma.billingPaidUsageLiability.create({ data: {
+    await createTestCapturedPaidLiability(db.prisma,{ data: {
       dispatchId: `dispatch-${randomUUID()}`, receiptId: `receipt-${randomUUID()}`,
       serviceId: ids.service, providerServiceId: 'provider-test', orgId: ids.org,
       teamId: ids.team, userId: ids.user, billingMonth: month,
@@ -50,7 +51,7 @@ export function registerCases1() {
     } });
     await settleCreditPortfolio({ creditAccountId: ids.creditAccount,
       credential, portfolio: portfolio('mup_manual_new_12345678901234567',
-        '2', '2026-09-04T00:02:00.000Z') }, { prisma: db.prisma });
+        '2', '2030-09-04T00:02:00.000Z') }, { prisma: db.prisma });
     const second = await db.prisma.billingCreditUsageSettlement.findUniqueOrThrow({
       where: { id: first.id },
     });
@@ -65,14 +66,14 @@ export function registerCases1() {
       id: ids.invoice,
     } });
     await db.prisma.billingInvoice.update({ where: { id: original.id }, data: {
-      status: 'VOID', voidedAt: new Date('2026-09-05T00:00:00.000Z'),
+      status: 'VOID', voidedAt: new Date('2030-09-05T00:00:00.000Z'),
       voidReason: 'Fixture moves collection authority to legacy invoice',
     } });
     const secondTeam = await db.prisma.team.create({ data: {
       orgId: ids.org, name: 'Other source team',
       slug: `other-${randomUUID().slice(0, 10)}`,
     } });
-    await db.prisma.billingPaidUsageLiability.create({ data: {
+    await createTestCapturedPaidLiability(db.prisma,{ data: {
       dispatchId: `dispatch-${randomUUID()}`, receiptId: `receipt-${randomUUID()}`,
       serviceId: ids.service, providerServiceId: 'provider-test', orgId: ids.org,
       teamId: secondTeam.id, userId: ids.user, billingMonth: month,
@@ -115,8 +116,8 @@ export function registerCases1() {
     // the current issuer would authorize a missing manifest.
     await db.prisma.billingInvoice.update({ where: { id: legacy.id }, data: {
       status: 'ISSUING', invoiceNumber: `LEGACY-${randomUUID()}`,
-      issueDate: new Date('2026-09-05T00:00:00.000Z'),
-      dueDate: new Date('2026-10-05T00:00:00.000Z'),
+      issueDate: new Date('2030-09-05T00:00:00.000Z'),
+      dueDate: new Date('2030-10-05T00:00:00.000Z'),
     } });
     await expect(db.prisma.$transaction((tx) => manualInvoiceReservedMicroMinor(tx, {
       orgId: ids.org, teamId: ids.team, serviceId: ids.service,
@@ -127,16 +128,16 @@ export function registerCases1() {
   it('rejects a stale draft when concurrent wallet settlement wins the payer lock', async () => {
     const dispatchId = `dispatch-${randomUUID()}`;
     const receiptId = `receipt-${randomUUID()}`;
-    const september = '2026-09';
-    await db.prisma.billingPaidUsageLiability.create({ data: {
+    const september = '2030-09';
+    await createTestCapturedPaidLiability(db.prisma,{ data: {
       dispatchId, receiptId, serviceId: ids.service, providerServiceId: 'provider-test',
       orgId: ids.org, teamId: ids.team, userId: ids.user, billingMonth: september,
       currency: 'USD', tariffId: ids.tariff, frozenMarkupBps: 3000,
       paymentMode: 'PAY_AS_YOU_GO', rawCostActual: '1', ratedQuanta: '0',
       ratedMicrocredits: 1_300_000_000n,
     } });
-    const starts = '2026-09-01T00:00:00.000Z';
-    const ends = '2026-10-01T00:00:00.000Z';
+    const starts = '2030-09-01T00:00:00.000Z';
+    const ends = '2030-10-01T00:00:00.000Z';
     const product = credential.service.identifier;
     const digest = createHash('sha256').update('ledger-paid-receipt-set-v1:paid\n')
       .update(JSON.stringify([dispatchId, receiptId, '1.000000000000000000']))
@@ -164,32 +165,36 @@ export function registerCases1() {
         id: 'september-team', cursor: 'september-team', capturedAt: ends,
         sha256: 'b'.repeat(64) } }),
       fetchPaidReceiptSet: async () => septemberProof,
-      now: () => new Date('2026-10-03T00:00:00.000Z'),
+      now: () => new Date('2030-10-03T00:00:00.000Z'),
     });
     const settlementClient = new PrismaClient({ datasources: { db: { url: db.databaseUrl } } });
     const issueClient = new PrismaClient({ datasources: { db: { url: db.databaseUrl } } });
     const locked = deferred();
     const unlock = deferred();
+    const pending:Promise<unknown>[]=[];let blockingPid=0;
     try {
       const SeptemberPortfolio = { ...portfolio('mup_manual_race_12345678901234567',
-        '1', '2026-10-03T00:01:00.000Z'),
+        '1', '2030-10-03T00:01:00.000Z'),
       scope: { organizationId: ids.org, teamId: ids.team, month: september,
         startsAt: starts, endsAt: ends } };
       const settlement = settleCreditPortfolio({ creditAccountId: ids.creditAccount,
         credential, portfolio: SeptemberPortfolio }, {
-        prisma: afterPayerLock(settlementClient, async () => {
+        prisma: afterPayerLock(settlementClient, async tx => {
+          blockingPid=(await tx.$queryRaw<Array<{pid:number}>>(Prisma.sql`SELECT pg_backend_pid() AS pid`))[0]?.pid??0;
           locked.release();
           await unlock.promise;
         }),
       });
-      await locked.promise;
+      pending.push(settlement);void settlement.catch(()=>{});
+      await Promise.race([locked.promise,settlement.then(()=>{throw Error('Settlement completed before lock');})]);
       const issue = issueBillingInvoice({ invoiceId: draft.id,
         actor: { email: 'operator@example.test' } }, {
         prisma: issueClient, storage: new MemoryStorage(),
-        now: () => new Date('2026-10-03T00:02:00.000Z'),
+        now: () => new Date('2030-10-03T00:02:00.000Z'),
         authorizeAdminEffect: vi.fn().mockResolvedValue(undefined),
       });
-      await waitForPayerWait(db.prisma);
+      pending.push(issue);void issue.catch(()=>{});
+      await waitForPayerWait(db.prisma,blockingPid);
       unlock.release();
       await settlement;
       await expect(issue).rejects.toThrow('BILLING_INVOICE_WALLET_CHANGED_BEFORE_ISSUE');
@@ -198,15 +203,16 @@ export function registerCases1() {
       } })).status).toBe('DRAFT');
     } finally {
       unlock.release();
+      await Promise.allSettled(pending);
       await Promise.all([settlementClient.$disconnect(), issueClient.$disconnect()]);
     }
   });
 
   it('reserves an issued cohort when invoice claim wins the payer lock', async () => {
-    const october = '2026-10';
+    const october = '2030-10';
     const dispatchId = `dispatch-${randomUUID()}`;
     const receiptId = `receipt-${randomUUID()}`;
-    await db.prisma.billingPaidUsageLiability.create({ data: {
+    await createTestCapturedPaidLiability(db.prisma,{ data: {
       dispatchId, receiptId, serviceId: ids.service, providerServiceId: 'provider-test',
       orgId: ids.org, teamId: ids.team, userId: ids.user, billingMonth: october,
       currency: 'USD', tariffId: ids.tariff, frozenMarkupBps: 3000,
@@ -234,7 +240,7 @@ export function registerCases1() {
       meteringRefs: { create: { serviceId: ids.service,
         ledgerSnapshotCursor: 'october-cohort',
         ledgerSnapshotSha256: 'd'.repeat(64),
-        capturedAt: new Date('2026-11-01T00:00:00.000Z') } },
+        capturedAt: new Date('2030-11-01T00:00:00.000Z') } },
     }, include: { lines: true } });
     const line = invoice.lines[0];
     if (!line) throw new Error('OCTOBER_LINE_MISSING');
@@ -256,7 +262,7 @@ export function registerCases1() {
         'app.admin_auth_domain', ${getAdminAuthDomain()}, true)`);
       await tx.billingCreditAdminAdjustment.create({ data: {
         id: fundingId, accountId: ids.account, creditAccountId: ids.creditAccount,
-        orgId: ids.org, teamId: ids.team, signedAmountMicrocredits: 1_300_000_000n,
+        orgId: ids.org, teamId: null, signedAmountMicrocredits: 1_300_000_000n,
         reason: 'Concurrent invoice funding fixture', idempotencyKey: fundingId,
         createdByUserId: ids.user, createdByEmail: ids.userEmail,
         createdByAdminDomain: getAdminAuthDomain(), creditEntryId: entryId,
@@ -266,33 +272,38 @@ export function registerCases1() {
         kind: 'ADJUSTMENT', amountMicrocredits: 1_300_000_000n,
         balanceAfterMicrocredits: 1_300_000_000n, currency: 'USD',
         idempotencyKey: fundingId, sourceType: 'credit_admin_adjustment',
-        sourceId: fundingId, occurredAt: new Date('2026-11-03T00:00:00.000Z'),
+        sourceId: fundingId, occurredAt: new Date('2030-11-03T00:00:00.000Z'),
       } });
     });
     const issuerClient = new PrismaClient({ datasources: { db: { url: db.databaseUrl } } });
     const settlementClient = new PrismaClient({ datasources: { db: { url: db.databaseUrl } } });
     const locked = deferred();
     const unlock = deferred();
+    const pending:Promise<unknown>[]=[];let blockingPid=0;
     try {
       const issue = issueBillingInvoice({ invoiceId: invoice.id,
         actor: { email: 'operator@example.test' } }, {
-        prisma: afterPayerLock(issuerClient, async () => {
+        prisma: afterPayerLock(issuerClient, async tx => {
+          blockingPid=(await tx.$queryRaw<Array<{pid:number}>>(Prisma.sql`SELECT pg_backend_pid() AS pid`))[0]?.pid??0;
           locked.release();
           await unlock.promise;
         }), storage: new MemoryStorage(),
-        now: () => new Date('2026-11-03T00:01:00.000Z'),
+        now: () => new Date('2030-11-03T00:01:00.000Z'),
         authorizeAdminEffect: vi.fn().mockResolvedValue(undefined),
       });
-      await locked.promise;
+      pending.push(issue);void issue.catch(()=>{});
+      await Promise.race([locked.promise,issue.then(()=>{throw Error('Issue completed before lock');})]);
       const octoberPortfolio = { ...portfolio('mup_manual_issue_wins_1234567890123',
-        '1', '2026-11-03T00:02:00.000Z'), scope: {
+        '1', '2030-11-03T00:02:00.000Z'), scope: {
         organizationId: ids.org, teamId: ids.team, month: october,
-        startsAt: '2026-10-01T00:00:00.000Z', endsAt: '2026-11-01T00:00:00.000Z',
+        startsAt: '2030-10-01T00:00:00.000Z', endsAt: '2030-11-01T00:00:00.000Z',
       } };
       const settlement = settleCreditPortfolio({ creditAccountId: ids.creditAccount,
         credential, portfolio: octoberPortfolio }, { prisma: settlementClient });
-      await waitForPayerWait(db.prisma);
+      pending.push(settlement);void settlement.catch(()=>{});
+      await waitForPayerWait(db.prisma,blockingPid);
       unlock.release();
+      await Promise.allSettled(pending);
       await Promise.all([issue, settlement]);
       const consumed = await db.prisma.billingCreditUsageSettlement.findFirstOrThrow({ where: {
         creditAccountId: ids.creditAccount, serviceId: ids.service,
@@ -304,6 +315,7 @@ export function registerCases1() {
       } })).balanceMicrocredits).toBe(1_300_000_000n);
     } finally {
       unlock.release();
+      await Promise.allSettled(pending);
       await Promise.all([issuerClient.$disconnect(), settlementClient.$disconnect()]);
     }
   });

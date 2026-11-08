@@ -18,7 +18,8 @@ function fixture() {
     }) },
     domainRole: { findUnique: vi.fn(async () => ({ role: 'SUPERUSER' })) },
     organisation: { findUnique: vi.fn(async () => ({ lifecycleStatus: 'ACTIVE', domain: context.domain })) },
-    team: { findUnique: vi.fn(async () => ({ lifecycleStatus: 'ACTIVE', orgId: 'org' })) },
+    team: { findUnique: vi.fn(async () => ({ lifecycleStatus: 'ACTIVE', orgId: 'org' })),
+      findFirst: vi.fn().mockResolvedValue({id:'selected'}) },
     orgMember: { findUnique: vi.fn(async () => ({ status: 'ACTIVE' })) },
     teamMember: { findUnique: vi.fn(async () => ({ status: 'ACTIVE' })) },
     clientDomain: { findUnique: vi.fn(async () => ({ id: 'registered', status: 'active',
@@ -48,6 +49,7 @@ describe('tenant transaction effect authority', () => {
       JSON.stringify(['uoa:refresh-session:user:v1', 'a-subject']),
       JSON.stringify(['uoa:refresh-session:user:v1', 'z-actor']), 'actor read']);
     expect(f.db.team.findUnique.mock.calls).toHaveLength(2);
+    expect(f.db.team.findFirst).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({id:'selected',orgId:'org',AND:expect.any(Array)})}));
   });
   it.each(['DISABLED', 'DELETING', 'DELETED'])('rejects a %s actor despite earlier verified claims', async (status) => {
     const f = fixture(); f.db.user.findUnique.mockResolvedValue({ lifecycleStatus: status, tokenVersion: 4 });
@@ -63,9 +65,9 @@ describe('tenant transaction effect authority', () => {
       f.tx, f.db as unknown as PrismaClient)).rejects.toThrow('AUTHENTICATION_FAILED');
   });
   it('rejects a revoked selected membership and a disabled exact target team', async () => {
-    const f = fixture(); f.db.teamMember.findUnique.mockResolvedValue({ status: 'REMOVED' });
+    const f = fixture(); f.db.team.findFirst.mockResolvedValue(null);
     await expect(f.guard()).rejects.toThrow('AUTHENTICATION_FAILED');
-    f.db.teamMember.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+    f.db.team.findFirst.mockResolvedValue({id:'selected'});
     f.db.team.findUnique.mockResolvedValueOnce({ lifecycleStatus: 'ACTIVE', orgId: 'org' })
       .mockResolvedValueOnce({ lifecycleStatus: 'DISABLED', orgId: 'org' });
     await expect(f.guard()).rejects.toThrow('ACCESS_DENIED');

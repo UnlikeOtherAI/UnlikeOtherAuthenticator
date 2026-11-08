@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { observedBillingTime } from '../../src/services/billing-seat-observed-time.service.js';
 import { runSeatTransitionCycle } from '../../src/services/billing-seat-transition-scheduler.service.js';
@@ -42,7 +43,7 @@ describe.skipIf(!process.env.DATABASE_URL)('superseded fixed seat capacity', () 
       monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'FIXED',
       seatChargeTiming: 'PRORATED',
     } });
-    const contract = await db.prisma.billingOrganisationContract.create({ data: {
+    const contract = await db.prisma.billingOrganisationContract.create({ data: { ...await captureTestOrganisationFinancialBinding(db.prisma,orgId),
       orgId, reference: 'capacity-change', name: 'Capacity change',
     } });
     const versions = [];
@@ -50,7 +51,7 @@ describe.skipIf(!process.env.DATABASE_URL)('superseded fixed seat capacity', () 
       versions.push(await db.prisma.billingOrganisationContractVersion.create({ data: {
         contractId: contract.id, version, usageMarkupBps: 3000,
         currency: 'USD', paymentTermsDays: 30,
-        effectiveFromMonth: version === 1 ? '2026-11' : '2026-12',
+        effectiveFromMonth: version === 1 ? '2030-11' : '2030-12',
       } }));
     }
     const terms = [];
@@ -80,7 +81,7 @@ describe.skipIf(!process.env.DATABASE_URL)('superseded fixed seat capacity', () 
       }
     });
   });
-  afterAll(async () => { if (db) await db.cleanup(); });
+  afterAll(async () => { if (db) await db.cleanup(); vi.unstubAllEnvs(); });
 
   it('keeps the old limit until its commercial boundary and then admits under the new capacity', async () => {
     await expect(db.prisma.orgMember.create({ data: { orgId, userId: memberId } }))

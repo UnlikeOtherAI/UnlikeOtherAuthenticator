@@ -1,3 +1,4 @@
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
 import {
   BillingAssignmentScope,
   BillingCollectionMode,
@@ -7,7 +8,7 @@ import {
   BillingOrganisationContractStatus,
   BillingTariffMode,
 } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it,vi } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -29,7 +30,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
   });
 
   afterAll(async () => {
-    await db?.cleanup();
+    await db?.cleanup();vi.unstubAllEnvs();
   });
 
   it('enforces version ordering, frozen calculation evidence, and credit-aware settlement', async () => {
@@ -57,6 +58,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
     );
     const contract = await db.prisma.billingOrganisationContract.create({
       data: {
+        ...await captureTestOrganisationFinancialBinding(db.prisma,org.id),
         orgId: org.id,
         reference: 'db-contract',
         name: 'Database Contract',
@@ -70,13 +72,13 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
         usageMarkupBps: 2000,
         currency: 'USD',
         paymentTermsDays: 30,
-        effectiveFromMonth: '2026-07',
+        effectiveFromMonth: '2030-07',
         createdByEmail: 'admin@example.com',
       },
     });
 
     const raced = await Promise.allSettled(
-      ['2026-08', '2026-09'].map((effectiveFromMonth) =>
+      ['2030-08', '2030-09'].map((effectiveFromMonth) =>
         db.prisma.billingOrganisationContractVersion.create({
           data: {
             contractId: contract.id,
@@ -190,7 +192,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
       where: { id: contract.id },
       data: {
         status: BillingOrganisationContractStatus.ACTIVE,
-        activatedAt: new Date('2026-07-01T00:00:00.000Z'),
+        activatedAt: new Date('2030-07-01T00:00:00.000Z'),
       },
     });
 
@@ -243,7 +245,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
         contractVersionId: versionOne.id,
         issuerProfileId: issuer.id,
         buyerProfileId: buyer.id,
-        billingMonth: '2026-07',
+        billingMonth: '2030-07',
         revision: 1,
         currency: 'USD',
         subtotalMinor: 1000n,
@@ -268,7 +270,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
             serviceId: services[0]!.id,
             ledgerSnapshotCursor: 'snapshot-one',
             ledgerSnapshotSha256: 'b'.repeat(64),
-            capturedAt: new Date('2026-08-01T00:00:00.000Z'),
+            capturedAt: new Date('2030-08-01T00:00:00.000Z'),
           },
         },
       },
@@ -313,7 +315,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
         contractVersionId: versionOne.id,
         issuerProfileId: issuer.id,
         buyerProfileId: buyer.id,
-        billingMonth: '2026-07',
+        billingMonth: '2030-07',
         revision: 2,
         currency: 'USD',
         subtotalMinor: 1000n,
@@ -338,7 +340,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
             serviceId: service.id,
             ledgerSnapshotCursor: `snapshot-${service.identifier}`,
             ledgerSnapshotSha256: 'd'.repeat(64),
-            capturedAt: new Date('2026-08-01T00:00:00.000Z'),
+            capturedAt: new Date('2030-08-01T00:00:00.000Z'),
           })),
         },
       },
@@ -352,7 +354,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
             contractVersionId: versionOne.id,
             issuerProfileId: issuer.id,
             buyerProfileId: buyer.id,
-            billingMonth: '2026-07',
+            billingMonth: '2030-07',
             revision: 3,
             currency: 'USD',
             subtotalMinor: 1000n,
@@ -377,7 +379,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
                 serviceId: service.id,
                 ledgerSnapshotCursor: `revision-race-${digestCharacter}-${service.identifier}`,
                 ledgerSnapshotSha256: digestCharacter.repeat(64),
-                capturedAt: new Date('2026-08-01T00:00:00.000Z'),
+                capturedAt: new Date('2030-08-01T00:00:00.000Z'),
               })),
             },
           },
@@ -390,14 +392,14 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
     expect((rejectedRevision as PromiseRejectedResult).reason.message).toMatch(
       /invoice revision must be contiguous/,
     );
-    const issuedAt = new Date('2026-08-02T00:00:00.000Z');
+    const issuedAt = new Date('2030-08-02T00:00:00.000Z');
     await db.prisma.billingInvoice.update({
       where: { id: invoice.id },
       data: {
         status: BillingInvoiceStatus.ISSUING,
-        invoiceNumber: 'UOAT-2026-000001',
+        invoiceNumber: 'UOAT-2030-000001',
         issueDate: issuedAt,
-        dueDate: new Date('2026-09-01T00:00:00.000Z'),
+        dueDate: new Date('2030-09-01T00:00:00.000Z'),
       },
     });
     await db.prisma.billingInvoice.update({
@@ -411,9 +413,9 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
       },
     });
     for (const data of [
-      { invoiceNumber: 'UOAT-2026-999999' },
-      { issueDate: new Date('2026-08-03T00:00:00.000Z') },
-      { dueDate: new Date('2026-09-02T00:00:00.000Z') },
+      { invoiceNumber: 'UOAT-2030-999999' },
+      { issueDate: new Date('2030-08-03T00:00:00.000Z') },
+      { dueDate: new Date('2030-09-02T00:00:00.000Z') },
     ]) {
       await expect(
         db.prisma.billingInvoice.update({ where: { id: invoice.id }, data }),
@@ -443,14 +445,14 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
         occurredAt: issuedAt,
       },
     });
-    const activatedAt = new Date('2026-07-01T00:00:00.000Z');
+    const activatedAt = new Date('2030-07-01T00:00:00.000Z');
     await expect(
       db.prisma.billingOrganisationContract.update({
         where: { id: contract.id },
-        data: { activatedAt: new Date('2026-07-02T00:00:00.000Z') },
+        data: { activatedAt: new Date('2030-07-02T00:00:00.000Z') },
       }),
     ).rejects.toThrow(/contract activation timestamp is immutable/);
-    const terminatedAt = new Date('2026-08-03T00:00:00.000Z');
+    const terminatedAt = new Date('2030-08-03T00:00:00.000Z');
     await db.prisma.billingOrganisationContract.update({
       where: { id: contract.id },
       data: { status: BillingOrganisationContractStatus.TERMINATED, terminatedAt },
@@ -458,7 +460,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice database invariants
     await expect(
       db.prisma.billingOrganisationContract.update({
         where: { id: contract.id },
-        data: { activatedAt, terminatedAt: new Date('2026-08-04T00:00:00.000Z') },
+        data: { activatedAt, terminatedAt: new Date('2030-08-04T00:00:00.000Z') },
       }),
     ).rejects.toThrow(/contract termination timestamp is immutable/);
   }, 120_000);

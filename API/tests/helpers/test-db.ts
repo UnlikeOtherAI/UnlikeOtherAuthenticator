@@ -80,6 +80,9 @@ async function withStartupRetry(run: () => Promise<void>): Promise<void> {
       await run();
       return;
     } catch (error) {
+      // Retrying a permanently invalid migration hides the original SQL error
+      // behind P3009, or a later connection timeout on a busy portable host.
+      if (/\bP(?:3006|3009|3015|3018|3019)\b/.test(error instanceof Error ? error.message : '')) throw error;
       if (attempt >= maxAttempts) throw error;
       const backoffMs = 1000 * 2 ** (attempt - 1) + Math.floor(Math.random() * 500);
       await new Promise((resolve) => setTimeout(resolve, backoffMs));

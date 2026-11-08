@@ -17,6 +17,7 @@ import {
   billingCyclesListV2JsonSchema,
   billingCyclesProtocolV2JsonSchema,
   billingCyclesV2OpenApiDocument,
+  billingOrganisationFinancialV1Schemas,
 } from '../../contracts/billing-statement-v1.js';
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import {
@@ -26,17 +27,21 @@ import {
 } from '../../services/billing-cycle-read.service.js';
 import { AppError } from '../../utils/errors.js';
 import { readBillingPresentation } from './billing-presentation.js';
-import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import { BillingFinancialSubjectRequestSchema as BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 
 const validator = new Ajv2020({ allErrors: true, strict: true });
 ajvFormats.default.default(validator);
 const validateList = validator.compile(billingCyclesListV2JsonSchema);
 const validateDetail = validator.compile(billingCycleDetailV2JsonSchema);
-const listRequest = BillingSubjectRequestSchema.extend({
+const validateFinancialList=validator.compile(billingOrganisationFinancialV1Schemas.cycles_list_response);
+const validateFinancialDetail=validator.compile(billingOrganisationFinancialV1Schemas.cycle_detail_response);
+const historySubject=BillingSubjectRequestSchema.extend({financial_scope:z.literal('organisation').optional(),
+  billing_mode:z.enum(['live','sandbox']).optional()});
+const listRequest = historySubject.extend({
   limit: z.number().int().min(1).max(24).optional(),
-  cursor: z.string().regex(/^\d{4}-(0[1-9]|1[0-2]):(team|organisation)$/).optional(),
+  cursor: z.string().min(1).max(2048).optional(),
 }).strict();
-const detailRequest = BillingSubjectRequestSchema.extend({
+const detailRequest = historySubject.extend({
   cycle_id: z.string().min(1).max(256),
 }).strict();
 const downloadRequest = detailRequest.extend({
@@ -45,16 +50,18 @@ const downloadRequest = detailRequest.extend({
 
 function context(
   request: FastifyRequest,
-  body: z.infer<typeof BillingSubjectRequestSchema>,
+  body: z.infer<typeof historySubject>,
   endpoint: Parameters<typeof listBillingCycles>[0]['endpoint'],
 ) {
   if (!request.billingAppKey) throw new AppError('UNAUTHORIZED', 401);
+  if((body.team_id===null||body.billing_mode)&&body.financial_scope!=='organisation')throw new AppError('BAD_REQUEST',400,'BILLING_HISTORY_SCOPE_REQUIRED');
   const presentation = readBillingPresentation(request.headers);
   return {
     credential: request.billingAppKey,
     locale: presentation.enabled ? presentation.locale : undefined,
     actorToken: readBillingActorHeader(request.headers['x-uoa-actor']),
     endpoint,
+    financialScope:body.financial_scope,billingMode:body.billing_mode,
     request: {
       product: body.product,
       organisationId: body.organisation_id,
@@ -88,7 +95,7 @@ export function registerBillingCycleRoutes(app: FastifyInstance): void {
       const body = listRequest.parse(request.body);
       const value = await listBillingCycles(context(request, body, BILLING_CYCLES_LIST_PATH),
         { limit: body.limit, cursor: body.cursor });
-      assertContract(validateList, value);
+      assertContract(body.financial_scope?validateFinancialList:validateList, value);
       reply.header('Cache-Control', 'private, no-store');
       return reply.send(value);
     });
@@ -97,7 +104,7 @@ export function registerBillingCycleRoutes(app: FastifyInstance): void {
       const body = detailRequest.parse(request.body);
       const value = await getBillingCycleDetail(context(request, body, BILLING_CYCLES_DETAIL_PATH),
         body.cycle_id);
-      assertContract(validateDetail, value);
+      assertContract(body.financial_scope?validateFinancialDetail:validateDetail, value);
       reply.header('Cache-Control', 'private, no-store');
       return reply.send(value);
     });

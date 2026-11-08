@@ -9,12 +9,13 @@ import { AppError } from '../utils/errors.js';
  * final provider scan. No database pool is checked out inside the callback.
  */
 export async function withLiveTeamBillingEffect<T>(prisma: PrismaClient,
-  scope: { organisationId: string; teamId: string }, effect: () => Promise<T>,
+  scope: { organisationId: string; teamId: string | null }, effect: () => Promise<T>,
   onRefused?: () => Promise<unknown>): Promise<T> {
   try {
     return await prisma.$transaction(async tx => {
       await lockProductTeamPolicyShared(tx);
-      try { await assertEntityAccess({ orgId: scope.organisationId, teamId: scope.teamId }, tx); }
+      try { await assertEntityAccess({ orgId: scope.organisationId,
+        ...(scope.teamId===null?{}:{teamId:scope.teamId}) }, tx); }
       catch (error) {
         if (error instanceof AppError && error.statusCode === 403) throw new AppError('FORBIDDEN', 403, 'TEAM_BILLING_RETIRED');
         throw error;

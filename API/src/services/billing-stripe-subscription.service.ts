@@ -1,14 +1,10 @@
+import { requireBillingManager } from './billing-financial-authority.service.js';
+import { billingSubscriptionContextObject } from './billing-subscription-context.service.js';
 import { assertBillingActionContext } from './billing-action-context.service.js';
-import { requireTeamStripeBilling, requireStoredStripeBilling, resolveTeamBillingMode } from './billing-team-mode.service.js';
+import { requireTeamStripeBilling, resolveTeamBillingMode } from './billing-team-mode.service.js';
 import type { BillingCustomerLocale } from '../contracts/billing-statement-v1.js';
 import { stripeBillingLocale } from './billing-stripe-locale.js';
-import {
-  BillingAssignmentScope,
-  MembershipStatus,
-  type BillingStripeSubscription,
-  type Prisma,
-  type PrismaClient,
-} from '@prisma/client';
+import { BillingAssignmentScope, type BillingStripeSubscription, type Prisma, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
 import { getEnv } from '../config/env.js';
@@ -24,7 +20,7 @@ import {
 } from './billing-customer-action-intent.service.js';
 import {
   customerBillingTariff,
-  resolveEffectiveTariffContext,
+  resolveFinancialTariffContext,
   type EffectiveTariffPayload,
 } from './billing-entitlement.service.js';
 import {
@@ -33,7 +29,7 @@ import {
   type StripeAccountContext,
 } from './billing-stripe-client.service.js';
 import { billingScope } from './billing-stripe-checkout-state.service.js';
-import { isBillingManager } from './billing-stripe-manager.service.js';
+
 import { stripeBillingPeriodPhase } from './billing-stripe-period.service.js';
 import { normalizeStripeReturnUrl } from './billing-stripe-return-url.service.js';
 import { refreshStripeSubscriptionProjection } from './billing-stripe-webhook.service.js';
@@ -42,7 +38,7 @@ export type BillingSubscriptionRequest = {
   billingContext?: string;
   product: string;
   organisationId: string;
-  teamId: string;
+  teamId: string | null;
   userId: string;
 };
 
@@ -52,7 +48,7 @@ type Dependencies = {
   prisma?: PrismaClient;
   stripe?: StripeSubscriptionClient;
   stripeLivemode?: boolean;
-  resolveTariff?: typeof resolveEffectiveTariffContext;
+  resolveTariff?: typeof resolveFinancialTariffContext;
   refreshSubscription?: typeof refreshStripeSubscriptionProjection;
   authorizeAction?: typeof authorizeBillingCustomerAction;
 };
@@ -73,7 +69,7 @@ type LifecycleContext = {
   account: StripeAccountContext | null;
   stripeCollectionEnabled: boolean;
   actor: BillingActor;
-  payload: EffectiveTariffPayload;
+  payload: EffectiveTariffPayload<string|null>;
   subscription: SubscriptionWithCustomer | null;
   canManage: boolean;
 };
@@ -81,7 +77,7 @@ type LifecycleContext = {
 function activeSubscriptionWhere(
   account: StripeAccountContext | null,
   serviceId: string,
-  payload: EffectiveTariffPayload,
+  payload: EffectiveTariffPayload<string|null>,
 ): Prisma.BillingStripeSubscriptionWhereInput {
   const scope = billingScope(payload);
   return {
@@ -106,7 +102,7 @@ async function currentSubscription(
   prisma: PrismaClient,
   account: StripeAccountContext,
   serviceId: string,
-  payload: EffectiveTariffPayload,
+  payload: EffectiveTariffPayload<string|null>,
 ): Promise<SubscriptionWithCustomer | null> {
   return prisma.billingStripeSubscription.findFirst({
     where: activeSubscriptionWhere(account, serviceId, payload),
@@ -133,35 +129,14 @@ async function lifecycleContext(
   options: { requireStripe: boolean; refreshSubscription?: boolean } = { requireStripe: true },
 ): Promise<LifecycleContext> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const { actor, payload } = await (deps?.resolveTariff ?? resolveEffectiveTariffContext)(params, {
+  const { actor, payload } = await (deps?.resolveTariff ?? resolveFinancialTariffContext)(params, {
     prisma,
   });
-  const [orgMember, teamMember] = await Promise.all([
-    prisma.orgMember.findUnique({
-      where: {
-        orgId_userId: {
-          orgId: payload.subject.organisation_id,
-          userId: payload.subject.user_id,
-        },
-      },
-      select: { role: true, status: true },
-    }),
-    prisma.teamMember.findUnique({
-      where: {
-        teamId_userId: {
-          teamId: payload.subject.team_id,
-          userId: payload.subject.user_id,
-        },
-      },
-      select: { teamRole: true, status: true },
-    }),
-  ]);
-  if (
-    orgMember?.status !== MembershipStatus.ACTIVE ||
-    teamMember?.status !== MembershipStatus.ACTIVE
-  ) {
-    throw new AppError('FORBIDDEN', 403, 'BILLING_SUBJECT_NOT_ENTITLED');
-  }
+  const viewer = await requireBillingManager(params.request,prisma);
+  const selection=await resolveTeamBillingMode(params.request,prisma);
+  const env=getEnv();
+  const namedAccount=selection.mode==='live'?env.STRIPE_LIVE_ACCOUNT_ID:env.STRIPE_SANDBOX_ACCOUNT_ID;
+  if(!namedAccount)throw new AppError('SERVICE_UNAVAILABLE',503,'BILLING_STRIPE_MODE_NOT_CONFIGURED');
 
   const billingEnabled = Boolean(deps?.stripe) || getEnv().STRIPE_BILLING_ENABLED;
   if (!billingEnabled) {
@@ -169,7 +144,8 @@ async function lifecycleContext(
       throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
     }
     const known = await prisma.billingStripeSubscription.findMany({
-      where: activeSubscriptionWhere(null, params.credential.service.id, payload),
+      where: {...activeSubscriptionWhere(null, params.credential.service.id, payload),
+        account:{stripeAccountId:namedAccount,livemode:selection.mode==='live'}},
       include: {
         customer: { select: { stripeCustomerId: true } },
         account: { select: { stripeAccountId: true, livemode: true } },
@@ -181,7 +157,6 @@ async function lifecycleContext(
       throw new AppError('BAD_REQUEST', 409, 'STRIPE_SUBSCRIPTION_ACCOUNT_AMBIGUOUS');
     }
     const subscription = known[0] ?? null;
-    const selectedScope = subscription?.scope ?? billingScope(payload).scope;
     return {
       prisma,
       stripe: null,
@@ -190,23 +165,13 @@ async function lifecycleContext(
       actor,
       payload,
       subscription,
-      canManage: isBillingManager({
-        scope: selectedScope,
-        orgRole: orgMember.role,
-        teamRole: teamMember.teamRole,
-      }),
+      canManage: viewer.billingManager,
     };
   }
 
   let configured;
   if (!deps?.stripe) {
-    const known = await prisma.billingStripeSubscription.findMany({
-      where: activeSubscriptionWhere(null, params.credential.service.id, payload), take: 2,
-      select: { accountId: true },
-    });
-    if (known.length > 1) throw new AppError('BAD_REQUEST', 409, 'STRIPE_SUBSCRIPTION_ACCOUNT_AMBIGUOUS');
-    configured = known[0] ? await requireStoredStripeBilling(known[0].accountId, prisma)
-      : await requireTeamStripeBilling(params.request, prisma);
+    configured = await requireTeamStripeBilling(params.request, prisma);
   }
   const stripe = deps?.stripe ?? configured?.client;
   if (!stripe) throw new AppError('INTERNAL', 503, 'STRIPE_BILLING_DISABLED');
@@ -233,7 +198,6 @@ async function lifecycleContext(
       payload,
     );
   }
-  const selectedScope = subscription?.scope ?? billingScope(payload).scope;
   return {
     prisma,
     stripe,
@@ -242,11 +206,7 @@ async function lifecycleContext(
     actor,
     payload,
     subscription,
-    canManage: isBillingManager({
-      scope: selectedScope,
-      orgRole: orgMember.role,
-      teamRole: teamMember.teamRole,
-    }),
+    canManage: viewer.billingManager,
   };
 }
 
@@ -348,8 +308,8 @@ export async function createStripePortalSession(
   let { account, stripe, subscription } = requireManageableSubscription(context);
   if (!deps?.stripe || params.request.billingContext !== undefined) {
     const selection = await resolveTeamBillingMode(params.request, context.prisma);
-    assertBillingActionContext(params.request.billingContext, { account, revision: selection.revision,
-      appKeyId: params.credential.id }, params.endpoint, {
+    assertBillingActionContext(params.request.billingContext, { account, revision: selection.revision, scopeEpoch: selection.epoch,
+      appKeyId: params.credential.id,objectBinding:billingSubscriptionContextObject(subscription) }, params.endpoint, {
       product: params.request.product, organisation_id: params.request.organisationId,
       team_id: params.request.teamId, user_id: params.request.userId, return_url: params.request.returnUrl,
     });

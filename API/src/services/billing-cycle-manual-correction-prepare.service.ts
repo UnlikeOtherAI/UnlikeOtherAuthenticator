@@ -14,6 +14,7 @@ import { readVerifiedCycleCreditEvidence } from './billing-cycle-paid-credit-evi
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
 import { invoiceSourceFingerprint } from './billing-cycle-manual-invoice.service.js';
 import { readCycleWalletBoundary } from './billing-cycle-wallet-boundary.service.js';
+import { capturedCycleAccount } from './billing-cycle-account-binding.service.js';
 import { verifiedManualInvoiceLine } from './billing-cycle-manual-allocation.service.js';
 import { verifiedManualFundedOffset } from
   './billing-cycle-manual-funded-offset.service.js';
@@ -64,6 +65,8 @@ export async function verifyPendingManualCorrectionReceipts(
     billingMonth: string; payerScope: BillingAssignmentScope },
   snapshot: BillingCycleDetailV2, evidence: Evidence, tariffId: string,
 ): Promise<void> {
+  const capturedAccountId = await capturedCycleAccount(reader, pending, evidence);
+  if (!capturedAccountId) hold('BILLING_CYCLE_ACCOUNT_BINDING_RECONCILIATION_REQUIRED');
   const tariff = await reader.billingTariff.findUnique({ where: { id: tariffId } });
   const snapshots = evidence.ledger_snapshots;
   const proofs = evidence.paid_receipt_proofs;
@@ -86,14 +89,15 @@ export async function verifyPendingManualCorrectionReceipts(
       organisationId: pending.orgId, teamId: metering.team_id,
       billingMonth: pending.billingMonth, serviceId: pending.serviceId };
     const verified = await readVerifiedCycleCreditEvidence(reader, { scope, proof,
-      payer: pending.payerScope, tariff, rawLines: metering.raw_lines });
+      payer: pending.payerScope, tariff, rawLines: metering.raw_lines,
+      accountId: capturedAccountId ?? undefined });
     if (verified.fingerprint !== expected.fingerprint) {
       hold('BILLING_CYCLE_MANUAL_CORRECTION_RECEIPTS_CHANGED');
     }
   }
   const bounds = monthBounds(pending.billingMonth);
   const wallet = await readCycleWalletBoundary(reader, { orgId: pending.orgId,
-    teamId: pending.teamId, payer: pending.payerScope, ...bounds });
+    teamId: pending.teamId, payer: pending.payerScope, capturedAccountId, ...bounds });
   if (wallet.fingerprint !== (evidence.wallet_boundary as
     { fingerprint?: string } | undefined)?.fingerprint) {
     hold('BILLING_CYCLE_MANUAL_CORRECTION_WALLET_CHANGED');

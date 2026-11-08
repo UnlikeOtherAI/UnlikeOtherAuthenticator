@@ -127,15 +127,18 @@ describe('/org/me and confidential exchange with production pool limits', () => 
     } });
     subject = user.id;
     await db.prisma.domainRole.create({ data: { domain: DOMAIN, userId: subject, role: 'USER' } });
+    // This revocation matrix exercises a team-bound member. Org managers keep
+    // effective access after a TeamMember removal, proved separately below.
+    const owner = await db.prisma.user.create({data:{email:`${randomUUID()}@example.test`,userKey:randomUUID()}});
     const org = await db.prisma.organisation.create({ data: {
-      domain: DOMAIN, name: 'Pool regression', slug: `pool-${randomUUID()}`, ownerId: subject,
+      domain: DOMAIN, name: 'Pool regression', slug: `pool-${randomUUID()}`, ownerId: owner.id,
     } });
     orgId = org.id;
     const team = await db.prisma.team.create({ data: {
       orgId, name: 'Selected team', slug: 'selected-team', isDefault: true,
     } });
     teamId = team.id;
-    await db.prisma.orgMember.create({ data: { orgId, userId: subject, role: 'owner' } });
+    await db.prisma.orgMember.createMany({data:[{orgId,userId:owner.id,role:'owner'},{orgId,userId:subject,role:'member'}]});
     await db.prisma.teamMember.create({ data: { teamId, userId: subject, teamRole: 'admin' } });
 
     const familyId = randomUUID();

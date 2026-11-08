@@ -1,6 +1,10 @@
+import type { BillingOrganisationFinancialDto as FinancialDto } from '../contracts/billing-statement-v1.js';
+import { AppError } from '../utils/errors.js';
 import { loadAddonData } from './billing-recurring-addon-data.service.js';
 import { freezeDisplayedBillingActions } from './billing-action-context.service.js';
 import { billingModeRefreshCopy } from './billing-mode-copy.catalog.js';
+import { organisationAddonCopy } from './billing-organisation-addon-copy.catalog.js';
+import { resolveTeamBillingMode } from './billing-team-mode.service.js';
 import {
   BillingRecurringAddonEntitlementScope,
   BillingRecurringAddonSubscriptionScope,
@@ -8,13 +12,13 @@ import {
 } from '@prisma/client';
 
 import type {
-  BillingRecurringAddonCancelAction,
-  BillingRecurringAddonCheckoutAction,
+  BillingRecurringAddonCancelAction as PublicBillingRecurringAddonCancelAction,
+  BillingRecurringAddonCheckoutAction as PublicBillingRecurringAddonCheckoutAction,
   BillingRecurringAddonManagerSubscription,
   BillingRecurringAddonMemberSubscription,
-  BillingRecurringAddonsManagerV1,
-  BillingRecurringAddonsMemberV1,
-  BillingRecurringAddonsV1,
+  BillingRecurringAddonsManagerV1 as PublicBillingRecurringAddonsManagerV1,
+  BillingRecurringAddonsMemberV1 as PublicBillingRecurringAddonsMemberV1,
+  BillingRecurringAddonsV1 as PublicBillingRecurringAddonsV1,
 } from '../contracts/billing-statement-v1.js';
 import {
   BILLING_RECURRING_ADDONS_CANCELLATION_PREVIEW_PATH,
@@ -27,10 +31,10 @@ import { resolveCreditCollectionContext } from './billing-credit-account.service
 import { billingRecurringAddonMoney } from './billing-credit-display.service.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingAddonCopy, billingAddonSubscriptionStatus } from './billing-addon-copy.catalog.js';
-import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import { resolveFinancialTariffContext } from './billing-entitlement.service.js';
 import {
   resolveBillingFundingViewer,
-  type BillingFundingViewer,
+  type OrganisationBillingFundingViewer,
 } from './billing-funding-viewer.service.js';
 import { recurringAddonOfferAvailability } from './billing-recurring-addon-catalog.service.js';
 import {
@@ -175,12 +179,13 @@ function managerActions(params: {
   offer: Awaited<ReturnType<typeof loadAddonData>>['offers'][number];
   subscription: Subscription | null;
   data: Awaited<ReturnType<typeof loadAddonData>>;
-  viewer: BillingFundingViewer;
+  viewer: OrganisationBillingFundingViewer;
   context: OfferContext;
   availability: ReturnType<typeof recurringAddonOfferAvailability>;
 }): Array<BillingRecurringAddonCheckoutAction | BillingRecurringAddonCancelAction> {
   const copy = billingAddonCopy(params.context.locale);
   if (!params.availability.entitlementScope) return [];
+  if(params.context.teamId===null&&params.availability.entitlementScope!==BillingRecurringAddonEntitlementScope.ORGANISATION)return [];
   const scope = recurringAddonScope(params.availability.entitlementScope, {
     product: params.context.product,
     organisationId: params.context.organisationId,
@@ -219,7 +224,7 @@ function managerActions(params: {
       },
     ];
   }
-  const pending = params.data.checkouts.some(
+  const pending = params.data.retainedSubscriptions.some(row=>row.offerKey===params.offer.key)||params.data.checkouts.some(
     (checkout) =>
       checkout.offerId === params.offer.id &&
       checkout.scope === scope.scope &&
@@ -255,18 +260,22 @@ function managerActions(params: {
 
 function offersForManager(
   data: Awaited<ReturnType<typeof loadAddonData>>,
-  viewer: BillingFundingViewer,
+  viewer: OrganisationBillingFundingViewer,
   context: OfferContext,
 ): BillingRecurringAddonsManagerV1['offers'] {
   const copy = billingAddonCopy(context.locale);
   return data.offers.map((offer) => {
     const scopes = new Set(offer.featurePolicies.map((policy) => policy.entitlementScope));
     const subscription = selectSubscription(
-      data.subscriptions.filter((row) => row.offerId === offer.id),
+      data.subscriptions.filter((row) => row.offerId === offer.id&&
+        (row.scope===BillingRecurringAddonSubscriptionScope.ORGANISATION||row.teamId===context.teamId)),
       scopes,
       viewer.userId,
     );
-    const availability = recurringAddonOfferAvailability(offer, context.collectionEnabled);
+    const sourceAvailability = recurringAddonOfferAvailability(offer, context.collectionEnabled);
+    const retained=data.retainedSubscriptions.some(row=>row.offerKey===offer.key);
+    const availability={...sourceAvailability,available:sourceAvailability.available&&!retained&&
+      (context.teamId!==null||sourceAvailability.entitlementScope===BillingRecurringAddonEntitlementScope.ORGANISATION)};
     return {
       id: offer.id,
       key: offer.key,
@@ -281,7 +290,9 @@ function offersForManager(
       ),
       interval: 'month',
       available: availability.available,
-      unavailable_reason: availability.available ? null : !context.collectionEnabled ? copy.noCollection : availability.entitlementScope ? copy.checkoutUnavailable : copy.noEntitlementScope,
+      unavailable_reason: availability.available ? null : retained?organisationAddonCopy(context.locale).retained:
+        context.teamId===null&&availability.entitlementScope!==BillingRecurringAddonEntitlementScope.ORGANISATION?
+          organisationAddonCopy(context.locale).targetRequired:!context.collectionEnabled ? copy.noCollection : availability.entitlementScope ? copy.checkoutUnavailable : copy.noEntitlementScope,
       entitlement: entitlement(subscription, offer.featurePolicies.length > 0, context.locale),
       subscription: managerSubscription(subscription, context.locale),
       actions: managerActions({ offer, subscription, data, viewer, context, availability }),
@@ -291,7 +302,7 @@ function offersForManager(
 
 function offersForMember(
   data: Awaited<ReturnType<typeof loadAddonData>>,
-  viewer: BillingFundingViewer,
+  viewer: OrganisationBillingFundingViewer,
   context: OfferContext,
 ): BillingRecurringAddonsMemberV1['offers'] {
   const copy = billingAddonCopy(context.locale);
@@ -330,7 +341,7 @@ export async function getBillingRecurringAddons(
     request: {
       product: string;
       organisationId: string;
-      teamId: string;
+      teamId: string|null;
       userId: string;
     };
     actorToken: string;
@@ -342,14 +353,15 @@ export async function getBillingRecurringAddons(
   deps?: {
     prisma?: PrismaClient;
     now?: () => Date;
-    resolveEntitlement?: typeof resolveEffectiveTariffContext;
+    resolveEntitlement?: typeof resolveFinancialTariffContext;
     resolveCollection?: typeof resolveCreditCollectionContext;
     resolveViewer?: typeof resolveBillingFundingViewer;
     loadData?: typeof loadAddonData;
+    resolveMode?: typeof resolveTeamBillingMode;
   },
 ): Promise<BillingRecurringAddonsV1> {
   const prisma = deps?.prisma;
-  await (deps?.resolveEntitlement ?? resolveEffectiveTariffContext)(
+  await (deps?.resolveEntitlement ?? resolveFinancialTariffContext)(
     {
       request: params.request,
       actorToken: params.actorToken,
@@ -358,23 +370,15 @@ export async function getBillingRecurringAddons(
     },
     { prisma },
   );
-  const [collection, viewer] = await Promise.all([
-    (deps?.resolveCollection ?? resolveCreditCollectionContext)(
+  const viewer=await (deps?.resolveViewer ?? resolveBillingFundingViewer)(params.request,{prisma});
+  if (!viewer.billingManager) throw new AppError('FORBIDDEN',403,'BILLING_MANAGER_REQUIRED');
+  const collection=await (deps?.resolveCollection ?? resolveCreditCollectionContext)(
       {
         organisationId: params.request.organisationId,
         teamId: params.request.teamId,
       },
       { prisma },
-    ),
-    (deps?.resolveViewer ?? resolveBillingFundingViewer)(
-      {
-        userId: params.request.userId,
-        organisationId: params.request.organisationId,
-        teamId: params.request.teamId,
-      },
-      { prisma },
-    ),
-  ]);
+    );
   const data = await (deps?.loadData ?? loadAddonData)(
     {
       accountId: collection.account.id,
@@ -385,6 +389,11 @@ export async function getBillingRecurringAddons(
     { prisma },
   );
   const now = deps?.now?.() ?? new Date();
+  const finalViewer=await (deps?.resolveViewer??resolveBillingFundingViewer)(params.request,{prisma});
+  if(!finalViewer.billingManager)throw new AppError('FORBIDDEN',403,'BILLING_MANAGER_REQUIRED');
+  const finalMode=await (deps?.resolveMode??resolveTeamBillingMode)(params.request,prisma);
+  if(finalMode.epoch!==collection.scopeEpoch||finalMode.revision!==collection.modeRevision||
+    collection.account.livemode!==(finalMode.mode==='live'))throw new AppError('BAD_REQUEST',409,'BILLING_CONTEXT_STALE');
   const common = {
     schema_version: 1 as const,
     generated_at: now.toISOString(),
@@ -403,7 +412,8 @@ export async function getBillingRecurringAddons(
       stripe_mode: collection.account.livemode ? ('live' as const) : ('test' as const),
     },
     title: `${params.credential.service.name} ${billingAddonCopy(params.locale).titleSuffix}`,
-    description: billingAddonCopy(params.locale).catalogDescription,
+    description: `${billingAddonCopy(params.locale).catalogDescription} ${organisationAddonCopy(params.locale).description}${
+      params.request.teamId===null?` ${organisationAddonCopy(params.locale).targetRequired}`:''}`,
   };
   const offerContext: OfferContext = {
     product: params.credential.service.identifier,
@@ -426,7 +436,7 @@ export async function getBillingRecurringAddons(
         can_manage_addons: offers.some((offer) => offer.actions.some((action) => action.enabled)),
       },
       offers,
-    } as BillingRecurringAddonsV1, { account: collection.account, revision: collection.modeRevision ?? 0,
+    } as BillingRecurringAddonsV1, { account: collection.account, revision: collection.modeRevision ?? 0, scopeEpoch: collection.scopeEpoch,
       appKeyId: params.credential.id }, params.supportsBillingMode === true, billingModeRefreshCopy(params.locale), now);
   }
   return {
@@ -440,3 +450,13 @@ export async function getBillingRecurringAddons(
     offers: offersForMember(data, viewer, offerContext),
   };
 }
+
+type BillingRecurringAddonsV1=FinancialDto<PublicBillingRecurringAddonsV1>;
+
+type BillingRecurringAddonsManagerV1=FinancialDto<PublicBillingRecurringAddonsManagerV1>;
+
+type BillingRecurringAddonsMemberV1=FinancialDto<PublicBillingRecurringAddonsMemberV1>;
+
+type BillingRecurringAddonCheckoutAction=FinancialDto<PublicBillingRecurringAddonCheckoutAction>;
+
+type BillingRecurringAddonCancelAction=FinancialDto<PublicBillingRecurringAddonCancelAction>;

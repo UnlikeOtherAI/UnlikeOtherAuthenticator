@@ -20,6 +20,7 @@ describe('resolveAutoSelectedTeam', () => {
     return {
       teams: [soloTeam],
       pending_invites: [],
+      creatable_orgs: [],
       can_create_org: false,
       ...overrides,
     };

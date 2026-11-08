@@ -8,6 +8,7 @@ const endsAt = new Date('2026-07-01T00:00:00.000Z');
 function settlement(overrides?: Record<string, unknown>) {
   return {
     id: 'settlement_1',
+    accountId:'stripe_account_1',
     serviceId: 'service_1',
     subscriptionId: null,
     creditAccount: {
@@ -29,6 +30,7 @@ function settlement(overrides?: Record<string, unknown>) {
 function addon() {
   return {
     id: 'addon_subscription_1',
+    accountId:'stripe_account_1',
     serviceId: 'service_1',
     offerId: 'offer_1',
     offerKey: 'privacy',
@@ -49,6 +51,7 @@ function addon() {
       currency: 'USD',
     },
     catalog: {
+      accountId:'stripe_account_1',
       id: 'catalog_1',
       serviceId: 'service_1',
       offerId: 'offer_1',
@@ -63,6 +66,7 @@ function params() {
     serviceId: 'service_1',
     tariffId: 'tariff_1',
     organisationId: 'org_1',
+    accountId:'stripe_account_1',
     billingMonth: '2026-06',
     startsAt,
     endsAt,
@@ -76,7 +80,7 @@ describe('contract invoice funding evidence', () => {
       settlement({
         id: 'settlement_2',
         creditAccount: {
-          accountId: 'stripe_account_2',
+          accountId: 'stripe_account_1',
           teamId: 'team_2',
           currency: 'USD',
         },
@@ -129,7 +133,7 @@ describe('contract invoice funding evidence', () => {
         where: expect.objectContaining({
           tariffId: 'tariff_1',
           billingMonth: '2026-06',
-          creditAccount: { orgId: 'org_1', currency: 'USD' },
+          accountId:'stripe_account_1',creditAccount: {accountId:'stripe_account_1', orgId: 'org_1', currency: 'USD' },
         }),
       }),
     );
@@ -155,7 +159,7 @@ describe('contract invoice funding evidence', () => {
     ).rejects.toThrow('BILLING_INVOICE_CREDIT_COLLECTOR_CONFLICT');
   });
 
-  it('rejects multiple credit accounts for the same exact team', async () => {
+  it('refuses another captured provider account even if a reader returns it', async () => {
     const prisma = {
       billingCreditUsageSettlement: {
         findMany: vi.fn().mockResolvedValue([
@@ -175,6 +179,19 @@ describe('contract invoice funding evidence', () => {
 
     await expect(
       collectContractFundingEvidence(params(), { prisma: prisma as never }),
-    ).rejects.toThrow('BILLING_INVOICE_CREDIT_ACCOUNT_AMBIGUOUS');
+    ).rejects.toThrow('BILLING_INVOICE_CREDIT_ACCOUNT_MISMATCH');
+  });
+  it('holds a missing contract binding before reading any financial evidence',async()=>{
+    const prisma={billingCreditUsageSettlement:{findMany:vi.fn()},billingRecurringAddonSubscription:{findMany:vi.fn()}};
+    await expect(collectContractFundingEvidence({...params(),accountId:''},{prisma:prisma as never}))
+      .rejects.toThrow('BILLING_INVOICE_ACCOUNT_BINDING_RECONCILIATION_REQUIRED');
+    expect(prisma.billingCreditUsageSettlement.findMany).not.toHaveBeenCalled();
+    expect(prisma.billingRecurringAddonSubscription.findMany).not.toHaveBeenCalled();
+  });
+  it('refuses a contradictory add-on catalog account',async()=>{
+    const source=addon();source.catalog.accountId='another_account';
+    const prisma={billingCreditUsageSettlement:{findMany:vi.fn().mockResolvedValue([])},
+      billingRecurringAddonSubscription:{findMany:vi.fn().mockResolvedValue([source])}};
+    await expect(collectContractFundingEvidence(params(),{prisma:prisma as never})).rejects.toThrow('BILLING_INVOICE_ADDON_EVIDENCE_INVALID');
   });
 });

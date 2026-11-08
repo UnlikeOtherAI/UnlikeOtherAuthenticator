@@ -80,7 +80,8 @@ export async function resolveRequiredAuthorizationTeam(
       await validateTeam(params, selected, deps);
       return selected;
     }
-    if (choices.teams.length > 0 || choices.pending_invites.length > 0) {
+    if (choices.teams.length > 0 || choices.pending_invites.length > 0 ||
+      choices.creatable_orgs.length>0 || choices.manageable_orgs?.length) {
       throw new AppError('UNAUTHORIZED', 401, 'INVALID_AUTH_CODE');
     }
   }

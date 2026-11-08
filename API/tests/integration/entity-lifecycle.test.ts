@@ -12,6 +12,9 @@ import { validateConfigFields } from '../../src/services/config.service.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { hasTeamCapability } from '../../src/services/team.service.base.js';
 import type { OrgServicePrisma } from '../../src/services/organisation.service.base.js';
+import { assertBillingPeriodMode } from '../../src/services/billing-mode-period.service.js';
+import { createTeam } from '../../src/services/team.service.teams.js';
+import { assertTeamDeletionScope,type DeletionPreview } from '../../src/services/entity-deletion-preview.service.js';
 
 const store = vi.hoisted(() => ({ prisma: null as PrismaClient | null, mail: vi.fn() }));
 vi.mock('../../src/db/prisma.js', () => ({ getAdminPrisma: () => store.prisma!, getPrisma: () => store.prisma! }));
@@ -129,34 +132,85 @@ describe.skipIf(!process.env.DATABASE_URL)('entity lifecycle on PostgreSQL', () 
       }
       expect((await handle.prisma.entityDeletionJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('COMPLETE');
     });
-  it('deletes an empty organisation with its sole team and org-only orphan while preserving shared accounts', async () => {
+  it('preserves the organisation and its people after explicit deletion of its sole team', async () => {
     const admin = await actor(), { owner, org, team } = await container();
     const member = await user('Org-only member'), shared = await user('Shared');
     await handle.prisma.orgMember.createMany({ data: [{ orgId: org.id, userId: member.id }, { orgId: org.id, userId: shared.id }] });
     const second = await handle.prisma.organisation.create({ data: { domain, name: 'Other company', slug: randomUUID(), ownerId: shared.id } });
     await handle.prisma.orgMember.create({ data: { orgId: second.id, userId: shared.id } });
     const preview = await getDeletionPreview('TEAM', team.id, 'RETAIN_REFERENCE');
-    expect(preview.deletesEmptyOrganisation).toBe(true);
-    expect(preview.candidates.find(c => c.id === member.id)?.eligible).toBe(true);
-    expect(preview.candidates.find(c => c.id === shared.id)?.eligible).toBe(false);
+    expect(preview).toMatchObject({effectiveScope:'TEAM',effectiveTargetId:team.id,deletesEmptyOrganisation:false,teamIds:[team.id]});
+    expect(preview.candidates.find(c=>c.id===owner.id)?.eligible).toBe(false);
+    expect(preview.candidates.some(c=>c.id===member.id||c.id===shared.id)).toBe(false);
     const job = await start('TEAM', team.id, admin);
-    expect((await handle.prisma.user.findUniqueOrThrow({ where: { id: member.id } })).lifecycleStatus).toBe('DELETING');
+    expect((await handle.prisma.user.findUniqueOrThrow({ where: { id: member.id } })).lifecycleStatus).toBe('ACTIVE');
     await acknowledge(job); await executeEntityDeletion(job.id, admin);
-    expect(await handle.prisma.organisation.findUnique({ where: { id: org.id } })).toBeNull();
-    expect((await handle.prisma.user.findUniqueOrThrow({ where: { id: owner.id } })).lifecycleStatus).toBe('DELETED');
+    expect(await handle.prisma.organisation.findUnique({where:{id:org.id}})).toMatchObject({lifecycleStatus:'ACTIVE',ownerId:owner.id});
+    expect(await handle.prisma.orgMember.count({where:{orgId:org.id,status:'ACTIVE'}})).toBe(3);
+    expect(await handle.prisma.team.count({where:{orgId:org.id}})).toBe(0);
+    expect((await handle.prisma.user.findUniqueOrThrow({where:{id:owner.id}})).lifecycleStatus).toBe('ACTIVE');
     expect((await handle.prisma.user.findUniqueOrThrow({ where: { id: shared.id } })).lifecycleStatus).toBe('ACTIVE');
   });
-  it('refuses stale previews after a new dependency and freezes dispatched candidates against new membership', async () => {
+  it('refuses stale previews while preserving org authority and new-team creation during exact team cleanup', async () => {
     const admin = await actor(), { owner, org, team } = await container();
     const preview = await getDeletionPreview('TEAM', team.id, 'RETAIN_REFERENCE');
     await handle.prisma.userSetting.create({ data: { userId: owner.id, namespace: 'personal', key: 'profile', value: {}, sizeBytes: 2 } });
     await expect(beginEntityDeletion({ scope: 'TEAM', id: team.id, mode: 'RETAIN_REFERENCE', previewDigest: preview.digest, confirmation: preview.confirmation, requestKey: randomUUID(), actor: admin })).rejects.toThrow('DELETION_PREVIEW_CHANGED');
     await handle.prisma.userSetting.deleteMany();
     const job = await start('TEAM', team.id, admin);
-    await expect(handle.prisma.team.create({ data: { orgId: org.id, name: 'Late', slug: randomUUID() } })).rejects.toThrow();
+    await expect(handle.prisma.team.create({data:{orgId:org.id,name:'Recovery team',slug:randomUUID()}})).resolves.toMatchObject({orgId:org.id});
     const otherOwner = await user(), other = await handle.prisma.organisation.create({ data: { domain, name: 'Other', slug: randomUUID(), ownerId: otherOwner.id } });
-    await expect(handle.prisma.orgMember.create({ data: { orgId: other.id, userId: owner.id } })).rejects.toThrow();
-    expect((await productDeletionJobs(job.participants[0].clientDomainId))[0]).toMatchObject({ effectiveScope: 'ORGANISATION', effectiveTargetId: org.id, accountsToDelete: [owner.id] });
+    await expect(handle.prisma.orgMember.create({data:{orgId:other.id,userId:owner.id}})).resolves.toMatchObject({userId:owner.id});
+    expect((await productDeletionJobs(job.participants[0].clientDomainId))[0]).toMatchObject({effectiveScope:'TEAM',effectiveTargetId:team.id,teamIds:[team.id],accountsToDelete:[]});
+  });
+  it('preserves captured TEST wallet evidence and the inclusive month hold after last-team deletion',async()=>{
+    const admin=await actor(),{owner,org,team}=await container();
+    const account=await handle.prisma.billingStripeAccount.create({data:{stripeAccountId:'acct_retained_main_test',livemode:false}});
+    const customer=await handle.prisma.billingStripeCustomer.create({data:{accountId:account.id,orgId:org.id,
+      scope:'ORGANISATION',scopeKey:org.id}});
+    const wallet=await handle.prisma.billingCreditAccount.create({data:{accountId:account.id,customerId:customer.id,
+      orgId:org.id,scope:'ORGANISATION',scopeKey:org.id}});
+    const teamCustomer=await handle.prisma.billingStripeCustomer.create({data:{accountId:account.id,orgId:org.id,
+      teamId:team.id,scope:'TEAM',scopeKey:`${org.id}:${team.id}`}});
+    const teamEvidence=await handle.prisma.billingCreditAccount.create({data:{accountId:account.id,customerId:teamCustomer.id,
+      orgId:org.id,teamId:team.id,scope:'TEAM',scopeKey:teamCustomer.scopeKey}});
+    // Synthetic already-funded historical source; the implementation never edits money this way.
+    await handle.prisma.$transaction(async tx=>{
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role=replica');
+      await tx.billingCreditAccount.update({where:{id:wallet.id},data:{balanceMicrocredits:2000000000n}});
+    });
+    const before=await handle.prisma.billingCreditAccount.findUniqueOrThrow({where:{id:wallet.id}});
+    const period={accountId:account.id,orgId:org.id,teamId:null,month:new Date().toISOString().slice(0,7),sourceCreatedAt:new Date('2020-01-01')};
+    await expect(assertBillingPeriodMode(handle.prisma,period)).rejects.toThrow('BILLING_MODE_TRANSITION_RECONCILIATION_REQUIRED');
+    const job=await start('TEAM',team.id,admin);await acknowledge(job);await executeEntityDeletion(job.id,admin);
+    expect(await handle.prisma.billingCreditAccount.findUnique({where:{id:wallet.id}})).toEqual(before);
+    expect(await handle.prisma.billingStripeCustomer.findUnique({where:{id:customer.id}})).toEqual(customer);
+    expect(await handle.prisma.billingCreditAccount.findUnique({where:{id:teamEvidence.id}})).toEqual(teamEvidence);
+    expect(await handle.prisma.team.findUnique({where:{id:team.id}})).toMatchObject({lifecycleStatus:'DELETED',isDefault:false});
+    await expect(assertBillingPeriodMode(handle.prisma,period)).rejects.toThrow('BILLING_MODE_TRANSITION_RECONCILIATION_REQUIRED');
+    const config=validateConfigFields({...baseClientConfigPayload(),domain,org_features:{enabled:true,
+      allow_user_create_org:true,allow_user_create_team:true,max_teams_per_org:1}});
+    const recovery=await createTeam({orgId:org.id,domain,actorUserId:owner.id,name:'Recovered workspace',
+      config,joinCreator:true},{prisma:handle.prisma as unknown as OrgServicePrisma});
+    expect(recovery.orgId).toBe(org.id);
+    expect(recovery.isDefault).toBe(true);
+    expect(await handle.prisma.organisation.findUnique({where:{id:org.id}})).toMatchObject({lifecycleStatus:'ACTIVE',ownerId:owner.id});
+    expect(await handle.prisma.billingCreditAccount.findUnique({where:{id:wallet.id}})).toEqual(before);
+  });
+  it('fences legacy TEAM previews and old executors before destructive work',async()=>{
+    const admin=await actor(),{org,team}=await container();const job=await start('TEAM',team.id,admin);
+    const preview=job.preview as Record<string,unknown>;
+    const unsafe={...preview,effectiveScope:'ORGANISATION',effectiveTargetId:org.id,deletesEmptyOrganisation:true};
+    await expect(handle.prisma.entityDeletionJob.update({where:{id:job.id},data:{preview:unsafe as never}}))
+      .rejects.toThrow('DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED');
+    expect(()=>assertTeamDeletionScope(unsafe as unknown as DeletionPreview)).toThrow('DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED');
+    await expect(handle.prisma.$executeRaw`SELECT uoa_assert_team_deletion_scope('TEAM',${team.id},${JSON.stringify(unsafe)}::jsonb)`)
+      .rejects.toThrow('DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED');
+    await expect(handle.prisma.entityDeletionJob.update({where:{id:job.id},data:{leaseOwner:'legacy-executor',leaseExpiresAt:new Date(Date.now()+60_000)}}))
+      .rejects.toThrow('DELETION_TEAM_EXECUTOR_UPGRADE_REQUIRED');
+    expect(await handle.prisma.organisation.findUnique({where:{id:org.id}})).toMatchObject({lifecycleStatus:'ACTIVE'});
+    expect(await handle.prisma.entityDeletionJob.findUnique({where:{id:job.id}})).toMatchObject({status:'WAITING_FOR_PRODUCTS'});
+    expect((await handle.prisma.entityDeletionJob.findUniqueOrThrow({where:{id:job.id}})).preview).toEqual(preview);
   });
   it('serializes simultaneous product acknowledgements and rejects wrong domain or conflicting replay', async () => {
     const admin = await actor(), target = await user();
@@ -235,7 +289,8 @@ describe.skipIf(!process.env.DATABASE_URL)('entity lifecycle on PostgreSQL', () 
     await acknowledge(job); await executeEntityDeletion(job.id, admin);
     expect((await handle.prisma.team.findUniqueOrThrow({ where: { id: sibling.id } })).isDefault).toBe(true);
     const last = await start('TEAM', sibling.id, admin); await acknowledge(last); await executeEntityDeletion(last.id, admin);
-    expect(await handle.prisma.organisation.findUnique({ where: { id: org.id } })).toBeNull();
+    expect(await handle.prisma.organisation.findUnique({where:{id:org.id}})).toMatchObject({lifecycleStatus:'ACTIVE'});
+    expect(await handle.prisma.team.count({where:{orgId:org.id}})).toBe(0);
   });
   it('persists bounded progress for 25 members with 250 audit rows, resuming without duplicate effects', async () => {
     const admin = await actor(), { org, team } = await container();

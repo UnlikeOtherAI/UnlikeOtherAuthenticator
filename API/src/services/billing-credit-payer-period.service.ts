@@ -11,6 +11,18 @@ export async function assertUnambiguousCreditPayer(
   prisma: PrismaClient | Prisma.TransactionClient,
   params: { orgId: string; scope: BillingAssignmentScope; billingMonth: string },
 ): Promise<void> {
+  const epochs = await prisma.$queryRaw<Array<{ activatedAt: Date }>>(Prisma.sql`
+    SELECT activated_at AS "activatedAt" FROM billing_organisation_scope_cutover WHERE id=1`);
+  const epoch = epochs[0]?.activatedAt;
+  if (epoch && params.billingMonth >= billingMonthKey(epoch)) {
+    if (params.billingMonth === billingMonthKey(epoch)) {
+      throw new AppError('INTERNAL',409,'BILLING_MODE_TRANSITION_RECONCILIATION_REQUIRED');
+    }
+    if (params.scope !== BillingAssignmentScope.ORGANISATION) {
+      throw new AppError('INTERNAL',409,'BILLING_ORGANISATION_SCOPE_REQUIRED');
+    }
+    return;
+  }
   const responsibility = await prisma.billingOrgResponsibility.findUnique({
     where: { orgId: params.orgId },
     select: {

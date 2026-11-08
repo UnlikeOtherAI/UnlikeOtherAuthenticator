@@ -44,7 +44,7 @@ function setup(orgRole = 'admin') {
     orgId: 'org_1',
     teamId: null,
     scope: BillingAssignmentScope.ORGANISATION,
-    scopeKey: 'org_1',
+    scopeKey: 'org_1:billing:GBP',
     stripeCustomerId: null as string | null,
     createdAt: now,
     updatedAt: now,
@@ -121,20 +121,22 @@ function setup(orgRole = 'admin') {
       }),
     },
     organisation: {
+      findFirst:vi.fn().mockResolvedValue({id:'org_1',ownerId:'other-owner'}),
       findUnique: vi.fn().mockResolvedValue({ id: 'org_1', name: 'Example Org' }),
     },
-    team: { findUnique: vi.fn() },
+    team: { findUnique: vi.fn(),findFirst:vi.fn().mockResolvedValue({id:'team_1'}) },
     orgMember: {
       findUnique: vi.fn().mockResolvedValue({
         role: orgRole,
         status: MembershipStatus.ACTIVE,
       }),
     },
-    teamMember: { findUnique: vi.fn() },
+    teamMember: { findUnique: vi.fn().mockResolvedValue({status:'ACTIVE',teamRole:'member'}),findFirst:vi.fn().mockResolvedValue(null) },
     billingTariff: { findFirst: vi.fn().mockResolvedValue(tariff) },
     billingStripeSubscription: { findFirst: vi.fn().mockResolvedValue(null) },
     billingStripeCheckoutSession: checkoutModel,
     billingStripeCustomer: {
+      findUniqueOrThrow:vi.fn().mockImplementation(async()=>customer),
       upsert: vi.fn().mockImplementation(async () => customer),
       update: vi.fn().mockImplementation(async ({ data }) => {
         customer = { ...customer, ...data };
@@ -211,7 +213,7 @@ function setup(orgRole = 'admin') {
         livemode: false,
         metadata: {
           uoa_scope: 'organisation',
-          uoa_scope_key: 'org_1',
+          uoa_scope_key: customer.scopeKey,
           uoa_organisation_id: 'org_1',
           uoa_stripe_account_id: 'acct_uoa',
           uoa_stripe_mode: 'test',
@@ -296,6 +298,9 @@ describe('Stripe Checkout authorization, recovery, and account binding', () => {
       deps(state),
     );
     expect(result.checkout_session_id).toBe('cs_1');
+    expect(state.prisma.billingStripeCustomer.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where:{accountId_scopeKey:{accountId:account.id,scopeKey:'org_1:billing:GBP'}},
+      create:expect.objectContaining({scope:'ORGANISATION',orgId:'org_1',teamId:null})}));
     expect(result.tariff).toEqual({
       collection_mode: payload.tariff.collection_mode,
       monthly_subscription: payload.tariff.monthly_subscription,
@@ -448,7 +453,7 @@ describe('Stripe Checkout authorization, recovery, and account binding', () => {
     expect(state.checkouts[0]?.stripeCheckoutSessionId).toBe('cs_1');
   });
 
-  it('abandons an expired creating lease with no Stripe session and reuses the scope', async () => {
+  it('abandons an expired creating lease and requires a new deliberate action before another capture', async () => {
     const state = setup();
     state.checkouts.push({
       id: 'checkout_stale',
@@ -475,11 +480,13 @@ describe('Stripe Checkout authorization, recovery, and account binding', () => {
       createdAt: new Date(now.getTime() - 3_600_000),
       updatedAt: new Date(now.getTime() - 3_600_000),
     });
-    await createStripeCheckoutSession(
+    await expect(createStripeCheckoutSession(
       { request, actorToken: 'actor-2', credential },
       deps(state, 'jti_2'),
-    );
+    )).rejects.toThrow('BILLING_CONTEXT_STALE');
     expect(state.checkouts[0]?.status).toBe('abandoned');
+    expect(state.checkouts).toHaveLength(1);
+    await createStripeCheckoutSession({request,actorToken:'actor-3',credential},deps(state,'jti_3'));
     expect(state.checkouts).toHaveLength(2);
   });
 });

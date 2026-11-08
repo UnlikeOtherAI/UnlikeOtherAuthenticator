@@ -23,18 +23,11 @@ export type StripeCheckoutClient = Pick<
 
 export type StripeCustomerClient = Pick<Stripe, 'customers'>;
 
-export function billingScope(payload: EffectiveTariffPayload): {
+export function billingScope(payload: EffectiveTariffPayload<string|null>): {
   scope: BillingAssignmentScope;
   scopeKey: string;
   teamId: string | null;
 } {
-  if (payload.assignment.scope === 'team') {
-    return {
-      scope: BillingAssignmentScope.TEAM,
-      scopeKey: `${payload.subject.organisation_id}:${payload.subject.team_id}`,
-      teamId: payload.subject.team_id,
-    };
-  }
   return {
     scope: BillingAssignmentScope.ORGANISATION,
     scopeKey: payload.subject.organisation_id,
@@ -42,7 +35,7 @@ export function billingScope(payload: EffectiveTariffPayload): {
   };
 }
 
-export function tariffSource(payload: EffectiveTariffPayload): BillingTariffSource {
+export function tariffSource(payload: EffectiveTariffPayload<string|null>): BillingTariffSource {
   const sources = {
     service_default: BillingTariffSource.SERVICE_DEFAULT,
     organisation: BillingTariffSource.ORGANISATION,
@@ -103,7 +96,7 @@ export function assertCheckoutBinding(
     account: StripeAccountContext;
     credential: VerifiedBillingAppKey;
     customerId: string;
-    payload: EffectiveTariffPayload;
+    payload: EffectiveTariffPayload<string|null>;
     scope: ReturnType<typeof billingScope>;
     successUrlDigest: string;
     cancelUrlDigest: string;

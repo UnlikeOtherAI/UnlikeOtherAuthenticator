@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getAdminAuthDomain } from '../../src/config/env.js';
 import { activateBillingContractVersion } from '../../src/services/billing-contract.service.js';
@@ -30,7 +31,7 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
     });
     orgId = org.id;
     const service = await db.prisma.billingService.create({
-      data: { identifier: 'future-terms', name: 'Future terms', tariffHistoryFromMonth: '2026-07' },
+      data: { identifier: 'future-terms', name: 'Future terms', tariffHistoryFromMonth: '2030-07' },
     });
     serviceId = service.id;
     const base = await db.prisma.billingTariff.create({
@@ -39,32 +40,32 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
     });
     await db.prisma.billingTariffTermEvent.create({
       data: { serviceId, source: 'SERVICE_DEFAULT', scopeKey: serviceId,
-        effectiveFromMonth: '2026-07', tariffId: base.id, reason: 'created' },
+        effectiveFromMonth: '2030-07', tariffId: base.id, reason: 'created' },
     });
     const contract = await db.prisma.billingOrganisationContract.create({
-      data: { orgId, reference: 'future-terms', name: 'Future terms' },
+      data: { ...await captureTestOrganisationFinancialBinding(db.prisma,orgId), orgId, reference: 'future-terms', name: 'Future terms' },
     });
     contractId = contract.id;
   });
 
-  afterAll(async () => { if (db) await db.cleanup(); });
+  afterAll(async () => { if (db) await db.cleanup(); vi.unstubAllEnvs(); });
 
   it('persists a future manual term without moving July and applies later complete versions', async () => {
     const august = await db.prisma.billingOrganisationContractVersion.create({
       data: { contractId, version: 1, usageMarkupBps: 1750, currency: 'USD',
-        paymentTermsDays: 30, effectiveFromMonth: '2026-08' },
+        paymentTermsDays: 30, effectiveFromMonth: '2030-08' },
     });
     await activateBillingContractVersion({
       contractId, contractVersionId: august.id,
       services: [{ serviceId, monthlyAmountMinor: '500' }],
       actor,
-    }, { prisma: db.prisma, now: () => new Date('2026-07-20T00:00:00Z') });
+    }, { prisma: db.prisma, now: () => new Date('2030-07-20T00:00:00Z') });
     expect(await db.prisma.billingTariffAssignment.count({ where: { serviceId } })).toBe(0);
     const july = await resolveBillingTariffForMonth(db.prisma, {
-      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-07',
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2030-07',
     });
     const inAugust = await resolveBillingTariffForMonth(db.prisma, {
-      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-08',
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2030-08',
     });
     expect(july.tariff.markupBps).toBe(3000);
     expect(inAugust.tariff.markupBps).toBe(1750);
@@ -72,18 +73,18 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
 
     const september = await db.prisma.billingOrganisationContractVersion.create({
       data: { contractId, version: 2, usageMarkupBps: 900, currency: 'USD',
-        paymentTermsDays: 30, effectiveFromMonth: '2026-09' },
+        paymentTermsDays: 30, effectiveFromMonth: '2030-09' },
     });
     await activateBillingContractVersion({
       contractId, contractVersionId: september.id,
       services: [{ serviceId, monthlyAmountMinor: '600' }],
       actor,
-    }, { prisma: db.prisma, now: () => new Date('2026-08-20T00:00:00Z') });
+    }, { prisma: db.prisma, now: () => new Date('2030-08-20T00:00:00Z') });
     const delayedAugust = await resolveBillingTariffForMonth(db.prisma, {
-      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-08',
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2030-08',
     });
     const inSeptember = await resolveBillingTariffForMonth(db.prisma, {
-      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-09',
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2030-09',
     });
     expect(delayedAugust.tariff.id).toBe(inAugust.tariff.id);
     expect(inSeptember.tariff.markupBps).toBe(900);
@@ -92,29 +93,29 @@ describe.skipIf(!process.env.DATABASE_URL)('manual contract effective history', 
     // not extend that discount after the agreement is terminated.
     await db.prisma.billingTariffTermEvent.create({
       data: { serviceId, source: 'ORGANISATION', scopeKey: orgId,
-        effectiveFromMonth: '2026-09', tariffId: inSeptember.tariff.id,
+        effectiveFromMonth: '2030-09', tariffId: inSeptember.tariff.id,
         reason: 'legacy-contract-pointer' },
     });
     await db.prisma.billingOrganisationContract.update({
       where: { id: contractId },
-      data: { status: 'TERMINATED', terminatedAt: new Date('2026-10-15T12:00:00Z') },
+      data: { status: 'TERMINATED', terminatedAt: new Date('2030-10-15T12:00:00Z') },
     });
     const historical = await resolveBillingTariffForMonth(db.prisma, {
-      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-09',
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2030-09',
     });
     expect(historical.tariff.id).toBe(inSeptember.tariff.id);
     await expect(resolveBillingTariffForMonth(db.prisma, {
-      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-10',
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2030-10',
     })).rejects.toThrow('BILLING_CONTRACT_TERMINATION_MONTH_RECONCILIATION_REQUIRED');
     await expect(resolveBillingTariffForMonth(db.prisma, {
-      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-11',
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2030-11',
     })).rejects.toThrow('BILLING_TARIFF_HISTORY_RECONCILIATION_REQUIRED');
     await db.prisma.billingTariffTermEvent.create({
       data: { serviceId, source: 'ORGANISATION', scopeKey: orgId,
-        effectiveFromMonth: '2026-12', tariffId: null, reason: 'reconciled-removal' },
+        effectiveFromMonth: '2030-12', tariffId: null, reason: 'reconciled-removal' },
     });
     const december = await resolveBillingTariffForMonth(db.prisma, {
-      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2026-12',
+      serviceId, organisationId: orgId, teamId: 'team', billingMonth: '2030-12',
     });
     expect(december.tariff.markupBps).toBe(3000);
   });

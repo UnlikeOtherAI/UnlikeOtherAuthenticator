@@ -37,7 +37,7 @@ export function registerCases1() {
     const tariff = await prisma.billingTariff.findUniqueOrThrow({ where: { id: ids.tariff } });
     const creditEvidence = await readCycleCreditEvidence(prisma, {
       orgId: ids.org, teamId: ids.team, serviceId: ids.service,
-      billingMonth: '2026-10', payer: BillingAssignmentScope.TEAM,
+      billingMonth: '2026-10', payer: BillingAssignmentScope.ORGANISATION,
       tariff, ratedAmount: '0.0000000013', rawLines: [{
         billingDisposition: 'paid', selectedProviderCost: '0.0000000013',
       }] as never,
@@ -198,7 +198,7 @@ export function registerCases1() {
       expect(forward._sum.ratedMicrocredits).toBe(2n);
       expect((await prisma.billingPaidRatingBucket.findUniqueOrThrow({ where: {
         ratingScopeKey: `payg:${createHash('sha256').update(JSON.stringify([
-          ids.org, ids.team, 'USD',
+          ids.account, ids.org, ids.team, 'USD',
         ])).digest('hex')}`,
       } })).ratedMicrocredits).toBe(2n);
       const totals = await prisma.$transaction((tx) => budgetScopeTotals(tx, {
@@ -228,6 +228,7 @@ export function registerCases1() {
 
   it('proves an organization cap once per month across two teams', async () => {
     const secondTeam = 'team_prepaid_rating_other';
+    await prisma.team.create({data:{id:secondTeam,orgId:ids.org,name:'Other prepaid team',slug:'other-prepaid'}});
     const policy = await prisma.billingCreditBudgetPolicy.create({ data: {
       product: 'deepwater', orgId: ids.org, teamId: null,
       scopeType: 'organization', scopeId: ids.org, period: 'monthly',

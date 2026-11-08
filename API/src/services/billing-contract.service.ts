@@ -13,6 +13,7 @@ import {
   type ContractServiceActivation, type NormalizedContractService,
 } from './billing-contract-seat.service.js';
 import { requireLifecycleActor, type LifecycleActor } from './internal-admin-lifecycle.service.js';
+import { captureOrganisationFinancialSource,assertCurrentFinancialSource } from './billing-financial-source-binding.service.js';
 
 const KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -98,6 +99,7 @@ export async function createBillingContract(
     if (!org) throw new AppError('NOT_FOUND', 404, 'ORGANISATION_NOT_FOUND');
     const contract = await tx.billingOrganisationContract.create({
       data: {
+        ...await captureOrganisationFinancialSource(tx,org.id),
         orgId: org.id,
         reference: reference.toLowerCase(),
         name,
@@ -227,6 +229,7 @@ async function activateInTransaction(
   if (contract.status === BillingOrganisationContractStatus.TERMINATED) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_CONTRACT_TERMINATED');
   }
+  await assertCurrentFinancialSource(tx,contract);
   const previousTerms = currentVersion?.serviceTerms ?? [];
   const previousAssignmentIds = previousTerms.flatMap((term) =>
     term.tariffAssignmentId ? [term.tariffAssignmentId] : [],

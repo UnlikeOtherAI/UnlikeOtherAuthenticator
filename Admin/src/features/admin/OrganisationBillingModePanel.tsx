@@ -4,14 +4,14 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { FieldShell, SelectField } from '../../components/ui/FormFields';
-import type { BillingTeamMode } from '../../schemas/billing-team-mode';
-import { billingTeamModeCopy } from './billing-team-mode-copy';
-import { useBillingTeamMode } from './billing-team-mode-queries';
+import type { BillingOrganisationMode } from '../../schemas/billing-organisation-mode';
+import { billingOrganisationModeCopy } from './billing-organisation-mode-copy';
+import { useBillingOrganisationMode } from './billing-organisation-mode-queries';
 
-export function TeamBillingModePanel({ organisationId, teamId }: { organisationId: string; teamId: string }) {
-  const { query, mutation } = useBillingTeamMode(organisationId, teamId);
-  const [selection, setSelection] = useState<BillingTeamMode['mode'] | null>(null);
-  const copy = billingTeamModeCopy();
+export function OrganisationBillingModePanel({ organisationId }: { organisationId: string }) {
+  const { query, mutation } = useBillingOrganisationMode(organisationId);
+  const [selection, setSelection] = useState<BillingOrganisationMode['mode'] | null>(null);
+  const copy = billingOrganisationModeCopy();
   const data = query.data;
   const selected = selection ?? data?.mode ?? 'live';
   const blocked = (data?.blockers.length ?? 0) > 0;
@@ -25,15 +25,13 @@ export function TeamBillingModePanel({ organisationId, teamId }: { organisationI
       {query.isError ? <div role="alert" className="text-sm text-red-600">{copy.loadError}{' '}
         <Button onClick={() => void query.refetch()}>{copy.retry}</Button></div> : null}
       {data ? <>
-        {data.adopting_sandbox_history ? <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          {copy.adoption}</p> : null}
         <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => {
           event.preventDefault();
           mutation.mutate({ mode: selected, revision: data.revision }, { onSuccess: () => setSelection(null) });
         }}>
           <FieldShell label={copy.label}>
             <SelectField value={selected} disabled={blocked || mutation.isPending}
-              onChange={(event) => { setSelection(event.target.value as BillingTeamMode['mode']); mutation.reset(); }}>
+              onChange={(event) => { setSelection(event.target.value as BillingOrganisationMode['mode']); mutation.reset(); }}>
               <option value="live">{copy.live}</option><option value="sandbox">{copy.sandbox}</option>
             </SelectField>
           </FieldShell>

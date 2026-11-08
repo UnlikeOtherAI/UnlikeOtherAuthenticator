@@ -333,7 +333,10 @@ describe.skipIf(!hasDatabase)('user-facing /org/me org context', () => {
       expect([401, 403]).toContain((await read(assertionCredential)).statusCode);
       await handle!.prisma.organisation.update({ where: { id: org.id }, data: { lifecycleStatus: 'ACTIVE' } });
       await handle!.prisma.teamMember.update({ where: { teamId_userId: { teamId: team.id, userId: user.id } }, data: { status: 'REMOVED' } });
+      await assertVerdict(assertionCredential,true); // Org authority admits every active same-org team.
+      await handle!.prisma.orgMember.update({where:{orgId_userId:{orgId:org.id,userId:user.id}},data:{status:'DEACTIVATED'}});
       expect((await read(assertionCredential)).statusCode).toBe(403);
+      await handle!.prisma.orgMember.update({where:{orgId_userId:{orgId:org.id,userId:user.id}},data:{status:'ACTIVE'}});
       await handle!.prisma.teamMember.update({ where: { teamId_userId: { teamId: team.id, userId: user.id } }, data: { status: 'ACTIVE' } });
       await handle!.prisma.user.update({ where: { id: user.id }, data: { lifecycleStatus: 'DISABLED' } });
       expect([401, 403]).toContain((await read(assertionCredential)).statusCode);

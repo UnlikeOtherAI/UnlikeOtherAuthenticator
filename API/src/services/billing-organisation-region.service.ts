@@ -8,10 +8,11 @@ import {
   authorizeBillingCustomerAction,
   BILLING_CUSTOMER_ACTION,
 } from './billing-customer-action-intent.service.js';
-import { resolveEffectiveTariffContext } from './billing-entitlement.service.js';
+import { resolveFinancialTariffContext } from './billing-entitlement.service.js';
 import { creditValueTarget } from './billing-credit-lot-value.service.js';
 import { isOrganisationBillingManager } from './billing-org-responsibility.service.js';
 import { requireStripeBillingEnabled } from './billing-stripe-client.service.js';
+import { resolveOrganisationBillingMode } from './billing-organisation-mode.service.js';
 import type { BillingOrgResponsibilityRequest } from './billing-org-responsibility-lifecycle.service.js';
 
 /** The three billing regions and the currency each one bills SMS in. AI usage stays USD in all three. */
@@ -87,16 +88,16 @@ export async function billingRegionView(organisationId: string, canManage: boole
  * choice changes nothing; any other choice is refused, here and in the database.
  */
 export async function setOrganisationBillingRegion(params: {
-  request: BillingOrgResponsibilityRequest; region: BillingRegion; actorToken: string;
+  request: Omit<BillingOrgResponsibilityRequest,'teamId'> & {teamId:string|null}; region: BillingRegion; actorToken: string;
   credential: VerifiedBillingAppKey; endpoint: BillingActorEndpoint;
-}, deps?: { prisma?: PrismaClient; now?: () => Date; resolveTariff?: typeof resolveEffectiveTariffContext;
+}, deps?: { prisma?: PrismaClient; now?: () => Date; resolveTariff?: typeof resolveFinancialTariffContext;
   isOrganisationManager?: typeof isOrganisationBillingManager; authorizeAction?: typeof authorizeBillingCustomerAction;
   captureRate?: (organisationId: string) => Promise<unknown>;
 }): Promise<BillingRegionViewV1> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const region = known(params.region);
   // The same fresh-actor path every billing action uses, then UOA's own organisation-manager verdict.
-  const { actor } = await (deps?.resolveTariff ?? resolveEffectiveTariffContext)(params, { prisma });
+  const { actor } = await (deps?.resolveTariff ?? resolveFinancialTariffContext)(params, { prisma });
   const organisationId = params.request.organisationId;
   if (!await (deps?.isOrganisationManager ?? isOrganisationBillingManager)(
     { organisationId, userId: params.request.userId }, { prisma })) {
@@ -132,5 +133,6 @@ export async function setOrganisationBillingRegion(params: {
 }
 
 async function captureRegionRate(organisationId: string): Promise<unknown> {
-  return creditValueTarget(organisationId, { db: getAdminPrisma(), stripe: requireStripeBillingEnabled().client });
+  const db=getAdminPrisma();const selection=await resolveOrganisationBillingMode(organisationId,db);
+  return creditValueTarget(organisationId, { db, stripe: requireStripeBillingEnabled(selection.mode).client });
 }

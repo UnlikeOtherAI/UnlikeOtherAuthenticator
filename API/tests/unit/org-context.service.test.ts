@@ -28,6 +28,7 @@ function makePrismaMock() {
     orgMember: {
       findFirst: vi.fn(),
     },
+    team:{findMany:vi.fn().mockResolvedValue([])},
     teamMember: {
       findMany: vi.fn(),
     },

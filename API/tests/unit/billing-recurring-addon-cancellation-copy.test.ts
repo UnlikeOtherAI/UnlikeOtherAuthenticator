@@ -5,12 +5,13 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/services/billing-entitlement.service.js', () => ({
-  resolveEffectiveTariffContext: vi.fn().mockResolvedValue({ actor: { jti: 'actor_1' } }),
+  resolveFinancialTariffContext: vi.fn().mockResolvedValue({ actor: { jti: 'actor_1' } }),
 }));
 vi.mock('../../src/services/billing-funding-viewer.service.js', () => ({
   resolveBillingFundingViewer: vi.fn().mockResolvedValue({
     organisationRole: 'admin',
     teamRole: 'member',
+    billingManager:true,
   }),
 }));
 
@@ -44,6 +45,7 @@ function replayFixture() {
     scope: BillingRecurringAddonSubscriptionScope.TEAM,
     scopeKey: `${request.organisationId}:${request.teamId}`,
     subscribingUserId: null,
+    customer:{scope:'TEAM',scopeKey:`${request.organisationId}:${request.teamId}`,teamId:request.teamId},
   };
   const subjectFingerprint = recurringAddonSubjectFingerprint({
     appKeyId: credential.id,

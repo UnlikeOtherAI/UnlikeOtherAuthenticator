@@ -2033,6 +2033,9 @@ components:
           type: string
 
 paths:
+  /billing/v1/organisation/capabilities: {"post":{"security":[{"billingAppKey":[],"billingActor":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","additionalProperties":false,"required":["product","organisation_id","team_id","user_id"],"properties":{"product":{"type":"string"},"organisation_id":{"type":"string"},"team_id":{"type":"string","nullable":true},"user_id":{"type":"string"}}}}}},"responses":{"200":{"description":"Canonical organisation financial response. Strict versioned schemas are published separately."},"401":{"description":"Invalid app key, endpoint audience or assurance."},"403":{"description":"Current organisation billing authority required."}},"operationId":"organisationBillingCapabilities","summary":"Read lightweight current organisation billing authority"}}
+  /billing/v1/organisation/overview: {"post":{"security":[{"billingAppKey":[],"billingActor":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","additionalProperties":false,"required":["product","organisation_id","team_id","user_id"],"properties":{"product":{"type":"string"},"organisation_id":{"type":"string"},"team_id":{"type":"string","nullable":true},"user_id":{"type":"string"},"billing_month":{"type":"string","pattern":"^\\d{4}-(0[1-9]|1[0-2])$"}}}}}},"responses":{"200":{"description":"Canonical organisation financial response. Strict versioned schemas are published separately."},"401":{"description":"Invalid app key, endpoint audience or assurance."},"403":{"description":"Current organisation billing authority required."}},"operationId":"organisationBillingOverview","summary":"Read independently confirmed organisation financial sections"}}
+  /billing/v1/organisation/region: {"post":{"security":[{"billingAppKey":[],"billingActor":[]}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","additionalProperties":false,"required":["product","organisation_id","team_id","user_id"],"properties":{"product":{"type":"string"},"organisation_id":{"type":"string"},"team_id":{"type":"string","nullable":true},"user_id":{"type":"string"},"region":{"type":"string","enum":["US","UK","EUROPE"]}}}}}},"responses":{"200":{"description":"Canonical organisation financial response. Strict versioned schemas are published separately."},"401":{"description":"Invalid app key, endpoint audience or assurance."},"403":{"description":"Current organisation billing authority required."}},"operationId":"organisationBillingRegion","summary":"Read or choose organisation billing region"}}
   /org/organisations/{orgId}/teams/{teamId}/archive:
     parameters:
       - $ref: '#/components/parameters/orgIdPath'
@@ -10525,69 +10528,5 @@ paths:
         '401':
           description: Invalid, expired or revoked token
 
-  /internal/admin/billing/organisations/{orgId}/teams/{teamId}/mode:
-    parameters:
-      - name: orgId
-        in: path
-        required: true
-        schema: { type: string, minLength: 1, maxLength: 256 }
-      - name: teamId
-        in: path
-        required: true
-        schema: { type: string, minLength: 1, maxLength: 256 }
-    get:
-      tags: [Billing, Internal Admin]
-      summary: Read the platform-owned billing mode for an exact active team
-      operationId: adminReadTeamBillingMode
-      description: |
-        UOA Admin Teams > selected team > Billing owns this setting across all
-        products. No policy means LIVE revision 0. Returns private no-store data.
-        Only a current admin-domain SUPERUSER may read or change it.
-      security:
-        - adminBearer: []
-      responses:
-        '200':
-          description: Durable mode, revision and financial change blockers.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/BillingTeamMode' }
-        '401': { description: "Missing, expired or revoked administrator token." }
-        '403': { description: Caller is not a current platform superadmin. }
-        '404': { description: The exact active organisation/team is unavailable. }
-    put:
-      tags: [Billing, Internal Admin]
-      summary: Change a team's mode or explicitly preserve eligible TEST history with immutable audit
-      operationId: adminSetTeamBillingMode
-      description: |
-        Rechecks current administrator role, identity and epoch under locks.
-        Balances/debt, consents, pending payments, subscriptions, provider work,
-        active delegated funding, unexpired quotes and recorded current-month
-        usage block changes. Organisation money requires uniform active teams.
-        No historical object, customer, balance or subscription migrates. Actual
-        changes invalidate previous new-work contexts. A transition month's
-        cumulative usage stays pending for operator reconciliation. See the
-        deployment runbook before activating LIVE-default production traffic.
-      security:
-        - adminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [mode, expected_revision]
-              properties:
-                mode: { type: string, enum: [live, sandbox] }
-                expected_revision: { type: integer, minimum: 0 }
-      responses:
-        '200':
-          description: Committed mode; exact no-op keeps its revision.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/BillingTeamMode' }
-        '400': { description: Invalid or extra input fields. }
-        '401': { description: "Missing, expired or revoked administrator token." }
-        '403': { description: Current platform administrator authority required. }
-        '404': { description: The exact active organisation/team is unavailable. }
-        '409': { description: BILLING_TEAM_MODE_CHANGED or BILLING_TEAM_MODE_BLOCKED; refresh current state. }
+  /internal/admin/billing/organisations/{orgId}/mode: {"parameters":[{"name":"orgId","in":"path","required":true,"schema":{"type":"string","minLength":1,"maxLength":256}}],"get":{"security":[{"adminBearer":[]}],"tags":["Billing","Internal Admin"],"responses":{"200":{"description":"Current organisation mode, immutable epoch and whole-organisation blockers.","content":{"application/json":{"schema":{"type":"object","additionalProperties":false,"required":["organisation_id","mode","revision","epoch","blockers"],"properties":{"organisation_id":{"type":"string"},"mode":{"type":"string","enum":["live","sandbox"]},"revision":{"type":"integer","minimum":0},"epoch":{"type":"string","format":"date-time"},"blockers":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["code","count"],"properties":{"code":{"type":"string"},"count":{"type":"integer","minimum":1}}}}}}}}},"401":{"description":"Invalid or revoked administrator token"},"403":{"description":"Current platform SUPERUSER required"},"404":{"description":"Active organisation unavailable"}},"operationId":"adminReadOrganisationBillingMode","summary":"Read the organisation financial mode and blockers"},"put":{"security":[{"adminBearer":[]}],"tags":["Billing","Internal Admin"],"responses":{"200":{"description":"Current organisation mode, immutable epoch and whole-organisation blockers.","content":{"application/json":{"schema":{"type":"object","additionalProperties":false,"required":["organisation_id","mode","revision","epoch","blockers"],"properties":{"organisation_id":{"type":"string"},"mode":{"type":"string","enum":["live","sandbox"]},"revision":{"type":"integer","minimum":0},"epoch":{"type":"string","format":"date-time"},"blockers":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["code","count"],"properties":{"code":{"type":"string"},"count":{"type":"integer","minimum":1}}}}}}}}},"400":{"description":"Invalid or extra input"},"401":{"description":"Invalid or revoked administrator token"},"403":{"description":"Current platform SUPERUSER required"},"404":{"description":"Active organisation unavailable"},"409":{"description":"BILLING_ORGANISATION_MODE_CHANGED or BILLING_ORGANISATION_MODE_BLOCKED"}},"operationId":"adminSetOrganisationBillingMode","summary":"Change one quiescent organisation financial mode with audit","description":"LIVE default; covers all current/future teams. No money, customer, consent or subscription adoption/migration. Inclusive change month held. Only platform SUPERUSER may choose modes.","requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","additionalProperties":false,"required":["mode","expected_revision"],"properties":{"mode":{"type":"string","enum":["live","sandbox"]},"expected_revision":{"type":"integer","minimum":0}}}}}}}}
+  /internal/admin/billing/organisations/{orgId}/teams/{teamId}/mode: {"parameters":[{"name":"orgId","in":"path","required":true,"schema":{"type":"string","minLength":1,"maxLength":256}},{"name":"teamId","in":"path","required":true,"schema":{"type":"string","minLength":1,"maxLength":256}}],"get":{"security":[{"adminBearer":[]}],"tags":["Billing","Internal Admin"],"responses":{"200":{"description":"Current organisation mode, immutable epoch and whole-organisation blockers.","content":{"application/json":{"schema":{"type":"object","additionalProperties":false,"required":["organisation_id","mode","revision","epoch","blockers","team_id","controlling_scope"],"properties":{"organisation_id":{"type":"string"},"mode":{"type":"string","enum":["live","sandbox"]},"revision":{"type":"integer","minimum":0},"epoch":{"type":"string","format":"date-time"},"blockers":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["code","count"],"properties":{"code":{"type":"string"},"count":{"type":"integer","minimum":1}}}},"team_id":{"type":"string"},"controlling_scope":{"type":"string","enum":["organisation"]}}}}}},"401":{"description":"Invalid or revoked administrator token"},"403":{"description":"Current platform SUPERUSER required"},"404":{"description":"Active organisation unavailable"}},"deprecated":true,"operationId":"adminReadTeamBillingMode","summary":"Read the legacy team doorway to controlling organisation mode"},"put":{"security":[{"adminBearer":[]}],"deprecated":true,"operationId":"adminSetTeamBillingMode","summary":"Retired team policy write; organisation owns the mode","responses":{"409":{"description":"BILLING_ORGANISATION_MODE_REQUIRED"}}}}

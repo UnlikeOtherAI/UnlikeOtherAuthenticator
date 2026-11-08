@@ -1,18 +1,23 @@
+import type { BillingOrganisationFinancialDto as FinancialDto } from '../contracts/billing-statement-v1.js';
 import type { Prisma } from '@prisma/client';
 
 import {
   BILLING_CUSTOMER_INVOICES_DOWNLOAD_PATH,
-  type BillingCustomerInvoiceDetailV1,
-  type BillingCustomerInvoiceSummaryV1,
-  type BillingSubjectRequest,
+  type BillingCustomerInvoiceDetailV1 as PublicBillingCustomerInvoiceDetailV1,
+  type BillingCustomerInvoiceSummaryV1 as PublicBillingCustomerInvoiceSummaryV1,
+  type BillingSubjectRequest as PublicBillingSubjectRequest,
 } from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
 import { stripeInvoiceCashDigest } from './billing-stripe-payment-evidence.service.js';
 
-export type StripePaymentInvoiceSource = Prisma.BillingStripePaymentInvoiceGetPayload<{
+type BaseInvoiceSource=Prisma.BillingStripePaymentInvoiceGetPayload<{
   include: { lines: true; subscription: true; cashPayments: true; adjustments: true };
 }>;
+export type StripePaymentInvoiceSource=BaseInvoiceSource&{addonSubscription?:
+  Prisma.BillingRecurringAddonSubscriptionGetPayload<{include:{customer:true}}>|null};
+export const stripePaymentInvoiceReadInclude={lines:true,subscription:true,cashPayments:true,adjustments:true,
+  addonSubscription:{include:{customer:true}}} as const;
 
 function hold(): never {
   throw new AppError('INTERNAL', 503, 'BILLING_CUSTOMER_STRIPE_INVOICE_SOURCE_UNPROVEN');
@@ -103,10 +108,14 @@ function verifiedAdjustments(row: StripePaymentInvoiceSource, paid: bigint) {
 
 /** The same immutable financial and cash proof gates invoices and cycle allocations. */
 export function verifyStripeInvoiceFinancialSource(row: StripePaymentInvoiceSource) {
-  if (row.subscription.id !== row.subscriptionId ||
-    row.subscription.accountId !== row.accountId ||
-    row.subscription.livemode !== row.livemode ||
-    row.subscription.orgId !== row.orgId || row.subscription.teamId !== row.teamId ||
+  const base=row.subscription,addon=row.addonSubscription;
+  const bound=base&&row.subscriptionId&&row.addonSubscriptionId==null?base.id===row.subscriptionId&&
+    base.accountId===row.accountId&&base.livemode===row.livemode&&base.orgId===row.orgId&&base.teamId===row.teamId:
+    addon&&row.addonSubscriptionId&&row.subscriptionId===null?addon.id===row.addonSubscriptionId&&addon.accountId===row.accountId&&
+      addon.livemode===row.livemode&&addon.orgId===row.orgId&&addon.customer.accountId===row.accountId&&
+      addon.customer.orgId===row.orgId&&addon.customer.teamId===row.teamId&&addon.customer.stripeCustomerId===row.stripeCustomerId:false;
+  if (!bound ||row.addonSubscriptionId&&(!row.addonPeriodStartsAt||!row.addonPeriodEndsAt||row.addonPeriodEndsAt<=row.addonPeriodStartsAt||
+    row.lines.some(line=>line.billingMonth!==row.addonPeriodStartsAt?.toISOString().slice(0,7)))||
     !/^[A-Z]{3}$/.test(row.currency) ||
     !row.stripeInvoiceId || !row.stripeCustomerId ||
     row.grossAmountMinor <= 0n || row.taxAmountMinor < 0n ||
@@ -134,10 +143,10 @@ export function verifyStripeInvoiceFinancialSource(row: StripePaymentInvoiceSour
 
 export function projectStripeCustomerInvoiceSummary(
   row: StripePaymentInvoiceSource, product: string, serviceId: string,
-  chargeMonth?: string,
+  chargeMonth?: string, organisationScope=false,
 ): BillingCustomerInvoiceSummaryV1 {
   verifyStripeInvoiceFinancialSource(row);
-  if (row.lines.some((line) => line.serviceIdentifier !== product ||
+  if (!organisationScope&&row.lines.some((line) => line.serviceIdentifier !== product ||
     line.serviceId !== serviceId)) hold();
   const payments = verifiedPayments(row);
   const paid = payments.reduce((sum, payment) => sum + payment.amount, 0n);
@@ -166,7 +175,7 @@ export function projectStripeCustomerInvoiceSummary(
     charge_month: selectedMonth, payments_in_charge_month: cycleMoney(paidInMonth, row.currency),
     scope: { organisation_id: row.orgId, team_id: row.teamId,
       scope_type: row.teamId === null ? 'organisation' : 'team' },
-    product_identifiers: [product],
+    product_identifiers: organisationScope?[...new Set(row.lines.map(line=>line.serviceIdentifier))].sort():[product],
     totals: { currency, gross_total: cycleMoney(row.grossAmountMinor, currency),
       tax: cycleMoney(row.taxAmountMinor, currency),
       credits_applied: cycleMoney(row.creditAmountMinor, currency), voided_amount: zero,
@@ -181,11 +190,11 @@ export function projectStripeCustomerInvoiceSummary(
 export function projectStripeCustomerInvoiceDetail(
   row: StripePaymentInvoiceSource, product: string, serviceId: string,
   subject: BillingSubjectRequest,
-  chargeMonth?: string,
+  chargeMonth?: string, organisationScope=false,
 ): BillingCustomerInvoiceDetailV1 {
-  const summary = projectStripeCustomerInvoiceSummary(row, product, serviceId, chargeMonth);
-  if (subject.product !== product || subject.organisation_id !== row.orgId ||
-    (row.teamId !== null && subject.team_id !== row.teamId)) hold();
+  const summary = projectStripeCustomerInvoiceSummary(row, product, serviceId, chargeMonth,organisationScope);
+  if (subject.organisation_id !== row.orgId || (!organisationScope&&
+    (subject.product !== product || (row.teamId !== null && subject.team_id !== row.teamId)))) hold();
   const invoiceId = `stripe:${row.id}`;
   return { ...summary, schema_version: 1,
     payments: verifiedPayments(row)
@@ -203,3 +212,9 @@ export function projectStripeCustomerInvoiceDetail(
         body: { ...subject, invoice_id: invoiceId, document_id: invoiceId } },
     } : null };
 }
+
+type BillingCustomerInvoiceDetailV1=FinancialDto<PublicBillingCustomerInvoiceDetailV1>;
+
+type BillingCustomerInvoiceSummaryV1=FinancialDto<PublicBillingCustomerInvoiceSummaryV1>;
+
+type BillingSubjectRequest=FinancialDto<PublicBillingSubjectRequest>;

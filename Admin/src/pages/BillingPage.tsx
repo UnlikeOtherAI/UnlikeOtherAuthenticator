@@ -1,4 +1,4 @@
-import { billingTeamModeCopy } from '../features/admin/billing-team-mode-copy';
+import { billingOrganisationModeCopy } from '../features/admin/billing-organisation-mode-copy';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 
@@ -25,7 +25,7 @@ import { BillingSmsPoliciesPanel } from '../features/admin/BillingSmsPoliciesPan
 import type { CreatedBillingAppKey } from '../schemas/billing';
 
 export function BillingPage() {
-  const modeCopy = billingTeamModeCopy();
+  const modeCopy = billingOrganisationModeCopy();
   const { data: services = [], isError, isLoading, refetch } = useBillingServicesQuery();
   const { params, href, update } = useBillingNavigation();
   const selectedServiceId = params.get('product') ?? '';
@@ -63,7 +63,7 @@ export function BillingPage() {
       />
 
       <p className="mb-4 text-sm text-gray-600">{modeCopy.defaultMode}{' '}
-        <Link className="text-blue-600 hover:underline" to="/teams">{modeCopy.doorway}</Link>
+        <Link className="text-blue-600 hover:underline" to="/organisations">{modeCopy.doorway}</Link>
       </p>
 
       <UnderlineTabs

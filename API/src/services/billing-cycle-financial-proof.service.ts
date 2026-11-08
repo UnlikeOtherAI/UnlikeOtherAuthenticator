@@ -8,6 +8,7 @@ import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
 import { monthlyFinancialQuoteEvidence } from './billing-cycle-quote-projection.service.js';
 import { quoteSubscriptionMonthlyCharge } from './billing-monthly-subscription-quote.service.js';
 import { readCycleWalletBoundary } from './billing-cycle-wallet-boundary.service.js';
+import { capturedCycleAccount } from './billing-cycle-account-binding.service.js';
 import type { CycleUsageEvidence } from './billing-cycle-usage-projection.service.js';
 import type { LedgerPaidReceiptSet } from './billing-ledger-paid-receipt-proof.service.js';
 
@@ -43,6 +44,9 @@ export async function verifyFinancialCycleProof(tx: Prisma.TransactionClient, cy
   const detail = cycle.publicSnapshot as unknown as BillingCycleDetailV2;
   const startsAt = new Date(detail.period.starts_at);
   const endsAt = new Date(detail.period.ends_at);
+  const capturedAccountId = await capturedCycleAccount(tx, cycle, evidence);
+  if (!capturedAccountId) throw new AppError('INTERNAL', 409,
+    'BILLING_CYCLE_ACCOUNT_BINDING_RECONCILIATION_REQUIRED');
   const quote = await quoteSubscriptionMonthlyCharge({ source: evidence.quote.source,
     billingMonth: cycle.billingMonth }, { prisma: tx as unknown as PrismaClient });
   if (billingCycleSnapshotDigest(monthlyFinancialQuoteEvidence(quote, startsAt, endsAt), {}) !==
@@ -63,13 +67,14 @@ export async function verifyFinancialCycleProof(tx: Prisma.TransactionClient, cy
       scope: { product: detail.product.identifier, organisationId: cycle.orgId,
         teamId: snapshot.team_id, billingMonth: cycle.billingMonth, serviceId: cycle.serviceId },
       proof, payer: cycle.payerScope, tariff, rawLines: snapshot.raw_lines,
+      accountId: capturedAccountId ?? undefined,
     });
     if (fresh.fingerprint !== captured.fingerprint) {
       throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_CREDIT_SOURCE_CHANGED');
     }
   }
   const wallet = await readCycleWalletBoundary(tx, { orgId: cycle.orgId, teamId: cycle.teamId,
-    payer: cycle.payerScope, startsAt, endsAt });
+    payer: cycle.payerScope, startsAt, endsAt, capturedAccountId });
   if (wallet.fingerprint !== (evidence.wallet_boundary as { fingerprint?: string })?.fingerprint) {
     throw new AppError('INTERNAL', 409, 'BILLING_CYCLE_WALLET_BOUNDARY_CHANGED');
   }

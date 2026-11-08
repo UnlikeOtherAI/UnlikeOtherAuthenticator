@@ -18,6 +18,7 @@ import { readVerifiedCycleCreditEvidence,
 import { billingCycleSnapshotDigest } from './billing-cycle-read.service.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
 import { readCycleWalletBoundary } from './billing-cycle-wallet-boundary.service.js';
+import { capturedCycleAccount } from './billing-cycle-account-binding.service.js';
 import { addBillingDecimals, majorAmountToMinorRounded } from './billing-money.service.js';
 import { copyVerifiedDocument, invoiceSourceFingerprint } from
   './billing-cycle-manual-invoice.service.js';
@@ -105,6 +106,8 @@ export async function finalizePrepaidBillingCycle(
     return null;
   }
   const evidence = pending.privateEvidence as Evidence;
+  const capturedAccountId = await capturedCycleAccount(prisma, pending, evidence);
+  if (!capturedAccountId) return null;
   const revised = pending.publicSnapshot as unknown as BillingCycleDetailV2;
   const originalId = revised.correction_of_cycle_id;
   const previous = typeof originalId === 'string' ?
@@ -280,6 +283,7 @@ export async function finalizePrepaidBillingCycle(
     const wallet = await readCycleWalletBoundary(tx, {
       orgId: pending.orgId, teamId: pending.teamId,
       payer: pending.payerScope, startsAt, endsAt,
+      capturedAccountId: await capturedCycleAccount(tx, pending, evidence),
     });
     if (wallet.fingerprint !== (evidence.wallet_boundary as
       { fingerprint?: string } | undefined)?.fingerprint) {

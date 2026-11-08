@@ -1,0 +1,919 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/schemas/billing-authority-v1.json",
+  "$defs": {
+    "capabilities": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": 2
+            },
+            "generated_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "subject": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "product",
+                "organisation_id",
+                "team_id",
+                "user_id"
+              ],
+              "properties": {
+                "product": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "organisation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "team_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            },
+            "access": {
+              "const": "organisation_manager"
+            },
+            "financial_scope": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "organisation"
+                },
+                "organisation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "mode": {
+                  "enum": [
+                    "live",
+                    "sandbox"
+                  ]
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "epoch": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "kind",
+                "organisation_id",
+                "mode",
+                "revision",
+                "epoch"
+              ]
+            }
+          },
+          "required": [
+            "schema_version",
+            "generated_at",
+            "subject",
+            "access",
+            "financial_scope"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": 2
+            },
+            "generated_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "subject": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "product",
+                "organisation_id",
+                "team_id",
+                "user_id"
+              ],
+              "properties": {
+                "product": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "organisation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "team_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            },
+            "access": {
+              "const": "team_reader"
+            },
+            "team_scope": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "team"
+                },
+                "product": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "organisation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "team_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              },
+              "required": [
+                "kind",
+                "product",
+                "organisation_id",
+                "team_id"
+              ]
+            },
+            "overview_request": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "method": {
+                  "const": "POST"
+                },
+                "path": {
+                  "const": "/billing/v1/team/overview"
+                },
+                "body": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "product": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "organisation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "team_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "user_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "billing_month": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+                    }
+                  },
+                  "required": [
+                    "product",
+                    "organisation_id",
+                    "team_id",
+                    "user_id"
+                  ]
+                }
+              },
+              "required": [
+                "method",
+                "path",
+                "body"
+              ]
+            }
+          },
+          "required": [
+            "schema_version",
+            "generated_at",
+            "subject",
+            "access",
+            "team_scope",
+            "overview_request"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": 2
+            },
+            "generated_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "subject": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "product",
+                "organisation_id",
+                "team_id",
+                "user_id"
+              ],
+              "properties": {
+                "product": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "organisation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "team_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "user_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            },
+            "access": {
+              "const": "none"
+            }
+          },
+          "required": [
+            "schema_version",
+            "generated_at",
+            "subject",
+            "access"
+          ]
+        }
+      ]
+    },
+    "team_overview_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "organisation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "team_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "billing_month": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+        }
+      },
+      "required": [
+        "product",
+        "organisation_id",
+        "team_id",
+        "user_id"
+      ]
+    },
+    "team_overview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "organisation_id",
+            "team_id",
+            "user_id"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "team_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "user_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        },
+        "team_scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "team"
+            },
+            "product": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "organisation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "team_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "kind",
+            "product",
+            "organisation_id",
+            "team_id"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "team": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "product": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "identifier": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "id",
+            "identifier",
+            "name"
+          ]
+        },
+        "period": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "month": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+            },
+            "starts_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "ends_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "month",
+            "starts_at",
+            "ends_at"
+          ]
+        },
+        "sections": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "activity": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "const": "confirmed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "as_of": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "recorded_calls": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "quantity": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]*)$"
+                            },
+                            "display": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "quantity",
+                            "display",
+                            "label"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "as_of",
+                        "recorded_calls"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "data"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "pending_reconciliation",
+                        "unavailable"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "code"
+                  ]
+                }
+              ]
+            },
+            "recorded_credit_usage": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "const": "confirmed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "as_of": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "sources": {
+                          "type": "array",
+                          "maxItems": 100,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "source_ref": {
+                                "type": "string",
+                                "pattern": "^tbs_[a-f0-9]{64}$"
+                              },
+                              "mode": {
+                                "enum": [
+                                  "live",
+                                  "sandbox"
+                                ]
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "recorded_usage": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "credits",
+                                  "display",
+                                  "usd_equivalent"
+                                ],
+                                "properties": {
+                                  "credits": {
+                                    "type": "string",
+                                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  },
+                                  "usd_equivalent": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "amount",
+                                      "currency",
+                                      "display"
+                                    ],
+                                    "properties": {
+                                      "amount": {
+                                        "type": "string",
+                                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+                                      },
+                                      "currency": {
+                                        "const": "USD"
+                                      },
+                                      "display": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "waived_usage": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "credits",
+                                  "display",
+                                  "usd_equivalent"
+                                ],
+                                "properties": {
+                                  "credits": {
+                                    "type": "string",
+                                    "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  },
+                                  "usd_equivalent": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "amount",
+                                      "currency",
+                                      "display"
+                                    ],
+                                    "properties": {
+                                      "amount": {
+                                        "type": "string",
+                                        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+                                      },
+                                      "currency": {
+                                        "const": "USD"
+                                      },
+                                      "display": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "source_ref",
+                              "mode",
+                              "label",
+                              "recorded_usage",
+                              "waived_usage"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "as_of",
+                        "sources"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "data"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "pending_reconciliation",
+                        "unavailable"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "code"
+                  ]
+                }
+              ]
+            },
+            "retained_credits": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "const": "confirmed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "as_of": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "records": {
+                          "type": "array",
+                          "maxItems": 100,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "record_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "source_ref": {
+                                "type": "string",
+                                "pattern": "^tbs_[a-f0-9]{64}$"
+                              },
+                              "mode": {
+                                "enum": [
+                                  "live",
+                                  "sandbox"
+                                ]
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "recorded_balance": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "credits",
+                                  "display",
+                                  "usd_equivalent"
+                                ],
+                                "properties": {
+                                  "credits": {
+                                    "type": "string",
+                                    "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$"
+                                  },
+                                  "display": {
+                                    "type": "string"
+                                  },
+                                  "usd_equivalent": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "amount",
+                                      "currency",
+                                      "display"
+                                    ],
+                                    "properties": {
+                                      "amount": {
+                                        "type": "string",
+                                        "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+                                      },
+                                      "currency": {
+                                        "const": "USD"
+                                      },
+                                      "display": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "recorded_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "record_id",
+                              "source_ref",
+                              "mode",
+                              "label",
+                              "recorded_balance",
+                              "recorded_at"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "as_of",
+                        "records"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "data"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "pending_reconciliation",
+                        "unavailable"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "message",
+                    "code"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "activity",
+            "recorded_credit_usage",
+            "retained_credits"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "generated_at",
+        "subject",
+        "team_scope",
+        "title",
+        "description",
+        "team",
+        "product",
+        "period",
+        "sections"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/capabilities"
+    },
+    {
+      "$ref": "#/$defs/team_overview"
+    }
+  ]
+}

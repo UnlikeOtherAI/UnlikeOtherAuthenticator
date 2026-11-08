@@ -13,8 +13,9 @@ describe('SMS number subscriptions in the quote currency', () => {
       scopeKey: 'org_1', customerScope: BillingAssignmentScope.ORGANISATION, customerScopeKey: 'org_1:sms:EUR' });
     expect(recurringAddonScope(org, subject, { resourceKind: 'sms_mobile_number', currency: 'USD' }).customerScopeKey)
       .toBe('org_1:sms:USD');
-    // Every other organisation subscription keeps the organisation's own Customer.
-    expect(recurringAddonScope(org, subject, { resourceKind: null, currency: 'USD' }).customerScopeKey).toBe('org_1');
+    // Ordinary subscriptions use their currency-specific ORG customer. Funding
+    // and captured old customers retain their separate original bindings.
+    expect(recurringAddonScope(org, subject, { resourceKind: null, currency: 'USD' }).customerScopeKey).toBe('org_1:billing:USD');
     expect(recurringAddonScope(org, subject).customerScopeKey).toBe('org_1');
     expect(recurringAddonScope(org, subject, { resourceKind: 'sms_mobile_number', currency: 'GBP' }).customerScopeKey)
       .toBe('org_1:sms:GBP');

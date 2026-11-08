@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../helpers/test-db.js';
 import { ids, concurrency, aboveThreshold, seed } from '../helpers/credit-auto-top-up-runtime-fixture.js';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
@@ -12,8 +12,8 @@ import { observedBillingTime } from '../../src/services/billing-seat-observed-ti
 describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS !== 'true' || !process.env.DATABASE_URL)(
   'team archive automatic reload evidence', () => {
     let db: NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
-    beforeAll(async () => { db = (await createTestDb())!; await seed(db.prisma); });
-    afterAll(async () => { await db?.cleanup(); });
+    beforeAll(async () => { db = (await createTestDb())!; await seed(db.prisma,undefined,true); });
+    afterAll(async () => { await db?.cleanup(); vi.unstubAllEnvs(); });
     it('disables future reload with archive evidence and retains consent, money and sibling configuration', async () => {
       const domain = 'auto-top-up.example.com', token = 'b'.repeat(64);
       const client = await db.prisma.clientDomain.create({ data: { domain, label: 'Archive funding test' } });
@@ -28,9 +28,9 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS !== 'true' || !proces
         markupBps: 0, currency: 'USD', monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'AUTOMATIC',
         seatChargeTiming: 'PRORATED', monthlyAmountMinor: 1000n,
       } });
-      const contract = await db.prisma.billingOrganisationContract.create({ data: {
-        orgId: ids.org, reference: 'archive-seats', name: 'Archive seats',
-      } });
+      // Opening historical seat agreement; actual archival keeps all guards enabled.
+      const contract = await db.prisma.$transaction(async tx=>{await tx.$executeRawUnsafe('SET LOCAL session_replication_role=replica');
+        return tx.billingOrganisationContract.create({data:{orgId:ids.org,reference:'archive-seats',name:'Archive seats'}});});
       const future = new Date(Date.now() + 86400_000);
       const seats = [];
       for (const versionNumber of [1, 2]) {

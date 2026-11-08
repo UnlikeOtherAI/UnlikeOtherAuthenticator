@@ -1,3 +1,4 @@
+import { fundingScopeEpoch } from './billing-credit-funding-actions.persistence.fixture.js';
 import { BillingCreditAutoTopUpState, BillingCreditCheckoutStatus, MembershipStatus } from '@prisma/client';
 import { expect, it, vi } from 'vitest';
 import { disableBillingCreditAutoTopUp, updateBillingCreditAutoTopUp } from '../../src/services/billing-credit-auto-top-up-consent.service.js';
@@ -65,7 +66,7 @@ export function registerCases2() {
     await expect(
       handle!.prisma.billingCreditSetupCheckout.create({
         data: {
-        billingModeTeamId: ids.team, billingModeRevision: 1,
+        billingModeTeamId: ids.team, billingModeRevision: 1,billingScopeEpoch:fundingScopeEpoch,
           id: 'bcsc_funding_race_stale_insert',
           accountId: ids.account,
           creditAccountId: ids.creditAccount,
@@ -99,7 +100,7 @@ export function registerCases2() {
     const setupId = 'bcsc_funding_race_terminal';
     await handle!.prisma.billingCreditSetupCheckout.create({
       data: {
-        billingModeTeamId: ids.team, billingModeRevision: 1,
+        billingModeTeamId: ids.team, billingModeRevision: 1,billingScopeEpoch:fundingScopeEpoch,
         id: setupId,
         accountId: ids.account,
         creditAccountId: ids.creditAccount,
@@ -146,8 +147,8 @@ export function registerCases2() {
     const preauthorized = await handle!.prisma.billingCreditAccount.findUniqueOrThrow({
       where: { id: ids.creditAccount },
     });
-    await handle!.prisma.teamMember.update({
-      where: { id: ids.teamMember },
+    await handle!.prisma.orgMember.update({
+      where: { id: ids.orgMember },
       data: { status: MembershipStatus.DEACTIVATED },
     });
 
@@ -173,8 +174,8 @@ export function registerCases2() {
     ]);
     expect(account.autoTopUpState).toBe(BillingCreditAutoTopUpState.ACTIVE);
     expect(disableEvents).toBe(0);
-    await handle!.prisma.teamMember.update({
-      where: { id: ids.teamMember },
+    await handle!.prisma.orgMember.update({
+      where: { id: ids.orgMember },
       data: { status: MembershipStatus.ACTIVE },
     });
   }, 20_000);
@@ -192,8 +193,8 @@ export function registerCases2() {
       signalRevocationLocked = resolve;
     });
     const revocation = handle!.prisma.$transaction(async (tx) => {
-      await tx.teamMember.update({
-        where: { id: ids.teamMember },
+      await tx.orgMember.update({
+        where: { id: ids.orgMember },
         data: { status: MembershipStatus.DEACTIVATED },
       });
       signalRevocationLocked();
@@ -231,8 +232,8 @@ export function registerCases2() {
         where: { id: ids.creditAccount },
       }),
     ).resolves.toMatchObject({ autoTopUpState: BillingCreditAutoTopUpState.ACTIVE });
-    await handle!.prisma.teamMember.update({
-      where: { id: ids.teamMember },
+    await handle!.prisma.orgMember.update({
+      where: { id: ids.orgMember },
       data: { status: MembershipStatus.ACTIVE },
     });
   }, 20_000);

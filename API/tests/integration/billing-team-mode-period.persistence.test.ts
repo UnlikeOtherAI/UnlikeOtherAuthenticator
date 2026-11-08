@@ -15,7 +15,7 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS !== 'true')('monthly 
   beforeAll(async () => {
     const handle = await createTestDb();
     if (!handle) throw new Error('DATABASE_URL required');
-    db = handle.prisma; cleanup = handle.cleanup; await seedAdoption(db);
+    db = handle.prisma; cleanup = handle.cleanup; await seedAdoption(db,true);
     const epoch = await db.billingModeCutover.findUniqueOrThrow({ where: { id: 1 } });
     const future = new Date(Date.UTC(epoch.activatedAt.getUTCFullYear(), epoch.activatedAt.getUTCMonth() + 1));
     month = future.toISOString().slice(0, 7);
@@ -71,16 +71,19 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS !== 'true')('monthly 
     const billingMonth = new Date(nextMonth + '-01T00:00:00.000Z');
     billingMonth.setUTCMonth(billingMonth.getUTCMonth() + 1);
     const exportMonth = billingMonth.toISOString().slice(0, 7);
-    const checkout = await db.billingStripeCheckoutSession.create({ data: {
+    const selection=await db.billingOrganisationScopeCutover.findUniqueOrThrow({where:{id:1}});
+    // Captured opening subscription only; the actual export reservation remains guarded.
+    const subscription=await db.$transaction(async tx=>{await tx.$executeRawUnsafe('SET LOCAL session_replication_role=replica');
+    const checkout = await tx.billingStripeCheckoutSession.create({ data: {
       accountId: 'adoption-live', customerId: 'adoption-live-customer', serviceId: ids.service, appKeyId: ids.appKey,
-      tariffId: 'mode-period-tariff', tariffSource: 'SERVICE_DEFAULT', orgId: ids.org, teamId: ids.team,
-      scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`, billingModeTeamId: ids.team, billingModeRevision: 0,
+      tariffId: 'mode-period-tariff', tariffSource: 'SERVICE_DEFAULT', orgId: ids.org, teamId: null,
+      scope: 'ORGANISATION', scopeKey: ids.org, billingModeTeamId: ids.team, billingModeRevision: 0,billingScopeEpoch:selection.activatedAt,
       actorJti: 'period-export', requestedByUserId: ids.user, successUrlDigest: 'a'.repeat(64), cancelUrlDigest: 'b'.repeat(64),
       status: 'complete', leaseExpiresAt: new Date() } });
-    const subscription = await db.billingStripeSubscription.create({ data: { accountId: 'adoption-live', checkoutId: checkout.id,
+    return tx.billingStripeSubscription.create({ data: { accountId: 'adoption-live', checkoutId: checkout.id,
       customerId: 'adoption-live-customer', serviceId: ids.service, tariffId: 'mode-period-tariff', tariffSource: 'SERVICE_DEFAULT',
-      orgId: ids.org, teamId: ids.team, scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`, stripeSubscriptionId: 'sub_period',
-      stripeUsageItemId: 'si_period', status: 'active', livemode: true } });
+      orgId: ids.org, teamId: null, scope: 'ORGANISATION', scopeKey: ids.org, stripeSubscriptionId: 'sub_period',
+      stripeUsageItemId: 'si_period', status: 'active', livemode: true } });});
     await db.billingStripeUsageExport.create({ data: { accountId: 'adoption-live', subscriptionId: subscription.id,
       ledgerSnapshotCursor: 'period-export', billingMonth: exportMonth, billingProduct: 'funding-race', callerProduct: 'funding-race',
       currency: 'USD', cumulativeCustomerCharge: '1.00', cumulativeMeterQuantity: 100n, deltaMeterQuantity: 100n,
@@ -96,11 +99,13 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS !== 'true')('monthly 
       await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
       await tx.billingTeamMode.deleteMany({ where: { teamId: creditIds.team } });
       await tx.billingStripeAccount.update({ where: { id: creditIds.account }, data: { livemode: true } });
+      await tx.billingStripeCustomer.update({where:{id:creditIds.customer},data:{scope:'ORGANISATION',teamId:null,scopeKey:creditIds.org}});
+      await tx.billingCreditAccount.update({where:{id:creditIds.creditAccount},data:{scope:'ORGANISATION',teamId:null,scopeKey:creditIds.org}});
     });
     const customer = await db.billingStripeCustomer.create({ data: { accountId: 'replacement-live', orgId: creditIds.org,
-      teamId: creditIds.team, scope: 'TEAM', scopeKey: `${creditIds.org}:${creditIds.team}`, stripeCustomerId: 'cus_replacement' } });
+      teamId: null, scope: 'ORGANISATION', scopeKey: creditIds.org, stripeCustomerId: 'cus_replacement' } });
     const wallet = await db.billingCreditAccount.create({ data: { accountId: 'replacement-live', customerId: customer.id,
-      orgId: creditIds.org, teamId: creditIds.team, scopeKey: `${creditIds.org}:${creditIds.team}` } });
+      orgId: creditIds.org, teamId: null,scope:'ORGANISATION',scopeKey:creditIds.org } });
     const selected = deferred(); const release = deferred();
     const first = db.$transaction(async (tx) => {
       await assertBillingPeriodMode(tx, { accountId: creditIds.account, orgId: creditIds.org,

@@ -1,7 +1,8 @@
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
 import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { exportJWK, generateKeyPair, SignJWT, type KeyLike } from 'jose';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it,vi } from 'vitest';
 
 import { finalizePrepaidDispatch, getLedgerDispatchDecision, reservePrepaidDispatch } from
   '../../src/services/billing-prepaid-reservation.service.js';
@@ -46,6 +47,7 @@ async function admit(dispatchId: string, withHold = true) {
     currency: 'USD', rawCostBound: '0.01',
   } });
   if (withHold) await prisma.billingCreditBudgetDispatch.create({ data: {
+    ...await captureTestOrganisationFinancialBinding(prisma,'org-payg'),
     dispatchId, contextDigest: 'b'.repeat(64), serviceId,
     providerServiceId: 'openai', orgId: 'org-payg', teamId: 'team-payg',
     userId: 'user-payg', billingMonth: '2026-10', currency: 'USD',
@@ -113,7 +115,7 @@ describe.skipIf(!process.env.DATABASE_URL)('PAYG finalization with immutable adm
       else process.env[name] = value;
     }
     resetAccessTokenKeyCache();
-    await cleanup?.();
+    await cleanup?.();vi.unstubAllEnvs();
   });
 
   it('settles once, replays the receipt, and preserves the admission record', async () => {

@@ -1,5 +1,10 @@
 # Team billing modes
 
+The organisation financial-scope tranche supersedes this team policy. See
+[Organisation billing](organisation-billing.md) for its authority, continuity
+release gate and deployment contract. The material below describes PR143 and
+the captured historical sources it continues to protect.
+
 Platform superadmins choose **Teams → selected team → Billing** in UOA Admin.
 Admin Billing links to the team directory. The setting applies across products;
 regular organisation/team members cannot choose a Stripe mode. No team allowlist

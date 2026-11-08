@@ -1,5 +1,4 @@
-import { BillingAssignmentScope, BillingCreditAutoTopUpConsentSource } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { runCreditAutoTopUpAccount } from '../../src/services/billing-credit-auto-top-up-runtime.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { ids, stripeAccount, concurrency, embeddedError, seed, paymentIntent, disableCreditAccountWithAuditEvidence } from '../helpers/credit-auto-top-up-runtime-fixture.js';
@@ -17,6 +16,7 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL disab
 
   afterAll(async () => {
     if (handle) await handle.cleanup();
+    vi.unstubAllEnvs();
   });
 
   it('requires current manager authority and allows an audited disable with a rotated key', async () => {
@@ -38,7 +38,7 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL disab
         embeddedError.creditAccount,
         'actor_auto_top_up_non_manager_disable',
         embeddedError.team,
-        'TEAM',
+        'ORGANISATION',
         undefined,
         ids.nonManagerUser,
       ),
@@ -54,7 +54,7 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL disab
       embeddedError.creditAccount,
       'actor_auto_top_up_embedded_disable',
       embeddedError.team,
-      'TEAM',
+      'ORGANISATION',
       { serviceId: ids.service, appKeyId: ids.rotatedAppKey, product: 'auto-top-up-test' },
     );
 
@@ -76,7 +76,7 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL disab
     expect(disableEvent).toMatchObject({
       serviceId: ids.service,
       appKeyId: ids.rotatedAppKey,
-      teamId: embeddedError.team,
+      teamId: null,
       previousConsentRevisionId: attempt.consentRevisionId,
       previousGeneration: 0,
     });
@@ -87,61 +87,14 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL disab
   }, 20_000);
 
   it('matches the audited disable to a NULL team for organization-scoped credits', async () => {
-    const customerId = 'bsc_auto_top_up_organization';
-    const creditAccountId = 'bca_auto_top_up_organization';
-    const revisionId = 'bcar_auto_top_up_organization';
+    const creditAccountId = concurrency.creditAccount;
+    const revisionId = concurrency.revision;
     const attemptId = 'bcattempt_auto_top_up_organization';
     const paymentMethodSummary = { type: 'card', brand: 'visa', last4: '4242' };
     const consentedAt = new Date('2026-07-21T12:00:00.000Z');
 
     await handle!.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
-      await tx.billingStripeCustomer.create({
-        data: {
-          id: customerId,
-          accountId: ids.account,
-          orgId: ids.org,
-          scope: BillingAssignmentScope.ORGANISATION,
-          scopeKey: ids.org,
-          stripeCustomerId: 'cus_auto_top_up_organization',
-        },
-      });
-      await tx.billingCreditAccount.create({
-        data: {
-          id: creditAccountId,
-          accountId: ids.account,
-          customerId,
-          orgId: ids.org,
-          teamId: null,
-          scope: BillingAssignmentScope.ORGANISATION,
-          scopeKey: ids.org,
-        },
-      });
-      await tx.billingCreditAutoTopUpConsentRevision.create({
-        data: {
-          id: revisionId,
-          accountId: ids.account,
-          creditAccountId,
-          orgId: ids.org,
-          teamId: null,
-          serviceId: ids.service,
-          appKeyId: ids.appKey,
-          policyId: ids.policy,
-          optionId: ids.option,
-          refillOfferId: ids.offer,
-          source: BillingCreditAutoTopUpConsentSource.CUSTOMER_UPDATE,
-          actorJti: 'actor_auto_top_up_organization_setup',
-          consentedByUserId: ids.user,
-          consentVersion: 'auto-top-up-v1',
-          thresholdMicrocredits: 200_000_000n,
-          refillCreditsMicrocredits: 5_000_000_000n,
-          refillPaymentAmountMinor: 500n,
-          monthlyChargeCapMinor: 1_500n,
-          stripePaymentMethodId: 'pm_auto_top_up_organization',
-          paymentMethodSummary,
-          consentedAt,
-        },
-      });
       await tx.billingCreditAccount.update({
         where: { id: creditAccountId },
         data: {

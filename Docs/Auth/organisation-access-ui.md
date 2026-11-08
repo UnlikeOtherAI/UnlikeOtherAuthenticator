@@ -153,3 +153,21 @@ management exchange. Challenge and code stay in component memory, and Back or
 Start again clears the factor step. The real-route browser evaluation covers
 the password-disabled path, foreign-browser refusal, 390/1280 layouts and the
 absence of product credentials or browser storage.
+# Organisation manager admission (2026-11-08)
+
+An active organisation owner/admin may select any ACTIVE team in that same
+organisation through current UOA authority, including a hidden team, without a
+TeamMember being created. The chooser, team directory, selected-team checks and
+assurance custody use that rule. Product policy and enterprise authentication
+evidence still restrict which organisations a product session can select.
+`first_login.memberships.teams` remains actual memberships; selectable team
+entries expose the effective organisation role instead of inventing membership.
+Selecting one team still scopes product content to that exact team. Losing org
+authority, org membership, active lifecycle or account validity removes that
+admission immediately. Ordinary members retain exact active-team admission.
+
+An existing organisation with no active teams offers explicit Create team
+recovery when its signed configuration permits team creation. Login does not
+silently create a replacement team or a new personal organisation. Explicit last
+TEAM deletion preserves the organisation and active org authority; explicit
+organisation deletion remains a separate destructive action.

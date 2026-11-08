@@ -31,7 +31,7 @@ export function recurringAddonMetadata(
     uoa_offer_id: checkout.offerId,
     uoa_offer_key: checkout.offerKey,
     uoa_organisation_id: checkout.orgId,
-    uoa_requested_team_id: checkout.requestedTeamId,
+    ...(checkout.requestedTeamId===null?{}:{uoa_requested_team_id:checkout.requestedTeamId}),
     uoa_scope: checkout.scope.toLowerCase(),
     uoa_scope_key: checkout.scopeKey,
     uoa_stripe_account_id: account.stripeAccountId,

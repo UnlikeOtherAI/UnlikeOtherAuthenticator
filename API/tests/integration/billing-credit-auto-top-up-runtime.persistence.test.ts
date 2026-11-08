@@ -19,9 +19,10 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
 
   afterAll(async () => {
     if (handle) await handle.cleanup();
+    vi.unstubAllEnvs();
   });
 
-  it('selects only active exact-team accounts below their configured threshold', async () => {
+  it('selects only active exact-organisation accounts below their configured threshold', async () => {
     const candidates = await listCreditAutoTopUpCandidateIds(
       { accountId: ids.account, limit: 10 },
       { prisma: handle!.prisma },
@@ -291,7 +292,7 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
       pendingDisabled.creditAccount,
       disableActorJti,
       pendingDisabled.team,
-      'TEAM',
+      'ORGANISATION',
       {
         serviceId: ids.otherService,
         appKeyId: ids.otherAppKey,
@@ -304,7 +305,7 @@ describe.skipIf(!databaseTestsEnabled)('credit automatic top-up PostgreSQL runti
     expect(disableEvent).toMatchObject({
       serviceId: ids.otherService,
       appKeyId: ids.otherAppKey,
-      teamId: pendingDisabled.team,
+      teamId: null,
       previousConsentRevisionId: attemptBeforeDisable.consentRevisionId,
       previousGeneration: 0,
     });

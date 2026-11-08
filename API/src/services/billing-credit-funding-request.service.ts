@@ -1,10 +1,4 @@
-import {
-  BillingAssignmentScope,
-  BillingCreditEntryDirection,
-  BillingCreditEntryKind,
-  MembershipStatus,
-  type PrismaClient,
-} from '@prisma/client';
+import { BillingCreditEntryDirection, BillingCreditEntryKind, MembershipStatus, type PrismaClient } from '@prisma/client';
 import { createHmac } from 'node:crypto';
 
 import { getEnv } from '../config/env.js';
@@ -27,12 +21,12 @@ import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js
 import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingCreditAttentionCopy } from './billing-credit-attention-copy.catalog.js';
-import { isBillingManager } from './billing-stripe-manager.service.js';
+import { activeAuthorityUserWhere } from './organisation-team-authority.service.js';
+
 
 /**
- * Return only current billing managers who can act for this exact billing
- * scope. A team owner/admin cannot receive an organisation-funded request
- * unless they also hold an organisation owner/admin role.
+ * Return current organisation billing managers. The originating team is
+ * provenance and never restricts the eligible manager's team membership.
  */
 export async function resolveBillingFundingRequestRecipients(
   params: {
@@ -44,64 +38,12 @@ export async function resolveBillingFundingRequestRecipients(
   deps?: { prisma?: PrismaClient },
 ): Promise<string[]> {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const memberships = await prisma.teamMember.findMany({
-    where: {
-      teamId: params.teamId,
-      status: MembershipStatus.ACTIVE,
-      user: {
-        is: {
-          lifecycleStatus: 'ACTIVE',
-          orgMembers: {
-            some: {
-              orgId: params.organisationId,
-              status: MembershipStatus.ACTIVE,
-            },
-          },
-        },
-      },
-      team: {
-        is: {
-          orgId: params.organisationId,
-          lifecycleStatus: 'ACTIVE',
-          org: { is: { lifecycleStatus: 'ACTIVE' } },
-        },
-      },
-    },
-    select: {
-      teamRole: true,
-      user: {
-        select: {
-          id: true,
-          lifecycleStatus: true,
-          orgMembers: {
-            where: {
-              orgId: params.organisationId,
-              status: MembershipStatus.ACTIVE,
-            },
-            select: { role: true },
-          },
-        },
-      },
-    },
-  });
-
-  return [...new Set(
-    memberships.flatMap(({ teamRole, user }) => {
-      if (
-        user.lifecycleStatus !== 'ACTIVE' ||
-        user.id === params.requesterUserId ||
-        user.orgMembers.length !== 1
-      ) {
-        return [];
-      }
-      const orgRole = user.orgMembers[0]?.role;
-      if (!orgRole) return [];
-      const eligible = params.organisationPays
-        ? isBillingManager({ scope: BillingAssignmentScope.ORGANISATION, orgRole })
-        : isBillingManager({ scope: BillingAssignmentScope.TEAM, orgRole, teamRole });
-      return eligible ? [user.id] : [];
-    }),
-  )].sort();
+  const org=await prisma.organisation.findFirst({where:{id:params.organisationId,lifecycleStatus:'ACTIVE'},select:{ownerId:true}});
+  if(!org)return [];
+  const memberships=await prisma.orgMember.findMany({where:{orgId:params.organisationId,status:MembershipStatus.ACTIVE,
+    userId:{not:params.requesterUserId},user:activeAuthorityUserWhere(),OR:[
+      {role:{in:['owner','admin']}},...(org.ownerId?[{userId:org.ownerId}]:[])]},select:{userId:true}});
+  return [...new Set(memberships.map(m=>m.userId))].sort();
 }
 
 export function billingCreditFundingRequestId(params: {
@@ -131,7 +73,7 @@ export type BillingCreditAttentionKind = BillingCreditAttentionV1['kind'];
 
 export async function resolveLatestBillingFundingCreditEntryId(
   params: { creditAccountId: string },
-  deps?: { prisma?: PrismaClient },
+  deps?: { prisma?: Pick<PrismaClient,'billingCreditEntry'> },
 ): Promise<string | null> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const entry = await prisma.billingCreditEntry.findFirst({
@@ -336,46 +278,7 @@ export async function createBillingCreditFundingRequest(
     },
     { prisma },
   );
-  const initialControlledBy = await (deps?.resolveControlledBy ?? resolveBillingControlledBy)(
-    {
-      organisationId: params.request.organisationId,
-      userId: params.request.userId,
-    },
-    { prisma },
-  );
-  if (initialControlledBy ? initialControlledBy.can_manage : viewer.billingManager) {
-    throw new AppError('FORBIDDEN', 403, 'BILLING_FUNDING_REQUEST_NOT_AVAILABLE');
-  }
-  const collection = await (deps?.resolveCollection ?? resolveCreditCollectionContext)(
-    {
-      organisationId: params.request.organisationId,
-      teamId: params.request.teamId,
-    },
-    { prisma },
-  );
-  const creditAccount = await (deps?.ensureCreditAccount ?? resolveCreditAccount)(
-    {
-      account: collection.account,
-      organisationId: params.request.organisationId,
-      teamId: params.request.teamId,
-    },
-    { prisma },
-  );
-  const controlledBy = await (deps?.resolveControlledBy ?? resolveBillingControlledBy)(
-    {
-      organisationId: params.request.organisationId,
-      userId: params.request.userId,
-    },
-    { prisma },
-  );
-  const organisationPays = creditAccount.scope === BillingAssignmentScope.ORGANISATION;
-  if (Boolean(controlledBy) !== organisationPays) {
-    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_ACCOUNT_SCOPE_CONFLICT');
-  }
-  const effectiveManager = controlledBy ? controlledBy.can_manage : viewer.billingManager;
-  if (effectiveManager) {
-    throw new AppError('FORBIDDEN', 403, 'BILLING_FUNDING_REQUEST_NOT_AVAILABLE');
-  }
+  if(viewer.billingManager)throw new AppError('FORBIDDEN',403,'BILLING_FUNDING_REQUEST_NOT_AVAILABLE');
   const recipientUserIds = await (
     deps?.resolveRecipients ?? resolveBillingFundingRequestRecipients
   )(
@@ -383,7 +286,7 @@ export async function createBillingCreditFundingRequest(
       organisationId: params.request.organisationId,
       teamId: params.request.teamId,
       requesterUserId: viewer.userId,
-      organisationPays,
+      organisationPays:true,
     },
     { prisma },
   );
@@ -391,7 +294,8 @@ export async function createBillingCreditFundingRequest(
 
   const now = deps?.now?.() ?? new Date();
   const requestId = billingCreditFundingRequestId({
-    accountId: creditAccount.id,
+    // A nonfinancial daily request does not open, read or select a wallet.
+    accountId: 'organisation:'+params.request.organisationId,
     organisationId: params.request.organisationId,
     teamId: params.request.teamId,
     requesterUserId: viewer.userId,

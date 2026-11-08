@@ -1,6 +1,7 @@
 import type {
   BillingCreditsManagerV1,
   BillingCreditsMemberV1,
+  BillingOrganisationFinancialDto,
 } from '../contracts/billing-statement-v1.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { formatBillingCopy } from './billing-copy-locale.js';
@@ -35,7 +36,7 @@ export type { BillingCreditActionSubject } from './billing-credit-action-terms.s
 
 function fundingPolicy(
   data: BillingCreditProjectionData,
-  requestBody: BillingCreditActionSubject,
+  requestBody: BillingCreditActionSubject<string|null>,
   manager: boolean,
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,
@@ -126,14 +127,24 @@ function fundingPolicy(
 }
 
 export function buildManagerCreditActionsProjection(
+  data: BillingCreditProjectionData, body: BillingCreditActionSubject, collectionEnabled: boolean,
+  readiness: BillingCreditActionReadiness, capResetsAt?: Date, locale?: BillingCustomerLocale,
+  purchaseRate?: CreditPurchaseRate|null,
+): Pick<BillingCreditsManagerV1,'funding_policy'|'automatic_top_up'>;
+export function buildManagerCreditActionsProjection(
+  data: BillingCreditProjectionData, body: BillingCreditActionSubject<string|null>, collectionEnabled: boolean,
+  readiness: BillingCreditActionReadiness, capResetsAt?: Date, locale?: BillingCustomerLocale,
+  purchaseRate?: CreditPurchaseRate|null,
+): BillingOrganisationFinancialDto<Pick<BillingCreditsManagerV1,'funding_policy'|'automatic_top_up'>>;
+export function buildManagerCreditActionsProjection(
   data: BillingCreditProjectionData,
-  body: BillingCreditActionSubject,
+  body: BillingCreditActionSubject<string|null>,
   collectionEnabled: boolean,
   readiness: BillingCreditActionReadiness,
   capResetsAt?: Date,
   locale?: BillingCustomerLocale,
   purchaseRate?: CreditPurchaseRate | null,
-): Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'> {
+): BillingOrganisationFinancialDto<Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'>> {
   return {
     funding_policy: fundingPolicy(data, body, true, collectionEnabled, readiness, locale, purchaseRate),
     automatic_top_up: creditAutomaticTopUpView(
@@ -146,7 +157,7 @@ export function buildManagerCreditActionsProjection(
       locale,
       purchaseRate,
     ),
-  } as Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'>;
+  } as BillingOrganisationFinancialDto<Pick<BillingCreditsManagerV1, 'funding_policy' | 'automatic_top_up'>>;
 }
 
 export function buildMemberCreditActionsProjection(

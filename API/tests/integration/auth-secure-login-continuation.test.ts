@@ -397,7 +397,7 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
     }
   });
 
-  it('rejects code exchange if the exact team membership became inactive', async () => {
+  it('rejects code exchange if current organisation authority became inactive', async () => {
     const team = await seedTeam({ email: 'exchange-inactive@example.com' });
     const verifier = 'exchange-verifier-abcdefghijklmnopqrstuvwxyz0123456789';
     const exchangeChallenge = createHash('sha256').update(verifier, 'utf8').digest('base64url');
@@ -430,6 +430,8 @@ describe.skipIf(!hasDatabase)('secure one-time login continuation', () => {
       },
       data: { status: 'REMOVED', statusChangedAt: new Date() },
     });
+
+    await handle.prisma.orgMember.update({where:{orgId_userId:{orgId:team.orgId,userId:team.userId}},data:{status:'REMOVED'}});
 
     await expect(
       consumeAuthorizationCode({

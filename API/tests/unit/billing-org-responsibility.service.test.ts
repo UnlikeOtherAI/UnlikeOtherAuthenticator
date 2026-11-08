@@ -7,6 +7,7 @@ import { addBillingDecimals } from '../../src/services/billing-money.service.js'
 
 const context = {
   organisationId: 'org_1',
+  accountId:'captured-account',
   serviceId: 'service_deepwater',
   statementProduct: 'deepwater',
   billingMonth: '2026-07',

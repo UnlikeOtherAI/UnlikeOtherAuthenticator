@@ -99,10 +99,12 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid Voice call legs', () => {
     await prisma.user.update({ where: { id: user.id }, data: { tokenVersion: user.tokenVersion + 1 } });
     try { await expect(readVoiceGrant(input, { prisma })).rejects.toMatchObject({ statusCode: 401 }); }
     finally { await prisma.user.update({ where: { id: user.id }, data: { tokenVersion: user.tokenVersion } }); }
-    const member = await prisma.teamMember.findUniqueOrThrow({ where: { teamId_userId: { teamId: smsIds.team, userId: smsIds.user } } });
-    await prisma.teamMember.delete({ where: { id: member.id } });
+    // An org owner remains admitted without TeamMembers. Revoke the actual
+    // organisation authority instead of relying on the retired membership rule.
+    const member = await prisma.orgMember.findUniqueOrThrow({ where: { orgId_userId: { orgId: smsIds.org, userId: smsIds.user } } });
+    await prisma.orgMember.delete({ where: { id: member.id } });
     try { await expect(readVoiceGrant(input, { prisma })).rejects.toMatchObject({ statusCode: 403 }); }
-    finally { await prisma.teamMember.create({ data: member }); }
+    finally { await prisma.orgMember.create({ data: member }); }
     await prisma.billingAppKey.update({ where: { id: fixture.lifecycle.id }, data: { revokedAt: new Date() } });
     try { await expect(readVoiceGrant(input, { prisma })).rejects.toMatchObject({ statusCode: 403 }); }
     finally { await prisma.billingAppKey.update({ where: { id: fixture.lifecycle.id }, data: { revokedAt: null } }); }

@@ -1,4 +1,5 @@
 import { lifecycleErrorMessage } from './lifecycle-errors';
+import { teamDeletionScopeCopy } from './entity-deletion-scope-copy';
 import { Link, useNavigate } from 'react-router';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -65,7 +66,7 @@ function EntityLifecyclePanelBody({ scope, id }: { scope: LifecycleScope; id: st
         : 'This entity cannot sign in or regain access. Deletion is terminal.'}</p>}
       {preview && !terminal ? <div className="space-y-3 border-t pt-4">
         <p>Delete {preview.name} ({scope.toLowerCase()}) — {id}</p>
-        <p>{preview.teamIds.length} teams in scope.{preview.deletesEmptyOrganisation ? ' The last team and its now-empty organisation will both be deleted.' : ''}</p>
+        <p>{preview.teamIds.length} teams in scope.{scope==='TEAM'?` ${teamDeletionScopeCopy()}`:''}</p>
         <ul>{preview.candidates.map(c => <li key={c.id}>{c.id}: {c.eligible ? 'account will be deleted' : `account kept — ${c.reasons.join(', ')}`}</li>)}</ul>
         <p>Products to acknowledge deletion: {preview.participants.map(p => p.domain).join(', ') || 'None identified'}</p>
         <ul>{preview.retainedEvidence.map((r, i) => <li key={i}>{r.model.replace(/([a-z])([A-Z])/g, '$1 $2')}: {r.count}. {r.reason}</li>)}</ul>

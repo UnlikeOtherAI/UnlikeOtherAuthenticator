@@ -26,6 +26,8 @@ export type SeatMonthQuoteInput = {
   endedAt: Date | null;
   membershipIntervals: MembershipInterval[];
   capacityRevisions: CapacityRevision[];
+  /** Accrual stops at this instant; the denominator remains the full UTC month. */
+  asOf?: Date;
 };
 
 export type SeatMonthQuote = {
@@ -168,7 +170,7 @@ export function quoteMonthlySeatCharge(input: SeatMonthQuoteInput): SeatMonthQuo
     invalidEvidence();
   }
   const from = Math.max(start, activatedAt, commercialEffectiveAt);
-  const to = Math.min(end, endedAt, commercialEndsAt);
+  const to = Math.min(end, endedAt, commercialEndsAt, input.asOf ? millis(input.asOf) : end);
   if (from >= to) {
     return { amountMinor: 0n, unitAmountMinor: input.unitAmountMinor,
       uniqueHumanSeats: input.seatPolicy === BillingSeatPolicy.AUTOMATIC ? 0 : null,

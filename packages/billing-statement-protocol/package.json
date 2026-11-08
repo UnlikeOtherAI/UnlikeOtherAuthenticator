@@ -1,6 +1,6 @@
 {
   "name": "@unlikeotherai/billing-statement-protocol",
-  "version": "5.9.0",
+  "version": "6.4.0",
   "description": "Public UOA billing statement and customer-action consumer contracts",
   "license": "MIT",
   "type": "module",
@@ -20,9 +20,14 @@
     "schema",
     "LICENSE",
     "README.md",
-    "BILLING-MODE.md"
+    "BILLING-MODE.md",
+    "ORGANISATION-BILLING.md"
   ],
   "exports": {
+    "./schema/billing-authority-v1.json": "./schema/billing-authority-v1.json",
+    "./fixtures/billing-authority-v1.example.json": "./fixtures/billing-authority-v1.example.json",
+    "./openapi/billing-authority-v1.openapi.json": "./openapi/billing-authority-v1.openapi.json",
+    "./schema/billing-organisation-financial-v1.json": "./schema/billing-organisation-financial-v1.json",
     "./schema/billing-sms-v1.json": "./schema/billing-sms-v1.json",
     "./openapi/billing-sms-v1.openapi.json": "./openapi/billing-sms-v1.openapi.json",
     "./schema/billing-credit-funding-request-v1.json": "./schema/billing-credit-funding-request-v1.json",
@@ -55,7 +60,10 @@
     "./openapi/billing-statement-v2.openapi.json": "./openapi/billing-statement-v2.openapi.json",
     "./openapi/billing-consumer-actions-v1.openapi.json": "./openapi/billing-consumer-actions-v1.openapi.json",
     "./openapi/billing-credits-v1.openapi.json": "./openapi/billing-credits-v1.openapi.json",
-    "./openapi/billing-recurring-addons-v1.openapi.json": "./openapi/billing-recurring-addons-v1.openapi.json"
+    "./openapi/billing-recurring-addons-v1.openapi.json": "./openapi/billing-recurring-addons-v1.openapi.json",
+    "./schema/billing-organisation-v1.json": "./schema/billing-organisation-v1.json",
+    "./fixtures/billing-organisation-v1.example.json": "./fixtures/billing-organisation-v1.example.json",
+    "./openapi/billing-organisation-v1.openapi.json": "./openapi/billing-organisation-v1.openapi.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/generate-artifacts.mjs --check",

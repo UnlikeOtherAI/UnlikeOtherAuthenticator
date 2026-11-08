@@ -7,6 +7,7 @@ import type {
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { localizedBillingMoney } from './billing-money.service.js';
 import { billingLocale } from './billing-copy-locale.js';
+import { billingLocalizedCreditDisplay } from './billing-credit-copy.catalog.js';
 import { AppError } from '../utils/errors.js';
 
 const MICROCREDITS_PER_CREDIT = 1_000_000n;
@@ -65,7 +66,7 @@ export function billingCreditAmount(microcredits: bigint, locale?: BillingCustom
   const usd = scaledDecimal(microcredits, 9);
   return {
     credits,
-    display: `${grouped(credits)} ${microcredits === MICROCREDITS_PER_CREDIT || microcredits === -MICROCREDITS_PER_CREDIT ? 'credit' : 'credits'}`,
+    display: billingLocalizedCreditDisplay(credits,locale),
     usd_equivalent: localizedBillingMoney({
       amount: usd,
       currency: 'USD',

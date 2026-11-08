@@ -11,6 +11,7 @@ import { finalizePrepaidBillingCycle } from
 import type { BillingInvoicePdfStorage } from
   '../../src/services/billing-invoice-storage.service.js';
 import { createTestDb } from '../helpers/test-db.js';
+import { importCapturedCycleSubscription } from '../helpers/captured-cycle-subscription.js';
 
 const enabled = process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' &&
   Boolean(process.env.DATABASE_URL);
@@ -35,7 +36,7 @@ describe.skipIf(!enabled)('fully funded PAYG usage with no monthly fee', () => {
   let db: TestDb;
   const storage = new MemoryStorage();
   const ids = { user: '', org: '', team: '', service: '', tariff: '', account: '',
-    creditAccount: '', appKey: '' };
+    creditAccount: '', appKey: '', source: '' };
   const month = '2026-08';
   let meteredCost = '0';
   const receipts: Array<{ dispatchId: string; receiptId: string; cost: string }> = [];
@@ -87,6 +88,7 @@ describe.skipIf(!enabled)('fully funded PAYG usage with no monthly fee', () => {
       actorPublicJwk: { kty: 'RSA', n: 'AQAB', e: 'AQAB' },
       checkoutReturnOrigins: ['https://test.example'] } });
     ids.appKey = appKey.id;
+    ids.source=(await importCapturedCycleSubscription(db.prisma,{orgId:org.id,teamId:team.id,serviceId:service.id,tariffId:tariff.id,accountId:stripeAccount.id,customerId:customer.id,appKeyId:appKey.id,userId:user.id})).id;
     const adminDomain = `funded-payg-${randomUUID()}.example.test`;
     await db.prisma.domainRole.create({ data: {
       domain: adminDomain, userId: user.id, role: 'SUPERUSER',
@@ -120,6 +122,15 @@ describe.skipIf(!enabled)('fully funded PAYG usage with no monthly fee', () => {
     accountBalance: bigint) {
     const dispatchId = `dispatch-${randomUUID()}`;
     const receiptId = `receipt-${randomUUID()}`;
+    // Captured original paid dispatch, before organisation cutover. The actual
+    // cycle close/late correction remains guarded and must match this account.
+    await db.prisma.$transaction(async tx=>{
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+      await tx.billingCreditBudgetDispatch.create({data:{dispatchId,contextDigest:'a'.repeat(64),
+        serviceId:ids.service,providerServiceId:'provider-test',orgId:ids.org,teamId:ids.team,userId:ids.user,
+        billingMonth:month,currency:'USD',tariffId:ids.tariff,tariffMode:'STANDARD',frozenMarkupBps:3000,
+        paymentMode:'PAY_AS_YOU_GO',billingAccountId:ids.account,createdAt:new Date('2026-08-15T00:00:00Z')}});
+    });
     await db.prisma.billingPaidUsageLiability.create({ data: {
       dispatchId, receiptId, serviceId: ids.service, providerServiceId: 'provider-test',
       orgId: ids.org, teamId: ids.team, userId: ids.user, billingMonth: month,
@@ -189,7 +200,7 @@ describe.skipIf(!enabled)('fully funded PAYG usage with no monthly fee', () => {
   it('keeps a fully credited PAYG month cash-free through a late receipt', async () => {
     const service = await db.prisma.billingService.findUniqueOrThrow({ where: {
       id: ids.service } });
-    const quote = { source: { kind: 'manual' as const, id: 'zero-fee-payg' },
+    const quote = { source: { kind: 'stripe' as const, id: ids.source },
       serviceId: ids.service, tariffId: ids.tariff, organisationId: ids.org,
       teamId: ids.team, scope: BillingAssignmentScope.TEAM,
       agreementId: null, billingMonth: month,

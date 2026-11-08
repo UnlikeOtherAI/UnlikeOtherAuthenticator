@@ -15,6 +15,7 @@ import { resolveOrgBillingResponsibility } from './billing-org-responsibility.se
 export type CreditCollectionContext = {
   account: StripeAccountContext;
   modeRevision?: number;
+  scopeEpoch?: string;
   stripeCollectionEnabled: boolean;
   stripe?: Pick<
     Stripe,
@@ -31,22 +32,20 @@ const CANONICAL_PORTFOLIO_PRODUCTS = [
 ] as const;
 
 async function resolvePersistedCreditAccount(
-  params: { organisationId: string; teamId: string },
+  params: { organisationId: string; teamId: string | null },
   prisma: PrismaClient,
 ): Promise<StripeAccountContext> {
   const selection = await resolveTeamBillingMode(params, prisma);
   const env = getEnv();
   const expectedId = selection.mode === 'live' ? env.STRIPE_LIVE_ACCOUNT_ID : env.STRIPE_SANDBOX_ACCOUNT_ID;
+  if(!expectedId)throw new AppError('SERVICE_UNAVAILABLE',503,'BILLING_STRIPE_MODE_NOT_CONFIGURED');
   const identity = { livemode: selection.mode === 'live',
-    ...(expectedId ? { stripeAccountId: expectedId } : {}) };
+    stripeAccountId: expectedId };
   const scoped = await prisma.billingCreditAccount.findMany({
     where: {
       account: identity,
       orgId: params.organisationId,
-      OR: [
-        { scope: BillingAssignmentScope.TEAM, teamId: params.teamId },
-        { scope: BillingAssignmentScope.ORGANISATION, teamId: null },
-      ],
+      scope: BillingAssignmentScope.ORGANISATION, teamId: null,
       currency: 'USD',
     },
     orderBy: { updatedAt: 'desc' },
@@ -81,18 +80,18 @@ async function resolvePersistedCreditAccount(
 }
 
 export async function resolveCreditCollectionContext(
-  params: { organisationId: string; teamId: string },
+  params: { organisationId: string; teamId: string | null },
   deps?: { prisma?: PrismaClient },
 ): Promise<CreditCollectionContext> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   if (!getEnv().STRIPE_BILLING_ENABLED) {
     const account = await resolvePersistedCreditAccount(params, prisma);
     const selection = await resolveTeamBillingMode(params, prisma);
-    return { account, modeRevision: selection.revision, stripeCollectionEnabled: false, stripe: null };
+    return { account, modeRevision: selection.revision, scopeEpoch: selection.epoch, stripeCollectionEnabled: false, stripe: null };
   }
   const configured = await requireTeamStripeBilling(params, prisma);
   const account = await resolveStripeAccountContext(configured.client, configured.livemode, prisma);
-  return { account, modeRevision: configured.selection.revision,
+  return { account, modeRevision: configured.selection.revision, scopeEpoch: configured.selection.epoch,
     stripeCollectionEnabled: true, stripe: configured.client };
 }
 
@@ -174,7 +173,7 @@ export async function ensureTeamCreditAccount(
   params: {
     account: StripeAccountContext;
     organisationId: string;
-    teamId: string;
+    teamId: string | null;
   },
   deps?: { prisma?: PrismaClient },
 ) {
@@ -194,39 +193,28 @@ export async function ensureOrganisationCreditAccount(
 /**
  * The single chokepoint every credit debit crosses.
  *
- * With an organisation billing responsibility active, every team's metered
- * spend lands on the ORGANISATION account; without one this is byte-identical
- * to `ensureTeamCreditAccount`. That is the whole of the money side of
- * `Docs/plans/2026-08-15-org-billing-override.md` §2: no caller anywhere in
- * Ledger, the worker, or a product changes.
+ * Every forward debit uses the organisation wallet in its selected account
+ * and mode. Retained responsibility rows and TEAM wallets remain historical
+ * recovery evidence; neither the selected team nor an optional roll-up chooses
+ * the current payer. No financial record is moved by this resolver.
  */
 export async function resolveCreditAccount(
   params: {
     account: StripeAccountContext;
     organisationId: string;
-    teamId: string;
+    teamId: string | null;
   },
   deps?: { prisma?: PrismaClient; resolveResponsibility?: typeof resolveOrgBillingResponsibility },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
-  const responsibility = await (deps?.resolveResponsibility ?? resolveOrgBillingResponsibility)(
-    { organisationId: params.organisationId },
-    { prisma },
-  );
-  if (responsibility.active) {
-    await assertOrganisationBillingMode(params.organisationId, params.account.livemode, prisma);
-    return ensureOrganisationCreditAccount(
-      { account: params.account, organisationId: params.organisationId },
-      { prisma },
-    );
-  }
-  return ensureTeamCreditAccount(params, { prisma });
+  await assertOrganisationBillingMode(params.organisationId,params.account.livemode,prisma);
+  return ensureOrganisationCreditAccount({account:params.account,organisationId:params.organisationId},{prisma});
 }
 
 export async function resolveCanonicalPortfolioProduct(
   params: {
     creditAccountId: string;
-    teamId: string;
+    teamId: string | null;
     billingMonth: string;
     fallbackProduct: string;
   },
@@ -237,7 +225,7 @@ export async function resolveCanonicalPortfolioProduct(
     prisma.billingCreditPortfolioSnapshot.findFirst({
       where: {
         creditAccountId: params.creditAccountId,
-        teamId: params.teamId,
+        ...(params.teamId===null?{}:{teamId:params.teamId}),
         billingMonth: params.billingMonth,
       },
       orderBy: [{ capturedAt: 'desc' }, { ledgerSnapshotCursor: 'desc' }],

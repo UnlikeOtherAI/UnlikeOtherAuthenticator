@@ -65,6 +65,14 @@ function usage(): NormalizedMeteringUsage {
 }
 
 describe('contract invoice calculator', () => {
+  it('holds a historical unbound contract before reading metering or issuing a new draft',async()=>{
+    const prisma={billingOrganisationContract:{findFirst:vi.fn().mockResolvedValue({id:'historical',orgId:'org_1',
+      billingAccountId:null,versions:[{id:'original-version'}]})}},fetchMetering=vi.fn();
+    await expect(calculateBillingContractInvoice({contractId:'historical',issuerProfileId:'issuer',billingMonth:'2026-06',
+      taxTerms:{treatment:'NO_TAX_CHARGED',rateBps:0,legalBasis:'Outside tax scope'},actor:{email:'operator@example.test'}},
+      {prisma:prisma as never,fetchMetering,now:()=>now})).rejects.toThrow('BILLING_INVOICE_ACCOUNT_BINDING_RECONCILIATION_REQUIRED');
+    expect(fetchMetering).not.toHaveBeenCalled();
+  });
   it('rates one org-wide Ledger snapshot and stores only final service price plus private refs', async () => {
     const created = {
       id: 'invoice_1',
@@ -120,6 +128,7 @@ describe('contract invoice calculator', () => {
       billingOrganisationContract: {
         findFirst: vi.fn().mockResolvedValue({
           id: 'contract_1',
+          billingAccountId:'stripe_account_1',
           orgId: 'org_1',
           versions: [
             {
@@ -222,7 +231,7 @@ describe('contract invoice calculator', () => {
     );
     const data = createInvoice.mock.calls[0]![0].data;
     expect(collectFunding).toHaveBeenCalledWith(
-      expect.objectContaining({ tariffId: 'tariff_1', organisationId: 'org_1' }),
+      expect.objectContaining({ tariffId: 'tariff_1', organisationId: 'org_1',accountId:'stripe_account_1' }),
       { prisma },
     );
     expect(quoteMonthly).toHaveBeenCalledWith({
@@ -314,7 +323,7 @@ describe('contract invoice calculator', () => {
       adminAuditLog: { create: vi.fn() } };
     const prisma = {
       billingOrganisationContract: { findFirst: vi.fn().mockResolvedValue({
-        id: 'contract_1', orgId: 'org_1', versions: [{ id: 'version_1',
+        id: 'contract_1', orgId: 'org_1',billingAccountId:'stripe_account_1', versions: [{ id: 'version_1',
           usageMarkupBps: 3000, currency: 'USD', serviceTerms: [{
             id: 'term_1', serviceId: 'service_1', tariffId: 'tariff_1',
             monthlyAmountMinor: 1000n,

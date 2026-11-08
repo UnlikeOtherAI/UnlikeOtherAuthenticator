@@ -44,7 +44,7 @@ export async function smsPaidNumberFixture(prisma: PrismaClient) {
     accountId: smsIds.account, serviceId: smsIds.service, offerId: offer.id, currency: 'USD', monthlyAmountMinor: 975n,
     stripeLookupKey: 'sms-fixture:1', stripeProductId: 'prod_sms', stripePriceId: 'price_sms' } });
   const customer = await prisma.billingStripeCustomer.create({ data: { id: 'sms-org-customer',
-    accountId: smsIds.account, orgId: smsIds.org, scope: 'ORGANISATION', scopeKey: smsIds.org,
+    accountId: smsIds.account, orgId: smsIds.org, scope: 'ORGANISATION', scopeKey: `${smsIds.org}:sms:USD`,
     stripeCustomerId: 'cus_sms' } });
   let checkout!: Awaited<ReturnType<PrismaClient['billingRecurringAddonCheckout']['create']>>;
   await prisma.$transaction(async (tx) => {
@@ -75,7 +75,7 @@ export async function smsPaidNumberFixture(prisma: PrismaClient) {
   await prisma.billingSmsNumberResource.create({ data: { id: smsIds.number, serviceId: smsIds.service,
     appKeyId: smsIds.lifecycle, orgId: smsIds.org, quoteId: monthly.id, offerId: offer.id,
     phoneNumber: smsPhone, country: 'CZ', accountSid: smsAccount, phoneNumberSid: `PN${'a'.repeat(32)}`, state: 'active' } });
-  const metadata = recurringAddonMetadata(checkout, { id: smsIds.account, stripeAccountId: 'acct_sms_fixture', livemode: false });
+  const metadata = recurringAddonMetadata(checkout, { id: smsIds.account, stripeAccountId: 'acct_SmsFixture', livemode: false });
   const remote = { id: 'sub_sms', customer: 'cus_sms', livemode: false, status: 'active', cancel_at_period_end: false,
     metadata, latest_invoice: 'in_sms', discounts: [], items: { data: [{ id: 'si_sms', quantity: 1, discounts: [],
       current_period_start: Math.floor(now.getTime() / 1000), current_period_end: Math.floor(end.getTime() / 1000),
@@ -89,7 +89,7 @@ export async function smsPaidNumberFixture(prisma: PrismaClient) {
         proration: false, subscription: 'sub_sms', subscription_item: 'si_sms' } },
       pricing: { price_details: { price: 'price_sms' }, unit_amount_decimal: '975' } }] } };
   const cash = { available: true };
-  const stripe = { accounts: { retrieveCurrent: async () => ({ id: 'acct_sms_fixture' }) },
+  const stripe = { accounts: { retrieveCurrent: async () => ({ id: 'acct_SmsFixture' }) },
     subscriptions: { retrieve: async () => remote, cancel: async () => { remote.status = 'canceled'; return remote; } },
     invoices: { retrieve: async () => invoice }, invoicePayments: { list: async () => ({ has_more: false,
       data: cash.available ? [{ id: 'ip_sms', invoice: 'in_sms', status: 'paid', currency: 'usd', livemode: false,

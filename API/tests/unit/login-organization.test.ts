@@ -19,7 +19,7 @@ function directory(teamRows = rows) {
   const teamInvite = { findMany: vi.fn(async ({ where }) => ['acme', 'other']
     .filter(orgId => !where.orgId || orgId === where.orgId).map(orgId => ({ id: `invite-${orgId}`, team: { name: orgId }, org: { name: orgId }, invitedByName: 'Jo', invitedByUserId: null }))) };
   return { user: { findUnique: vi.fn(async () => ({ email: 'member@example.com' })), findMany: vi.fn(async () => []) },
-    teamMember, orgMember, teamInvite };
+    team: {findMany: vi.fn(async()=>[])}, teamMember, orgMember, teamInvite };
 }
 
 describe('organisation-scoped sign-in', () => {

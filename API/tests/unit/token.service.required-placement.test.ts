@@ -85,7 +85,7 @@ describe('required team placement during token exchange', () => {
       refreshToken: { findUnique: vi.fn().mockResolvedValue({ assuranceId: null }), create: vi.fn().mockResolvedValue({ id: 'refresh-new' }) },
       team: {
         findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE', orgId: 'org-new' }),
-        findFirst: vi.fn().mockResolvedValue(null),
+        findFirst:vi.fn(async()=>placed?{id:'team-new'}:null),findMany:vi.fn().mockResolvedValue([]),
         create: vi.fn().mockResolvedValue({ id: 'team-new' }),
       },
       teamInvite: { findMany: vi.fn().mockResolvedValue([]) },
@@ -176,10 +176,12 @@ describe('required team placement during token exchange', () => {
       organisation: {
         findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE' }), create: createOrganisation },
       teamInvite: { findMany: vi.fn().mockResolvedValue([]) },
+      team:{findMany:vi.fn().mockResolvedValue([])},
       teamMember: { findMany: vi.fn().mockResolvedValue([]) },
       user: { findUnique: vi.fn().mockResolvedValue({ email: 'member@example.com' }) },
     } as unknown as PrismaClient;
     const teamPrisma = {
+      team:{findMany:vi.fn().mockResolvedValue([])},
       orgMember: { findMany: vi.fn().mockResolvedValue([]) },
       billingAppKey: {
         findMany: vi
@@ -238,7 +240,7 @@ describe('required team placement during token exchange', () => {
           status: orgStatus,
         }),
       },
-      team: { create: createTeam },
+      team: { create: createTeam, count:vi.fn().mockResolvedValue(1) },
       teamMember: { count: vi.fn().mockResolvedValue(1) },
       user: {
         findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
@@ -282,7 +284,7 @@ describe('required team placement during token exchange', () => {
           status: 'ACTIVE',
         }),
       },
-      team: { create: vi.fn() },
+      team: { create: vi.fn(),count:vi.fn().mockResolvedValue(1) },
       teamMember: { count: vi.fn().mockResolvedValue(1) },
       user: {
         findUnique: vi.fn().mockResolvedValue({ lifecycleStatus: 'ACTIVE',
@@ -427,7 +429,7 @@ describe('required team placement during token exchange', () => {
           ),
         },
         team: {
-          findFirst: vi.fn().mockResolvedValue(null),
+          findMany:vi.fn().mockResolvedValue([]),findFirst:vi.fn(async({where})=>team&&(!where.org?.domain||where.org.domain===team.domain)?{id:team.teamId}:null),
           create: vi.fn().mockResolvedValue({ id: 'team-race' }),
         },
         teamInvite: { findMany: vi.fn().mockResolvedValue([]) },

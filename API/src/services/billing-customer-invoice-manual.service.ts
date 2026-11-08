@@ -1,10 +1,11 @@
+import type { BillingOrganisationFinancialDto as FinancialDto } from '../contracts/billing-statement-v1.js';
 import { BillingInvoiceStatus, type Prisma } from '@prisma/client';
 
 import {
   BILLING_CUSTOMER_INVOICES_DOWNLOAD_PATH,
-  type BillingCustomerInvoiceDetailV1,
-  type BillingCustomerInvoiceSummaryV1,
-  type BillingSubjectRequest,
+  type BillingCustomerInvoiceDetailV1 as PublicBillingCustomerInvoiceDetailV1,
+  type BillingCustomerInvoiceSummaryV1 as PublicBillingCustomerInvoiceSummaryV1,
+  type BillingSubjectRequest as PublicBillingSubjectRequest,
 } from '../contracts/billing-statement-v1.js';
 import { AppError } from '../utils/errors.js';
 import { cycleMoney } from './billing-cycle-quote-projection.service.js';
@@ -101,14 +102,14 @@ export function projectManualCustomerInvoiceSummary(
 }
 
 export function projectManualCustomerInvoiceDetail(
-  invoice: ManualInvoiceSource, subject: BillingSubjectRequest, chargeMonth?: string,
+  invoice: ManualInvoiceSource, subject: BillingSubjectRequest, chargeMonth?: string, organisationScope=false,
 ): BillingCustomerInvoiceDetailV1 {
   const summary = projectManualCustomerInvoiceSummary(invoice, chargeMonth);
   const number = summary.number;
   const issuedAt = summary.issued_at;
   if (!number || !issuedAt) hold();
   if (subject.organisation_id !== invoice.orgId ||
-    invoice.lines.some((line) => line.serviceIdentifier !== subject.product)) hold();
+    (!organisationScope&&invoice.lines.some((line) => line.serviceIdentifier !== subject.product))) hold();
   return { ...summary, schema_version: 1,
     payments: invoice.paymentEvents.filter((event) => event.kind === 'PAYMENT')
       .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() ||
@@ -126,3 +127,9 @@ export function projectManualCustomerInvoiceDetail(
           document_id: `manual:${invoice.id}` } } },
   };
 }
+
+type BillingCustomerInvoiceDetailV1=FinancialDto<PublicBillingCustomerInvoiceDetailV1>;
+
+type BillingCustomerInvoiceSummaryV1=FinancialDto<PublicBillingCustomerInvoiceSummaryV1>;
+
+type BillingSubjectRequest=FinancialDto<PublicBillingSubjectRequest>;

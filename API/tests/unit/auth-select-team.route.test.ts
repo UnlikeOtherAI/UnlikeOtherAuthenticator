@@ -52,7 +52,7 @@ const prismaMock = vi.hoisted(() => ({
   $executeRaw: vi.fn(),
   $queryRaw: vi.fn(),
   domainSignatureSettings: { findUnique: vi.fn() },
-  team: { findFirst: vi.fn() },
+  team: { findFirst: vi.fn(), findMany: vi.fn() },
   teamMember: {
     findFirst: vi.fn(),
     findMany: vi.fn(),
@@ -180,6 +180,8 @@ describe('POST /auth/select-team', () => {
     assertEmailDomainAllowedForLoginMock.mockReset().mockResolvedValue(undefined);
     assertNotBannedAtLoginMock.mockReset().mockResolvedValue(undefined);
     prismaMock.orgMember.findMany.mockResolvedValue([]);
+    prismaMock.team.findMany.mockResolvedValue([]);
+    prismaMock.organisation.findMany.mockResolvedValue([]);
     prismaMock.authorizationCode.create.mockResolvedValue({ id: 'code-row-1' });
     prismaMock.loginSessionUse.create.mockResolvedValue({ id: 'session-use-1' });
     prismaMock.$executeRaw.mockResolvedValue(1);
@@ -198,13 +200,11 @@ describe('POST /auth/select-team', () => {
     vi.restoreAllMocks();
     Reflect.deleteProperty(process.env, 'DATABASE_URL');
   });
-
   it('rejects an invalid login_token with a generic error', async () => {
     const res = await postSelectTeam({ login_token: 'not-a-real-token', teamId: 'team-1' });
     expect(res.statusCode).toBe(401);
     expect(res.json()).toEqual({ error: 'Request failed' });
   });
-
   it('rejects an expired login_token with a generic error', async () => {
     const expired = await signLoginSession({
       userId: 'user-1',
@@ -227,7 +227,6 @@ describe('POST /auth/select-team', () => {
     expect(res.statusCode).toBe(401);
     expect(res.json()).toEqual({ error: 'Request failed' });
   });
-
   it('does not decline an invite when the login_token expires waiting for the lock', async () => {
     const now = new Date('2026-07-22T12:00:00.000Z');
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -270,11 +269,9 @@ describe('POST /auth/select-team', () => {
     expect(prismaMock.teamInvite.findUnique).not.toHaveBeenCalled();
     expect(prismaMock.teamInvite.update).not.toHaveBeenCalled();
   });
-
-  it('rejects a teamId the user is not an ACTIVE member of', async () => {
+  it('rejects a teamId without ACTIVE membership or organisation-manager authority', async () => {
     const loginToken = await mintLoginToken('user-1');
-    prismaMock.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1' });
-    prismaMock.teamMember.findFirst.mockResolvedValue(null); // no ACTIVE membership
+    prismaMock.team.findFirst.mockResolvedValueOnce({ id: 'team-1', orgId: 'org-1' }).mockResolvedValue(null);
 
     const res = await postSelectTeam({ login_token: loginToken, teamId: 'team-1' });
 
@@ -282,13 +279,12 @@ describe('POST /auth/select-team', () => {
     expect(res.json()).toEqual({ error: 'Request failed' });
     expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();
   });
-
   it('rejects a cross-domain team for an unknown product domain (IDOR)', async () => {
     const loginToken = await mintLoginToken('user-1');
-    prismaMock.team.findFirst.mockResolvedValue({
+    prismaMock.team.findFirst.mockResolvedValueOnce({
       id: 'team-owned-by-other-domain',
       orgId: 'org-other-domain',
-    });
+    }).mockResolvedValue(null);
     prismaMock.orgMember.findFirst.mockResolvedValue(null);
     prismaMock.teamMember.findFirst.mockResolvedValue(null);
     prismaMock.clientDomain.findUnique.mockResolvedValue({ status: 'active' });
@@ -307,11 +303,10 @@ describe('POST /auth/select-team', () => {
     });
     expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();
   });
-
   it('accepts a cross-domain ACTIVE team for one centrally bound product', async () => {
     currentConfig = baseConfig({ domain: 'api.deepsignal.live' });
     const loginToken = await mintLoginToken('user-1', 'api.deepsignal.live');
-    prismaMock.team.findFirst.mockResolvedValue({ id: 'team-nessie', orgId: 'org-nessie' });
+    prismaMock.team.findFirst.mockImplementation(async({where})=>where.org?.domain?null:{id:'team-nessie',orgId:'org-nessie'});
     prismaMock.orgMember.findFirst.mockImplementation(async ({ where }) =>
       where.org?.domain ? null : { id: 'org-member-nessie' },
     );
@@ -336,18 +331,11 @@ describe('POST /auth/select-team', () => {
         data: expect.objectContaining({ orgId: 'org-nessie', teamId: 'team-nessie' }),
       }),
     );
-    expect(prismaMock.orgMember.findFirst).toHaveBeenCalledWith({
-      where: {
-        orgId: 'org-nessie',
-        userId: 'user-1',
-        status: 'ACTIVE',
-        org: { lifecycleStatus: 'ACTIVE' },
-        user: { lifecycleStatus: 'ACTIVE' },
-      },
-      select: { id: true },
-    });
+    expect(prismaMock.team.findFirst).toHaveBeenCalledWith({
+      where: { id:'team-nessie',orgId:'org-nessie',org:undefined,
+        AND:[expect.objectContaining({lifecycleStatus:'ACTIVE',org:expect.objectContaining({
+          members:{some:expect.objectContaining({userId:'user-1',status:'ACTIVE'})}})})]},select:{id:true}});
   });
-
   it('accepts a valid ACTIVE team selection and issues a scoped authorization code', async () => {
     const loginToken = await mintLoginToken('user-1');
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-1', orgId: 'org-1' });
@@ -375,7 +363,6 @@ describe('POST /auth/select-team', () => {
       expect.anything(),
     );
   });
-
   it('finalizes with no team scope when neither teamId nor inviteId is given', async () => {
     const loginToken = await mintLoginToken('user-1');
     prismaMock.user.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE', twoFaEnabled: false, tokenVersion: 0 });
@@ -390,7 +377,6 @@ describe('POST /auth/select-team', () => {
       }),
     );
   });
-
   it('enforces the selected org 2FA policy — returns a twofa challenge instead of finalizing', async () => {
     currentConfig = baseConfig({ '2fa_enabled': true });
     const loginToken = await mintLoginToken('user-1');
@@ -409,9 +395,9 @@ describe('POST /auth/select-team', () => {
     expect(typeof body.twofa_token).toBe('string');
     expect(prismaMock.authorizationCode.create).not.toHaveBeenCalled();
   });
-
   it('accepts a pending invite and finalizes scoped to the invite team/org', async () => {
     const loginToken = await mintLoginToken('user-1');
+    prismaMock.team.findFirst.mockResolvedValue({id:'team-9',orgId:'org-9'});
     prismaMock.teamInvite.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',
       id: 'invite-1',
       orgId: 'org-9',
@@ -462,7 +448,6 @@ describe('POST /auth/select-team', () => {
       }),
     );
   });
-
   it('declines a pending invite and returns a refreshed chooser payload', async () => {
     const loginToken = await mintLoginToken('user-1');
     prismaMock.teamInvite.findUnique.mockResolvedValue({ lifecycleStatus: 'ACTIVE',

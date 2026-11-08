@@ -1,3 +1,4 @@
+import { captureTestOrganisationFinancialBinding } from '../helpers/organisation-financial-binding.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 
@@ -62,7 +63,7 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
   const storage = new MemoryStorage();
   const ids = { user: '', org: '', team: '', service: '', tariff: '', term: '',
     contract: '', version: '', issuer: '', buyer: '', invoice: '', originalCycle: '' };
-  const month = '2026-08';
+  const month = '2030-08';
   const actor = { userId: '', tokenVersion: 0, email: '' };
   const issuerParty = { legal_name: 'UOA Limited', billing_email: 'billing@example.test',
     address: { line1: '1 Main Street', city: 'London', postal_code: 'SW1A 1AA',
@@ -96,7 +97,7 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
     const service = await db.prisma.billingService.create({ data: {
       identifier: process.env.BILLING_CREDIT_NOTE_FIXTURE_PRODUCT ?? 'nessie',
       name: 'Customer service',
-      tariffHistoryFromMonth: '2026-01' } });
+      tariffHistoryFromMonth: '2030-01' } });
     ids.service = service.id;
     const tariff = await db.prisma.billingTariff.create({ data: {
       serviceId: service.id, key: 'manual-note', version: 1, name: 'Manual',
@@ -105,9 +106,9 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
       monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT,
       markupBps: 3000, monthlyAmountMinor: 130n, currency: 'USD' } });
     ids.tariff = tariff.id;
-    const contract = await db.prisma.billingOrganisationContract.create({ data: {
+    const contract = await db.prisma.billingOrganisationContract.create({ data: { ...await captureTestOrganisationFinancialBinding(db.prisma,org.id),
       orgId: org.id, reference: `note-${randomUUID()}`, name: 'Agreement',
-      status: 'ACTIVE', activatedAt: new Date('2026-08-01T00:00:00.000Z') } });
+      status: 'ACTIVE', activatedAt: new Date('2030-08-01T00:00:00.000Z') } });
     ids.contract = contract.id;
     const version = await db.prisma.billingOrganisationContractVersion.create({ data: {
       contractId: contract.id, version: 1, usageMarkupBps: 3000,
@@ -140,7 +141,7 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
       meteringRefs: { create: { serviceId: service.id,
         ledgerSnapshotCursor: 'complete-no-paid-usage',
         ledgerSnapshotSha256: 'd'.repeat(64),
-        capturedAt: new Date('2026-09-02T00:00:00.000Z') } },
+        capturedAt: new Date('2030-09-02T00:00:00.000Z') } },
     } });
     ids.invoice = invoice.id;
     const line = await db.prisma.billingInvoiceLine.findFirstOrThrow({ where: {
@@ -151,11 +152,11 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
       taxMinor: 26n, invoiceCreditMinor: 0n, totalMinor: 156n,
       dueMinor: 156n, currency: 'USD', calculationDigest: 'c'.repeat(64) } });
     await issueBillingInvoice({ invoiceId: invoice.id, actor }, { prisma: db.prisma,
-      storage, now: () => new Date('2026-09-04T00:00:00.000Z'),
+      storage, now: () => new Date('2030-09-04T00:00:00.000Z'),
       authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
   });
 
-  afterAll(async () => { await db?.cleanup(); });
+  afterAll(async () => { await db?.cleanup(); vi.unstubAllEnvs(); });
 
   it('issues one immutable taxed cancellation and projects verified cash only', async () => {
     const product = (await db.prisma.billingService.findUniqueOrThrow({ where: {
@@ -172,25 +173,25 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
       commercialEffectiveAt: null, commercialEndsAt: null, endedAt: null };
     const pending = await prepareBillingCycleClose({ source: quote.source,
       billingMonth: month }, { prisma: db.prisma,
-      now: () => new Date('2026-09-03T00:00:00.000Z'),
+      now: () => new Date('2030-09-03T00:00:00.000Z'),
       quote: vi.fn().mockResolvedValue(quote),
       discoverTeams: vi.fn().mockResolvedValue({ teamIds: [], snapshot: {
         cursor: 'no-teams', id: 'no-teams',
-        capturedAt: '2026-09-02T00:00:00.000Z', sha256: 'b'.repeat(64) } }),
+        capturedAt: '2030-09-02T00:00:00.000Z', sha256: 'b'.repeat(64) } }),
       fetchMetering: vi.fn().mockResolvedValue({ schemaVersion: 1, product,
         groupBy: 'user', scope: { organizationId: ids.org, teamId: null,
-          userId: null, month, startsAt: '2026-08-01T00:00:00.000Z',
-          endsAt: '2026-09-01T00:00:00.000Z' }, calls: '0', lines: [],
+          userId: null, month, startsAt: '2030-08-01T00:00:00.000Z',
+          endsAt: '2030-09-01T00:00:00.000Z' }, calls: '0', lines: [],
         billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' },
         snapshot: { cursor: 'no-usage', id: 'no-usage',
-          capturedAt: '2026-09-02T00:00:00.000Z', immutable: true,
+          capturedAt: '2030-09-02T00:00:00.000Z', immutable: true,
           sha256: 'a'.repeat(64) } }),
       fetchPaidReceiptSet: vi.fn().mockResolvedValue({
         contract: 'ledger-paid-receipt-set-v1',
         scope: { billing_product: product, organization_id: ids.org,
           team_id: null, billing_month: month },
         snapshot: { cursor: `mpr_${'a'.repeat(32)}`,
-          captured_at: '2026-09-02T00:00:00.000Z', immutable: true },
+          captured_at: '2030-09-02T00:00:00.000Z', immutable: true },
         paid_receipt_count: '0', paid_receipt_sha256:
           createHash('sha256').update('ledger-paid-receipt-set-v1:paid\n').digest('hex'),
         zero_incremental_count: '0', zero_incremental_sha256:
@@ -205,15 +206,15 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
     const originalPdf = await storage.read(originalInvoice.pdfObjectKey ?? '');
     await recordBillingInvoicePayment({ invoiceId: ids.invoice, kind: 'payment',
       amountMinor: '100', currency: 'USD', idempotencyKey: `paid-${randomUUID()}`,
-      occurredAt: new Date('2026-09-05T00:00:00.000Z'), actor }, {
-      prisma: db.prisma, now: () => new Date('2026-09-05T00:00:01.000Z'),
+      occurredAt: new Date('2030-09-05T00:00:00.000Z'), actor }, {
+      prisma: db.prisma, now: () => new Date('2030-09-05T00:00:01.000Z'),
       authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
     const prepared = await prepareManualInvoiceCreditNote({ invoiceId: ids.invoice,
       reason: 'Verified cancellation', actor }, { prisma: db.prisma });
     expect(await prepareManualInvoiceCreditNote({ invoiceId: ids.invoice,
       reason: 'Verified cancellation', actor }, { prisma: db.prisma })).toEqual(prepared);
     const issued = await issueManualCreditNote({ creditNoteId: prepared.id, actor }, {
-      prisma: db.prisma, storage, now: () => new Date('2026-09-06T00:00:00.000Z') });
+      prisma: db.prisma, storage, now: () => new Date('2030-09-06T00:00:00.000Z') });
     expect(issued.number).toMatch(/^CN-/);
     const result = await captureIssuedManualCreditNote({ creditNoteId: prepared.id }, {
       prisma: db.prisma, storage });
@@ -232,7 +233,7 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
       where: { id: prepared.id }, include: { originalInvoice: { include: {
         lines: true, paymentEvents: true } } },
     });
-    const legalView = projectCustomerCreditNoteSummary(legalSource, '2026-09');
+    const legalView = projectCustomerCreditNoteSummary(legalSource, '2030-09');
     expect([legalView.kind, legalView.totals.gross_total.amount_minor,
       legalView.totals.voided_amount.amount_minor,
       legalView.totals.total_due.amount_minor]).toEqual([
@@ -242,7 +243,7 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
     const originalView = projectManualCustomerInvoiceSummary(
       await db.prisma.billingInvoice.findUniqueOrThrow({ where: { id: ids.invoice },
         include: { lines: true, paymentEvents: true, manualCreditNotes: true } }),
-      '2026-09');
+      '2030-09');
     expect(originalView.status).toBe('voided');
     expect([originalView.totals.voided_amount.amount_minor,
       originalView.totals.total_due.amount_minor,
@@ -253,8 +254,8 @@ describe.skipIf(!enabled)('manual legal credit note', () => {
       data: { totalCreditMinor: 1n } })).rejects.toThrow();
     await recordBillingInvoicePayment({ invoiceId: ids.invoice, kind: 'refund',
       amountMinor: '40', currency: 'USD', idempotencyKey: `refund-${randomUUID()}`,
-      occurredAt: new Date('2026-09-07T00:00:00.000Z'), actor }, {
-      prisma: db.prisma, now: () => new Date('2026-09-07T00:00:01.000Z'),
+      occurredAt: new Date('2030-09-07T00:00:00.000Z'), actor }, {
+      prisma: db.prisma, now: () => new Date('2030-09-07T00:00:01.000Z'),
       authorizeAdminEffect: vi.fn().mockResolvedValue(undefined) });
     const refunded = await captureIssuedManualCreditNote({ creditNoteId: prepared.id }, {
       prisma: db.prisma, storage });

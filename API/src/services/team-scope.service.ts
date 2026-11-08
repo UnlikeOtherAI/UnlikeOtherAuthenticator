@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
 import {
   resolveProductTeamPolicy,
   type ProductTeamPolicyPrisma,
@@ -32,34 +33,9 @@ async function activeTeamScopeExists(
   if (!orgId && !teamId) return true;
   if (!orgId || !teamId) return false;
 
-  const [orgMember, teamMember] = await Promise.all([
-    deps.prisma.orgMember.findFirst({
-      where: {
-        orgId,
-        userId: params.userId,
-        status: 'ACTIVE',
-        user: { lifecycleStatus: 'ACTIVE' },
-        org: { lifecycleStatus: 'ACTIVE', ...(params.allowCrossDomain ? {} : { domain: params.domain }) },
-      },
-      select: { id: true },
-    }),
-    deps.prisma.teamMember.findFirst({
-      where: {
-        teamId,
-        userId: params.userId,
-        status: 'ACTIVE',
-        user: { lifecycleStatus: 'ACTIVE' },
-        team: {
-          orgId,
-          lifecycleStatus: 'ACTIVE',
-          org: { lifecycleStatus: 'ACTIVE', ...(params.allowCrossDomain ? {} : { domain: params.domain }) },
-        },
-      },
-      select: { id: true },
-    }),
-  ]);
-
-  return Boolean(orgMember && teamMember);
+  return Boolean(await deps.prisma.team.findFirst({where:{id:teamId,orgId,
+    org:params.allowCrossDomain?undefined:{domain:params.domain},
+    AND:[activeTeamAuthorityWhere(params.userId)]},select:{id:true}}));
 }
 
 /** Lock a team container before a destructive operation reaches membership rows. */
@@ -150,7 +126,7 @@ export async function lockTeamMembershipRows(
 
 /**
  * Require the exact selected organisation and team to belong to this client
- * domain and require ACTIVE membership at both levels. Lifecycle tombstones
+ * domain and require current member or org-manager authority. Lifecycle tombstones
  * are deliberately never treated as reusable membership.
  */
 export async function assertActiveTeamScope(
@@ -174,8 +150,9 @@ export async function assertActiveTeamScope(
  * Every client domain is equal: an organisation belongs to whoever founded it
  * and is usable from every UOA-integrated product, so which product is asking
  * says nothing about whether this person is a member of this team. Only the
- * membership rows decide, and DEACTIVATED/REMOVED rows are tombstones that
- * still refuse.
+ * current organisation authority or exact active membership decides. An active
+ * organisation owner/admin does not need a synthetic team membership. Everyone
+ * else remains subject to their selected team's membership tombstones.
  *
  * Callers that must additionally decide *which* teams a product may offer or
  * select keep using the client/product-aware assertions below — this one is for

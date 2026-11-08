@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createApp } from '../../src/app.js';
 
 import { renderAuthEntrypointHtml } from '../../src/services/auth-ui.service.js';
 import type { ClientConfig } from '../../src/services/config.service.js';
@@ -75,7 +76,6 @@ function directive(csp: string, name: string): string {
 
 describe('script-src CSP nonce', () => {
   it('serves non-auth responses with a script nonce and an unsafe-inline, nonce-free style-src', async () => {
-    const { createApp } = await import('../../src/app.js');
     const app = await createApp();
     await app.ready();
     try {
@@ -95,7 +95,6 @@ describe('script-src CSP nonce', () => {
   });
 
   it('serves the inline-style 2FA reset page under a style-src that permits its inline styles', async () => {
-    const { createApp } = await import('../../src/app.js');
     const app = await createApp();
     await app.ready();
     try {
@@ -150,7 +149,6 @@ describe('script-src CSP nonce', () => {
   });
 
   it('nonce in the header matches the nonce on the bootstrap script tag, and no unsafe-inline', async () => {
-    const { createApp } = await import('../../src/app.js');
     const app = await createApp();
     await app.ready();
     try {

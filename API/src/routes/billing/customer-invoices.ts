@@ -18,6 +18,7 @@ import {
   billingCustomerInvoicesListV1ConformanceFixture,
   billingCustomerInvoicesProtocolV1JsonSchema,
   billingCustomerInvoicesV1OpenApiDocument,
+  billingOrganisationFinancialV1Schemas,
 } from '../../contracts/billing-statement-v1.js';
 import { requireBillingLifecycleAppKey } from '../../middleware/billing-app-auth.js';
 import type { BillingCycleContext } from '../../services/billing-cycle-read.service.js';
@@ -26,34 +27,40 @@ import {
 } from '../../services/billing-customer-invoice-read.service.js';
 import { AppError } from '../../utils/errors.js';
 import { readBillingPresentation } from './billing-presentation.js';
-import { BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
+import { BillingFinancialSubjectRequestSchema as BillingSubjectRequestSchema, readBillingActorHeader } from './billing-request.js';
 
 const validator = new Ajv2020({ allErrors: true, strict: true });
 ajvFormats.default.default(validator);
 const validateList = validator.compile(billingCustomerInvoicesListV1JsonSchema);
 const validateDetail = validator.compile(billingCustomerInvoiceDetailV1JsonSchema);
-const listRequest = BillingSubjectRequestSchema.extend({
+const validateOrganisationList=validator.compile(billingOrganisationFinancialV1Schemas.invoices_list_response);
+const validateOrganisationDetail=validator.compile(billingOrganisationFinancialV1Schemas.invoice_detail_response);
+const historySubject=BillingSubjectRequestSchema.extend({financial_scope:z.literal('organisation').optional(),
+  billing_mode:z.enum(['live','sandbox']).optional()});
+const listRequest = historySubject.extend({
   charge_month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
   limit: z.number().int().min(1).max(50).optional(),
-  cursor: z.string().min(1).max(256).optional(),
+  cursor: z.string().min(1).max(2048).optional(),
 }).strict();
-const detailRequest = BillingSubjectRequestSchema.extend({
+const detailRequest = historySubject.extend({
   invoice_id: z.string().min(1).max(256),
   charge_month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
 }).strict();
-const downloadRequest = BillingSubjectRequestSchema.extend({
+const downloadRequest = historySubject.extend({
   invoice_id: z.string().min(1).max(256),
   document_id: z.string().min(1).max(256),
 }).strict();
 
 function context(request: FastifyRequest,
-  body: z.infer<typeof BillingSubjectRequestSchema>,
+  body: z.infer<typeof historySubject>,
   endpoint: BillingCycleContext['endpoint']): BillingCycleContext {
   if (!request.billingAppKey) throw new AppError('UNAUTHORIZED', 401);
+  if((body.team_id===null||body.billing_mode)&&body.financial_scope!=='organisation')throw new AppError('BAD_REQUEST',400,'BILLING_HISTORY_SCOPE_REQUIRED');
   const presentation = readBillingPresentation(request.headers);
   return { credential: request.billingAppKey,
     locale: presentation.enabled ? presentation.locale : undefined,
     actorToken: readBillingActorHeader(request.headers['x-uoa-actor']), endpoint,
+    financialScope:body.financial_scope,billingMode:body.billing_mode,
     request: { product: body.product, organisationId: body.organisation_id,
       teamId: body.team_id, userId: body.user_id } };
 }
@@ -85,7 +92,7 @@ export function registerBillingCustomerInvoiceRoutes(app: FastifyInstance): void
         BILLING_CUSTOMER_INVOICES_LIST_PATH), {
         chargeMonth: body.charge_month, limit: body.limit, cursor: body.cursor,
       });
-      contract(value, validateList);
+      contract(value, body.financial_scope?validateOrganisationList:validateList);
       reply.header('Cache-Control', 'private, no-store');
       return reply.send(value);
     });
@@ -95,7 +102,7 @@ export function registerBillingCustomerInvoiceRoutes(app: FastifyInstance): void
       const value = await getCustomerInvoiceDetail(context(request, body,
         BILLING_CUSTOMER_INVOICES_DETAIL_PATH), body.invoice_id,
       { chargeMonth: body.charge_month });
-      contract(value, validateDetail);
+      contract(value, body.financial_scope?validateOrganisationDetail:validateDetail);
       reply.header('Cache-Control', 'private, no-store');
       return reply.send(value);
     });

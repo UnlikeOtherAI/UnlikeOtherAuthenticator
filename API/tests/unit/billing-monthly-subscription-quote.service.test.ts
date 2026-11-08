@@ -32,6 +32,17 @@ function stripeSource() {
 }
 
 describe('frozen monthly subscription quote', () => {
+  it('accrues tracked seats only through the explicit instant within an open month',async()=>{
+    const source=stripeSource();source.scope=BillingAssignmentScope.ORGANISATION;source.teamId=null as never;
+    source.seatSubscription.scope=BillingAssignmentScope.ORGANISATION;source.seatSubscription.teamId=null as never;
+    source.tariff.currency='EUR';source.seatSubscription.currency='EUR';
+    const prisma={billingStripeSubscription:{findUnique:vi.fn().mockResolvedValue(source)}};
+    const quote=await quoteSubscriptionMonthlyCharge({source:{kind:'stripe',id:source.id},billingMonth:'2028-02',
+      asOf:at('2028-02-08T00:00:00Z')},closed(prisma));
+    expect(quote).toMatchObject({scope:'ORGANISATION',teamId:null,currency:'EUR',amountMinor:70n});
+    await expect(quoteSubscriptionMonthlyCharge({source:{kind:'stripe',id:source.id},billingMonth:'2028-02',
+      asOf:at('2028-03-01T00:00:01Z')},closed(prisma))).rejects.toThrow('BILLING_ACCRUAL_INSTANT_INVALID');
+  });
   it('uses exact tracked seat evidence and commercial boundary for Stripe', async () => {
     const source = stripeSource();
     const prisma = { billingStripeSubscription: { findUnique: vi.fn().mockResolvedValue(source) } };

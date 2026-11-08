@@ -378,30 +378,21 @@ describe('getBillingCreditPurchaseStatus authorization and scope', () => {
     expect(state.findFirst).not.toHaveBeenCalled();
   });
 
-  it('uses organisation manager authority while billing responsibility is active', async () => {
+  it('cannot promote a refused current viewer through a legacy responsibility flag', async () => {
     const state = setup({ viewerManager: false, responsibilityActive: true, orgManager: true });
-    await getBillingCreditPurchaseStatus({
+    await expect(getBillingCreditPurchaseStatus({
       request, credential, actorToken: 'actor', endpoint: '/billing/v1/credits/purchase-status',
-    }, state.deps);
-
-    expect(state.isOrganisationManager).toHaveBeenCalledWith(request, { prisma: state.prisma });
-    expect(state.findFirst).toHaveBeenCalledWith({
-      where: {
-        id: purchaseId,
-        creditAccount: { orgId: 'org_1', OR: [{ teamId: 'team_1' }, { teamId: null, scope: 'ORGANISATION' }] },
-        serviceId: 'service_1',
-        appKeyId: 'app_key_1',
-      },
-      include: { customer: { select: { stripeCustomerId: true } }, creditAccount: true, account: true },
-    });
+    }, state.deps)).rejects.toMatchObject({statusCode:403});
+    expect(state.findFirst).not.toHaveBeenCalled();expect(state.isOrganisationManager).not.toHaveBeenCalled();
   });
 
-  it('denies an organisation non-manager even when the team viewer manages billing', async () => {
+  it('uses the current any-team organisation manager predicate independently of legacy responsibility', async () => {
     const state = setup({ viewerManager: true, responsibilityActive: true, orgManager: false });
     await expect(getBillingCreditPurchaseStatus({
       request, credential, actorToken: 'actor', endpoint: '/billing/v1/credits/purchase-status',
-    }, state.deps)).rejects.toMatchObject({ statusCode: 403 });
-    expect(state.findFirst).not.toHaveBeenCalled();
+    }, state.deps)).resolves.toMatchObject({state:'processing',purchase_id:purchaseId});
+    expect(state.resolveResponsibility).not.toHaveBeenCalled();
+    expect(state.findFirst).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({creditAccount:{orgId:'org_1'}})}));
   });
 
   it('returns not-found when any purchase scope selector does not match', async () => {
@@ -419,7 +410,7 @@ describe('getBillingCreditPurchaseStatus authorization and scope', () => {
         request, credential, actorToken: 'actor', endpoint: '/billing/v1/credits/purchase-status',
       }, state.deps)).rejects.toMatchObject({ statusCode: 404 });
       expect(state.findFirst.mock.calls[0]?.[0].where).toMatchObject({
-        creditAccount: { orgId: 'org_1', OR: [{ teamId: 'team_1' }, { teamId: null, scope: 'ORGANISATION' }] },
+        creditAccount: { orgId: 'org_1' },
         serviceId: 'service_1',
         appKeyId: 'app_key_1',
       });

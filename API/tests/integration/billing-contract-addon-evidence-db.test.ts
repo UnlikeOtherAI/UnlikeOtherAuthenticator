@@ -1,3 +1,4 @@
+import { captureTestOrganisationFinancialBinding,createTestSandboxOrganisationPolicy } from '../helpers/organisation-financial-binding.js';
 import {
   BillingAppKeyPurpose,
   BillingAssignmentScope,
@@ -8,7 +9,7 @@ import {
   BillingTariffMode,
   Prisma,
 } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it,vi } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -24,7 +25,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
   });
 
   afterAll(async () => {
-    await db?.cleanup();
+    await db?.cleanup();vi.unstubAllEnvs();
   });
 
   it('snapshots paid Stripe add-ons without adding them to the manual amount due', async () => {
@@ -73,16 +74,16 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
         checkoutReturnOrigins: ['https://addon-contract.example'],
       },
     });
-    const stripeAccount = await db.prisma.billingStripeAccount.create({
-      data: { stripeAccountId: 'acct_addon_contract_test', livemode: false },
-    });
+    const billingScopeEpoch=await createTestSandboxOrganisationPolicy(db.prisma,org.id);
+    const binding=await captureTestOrganisationFinancialBinding(db.prisma,org.id,{stripeAccountId:'acct_AddonContract',livemode:false});
+    const stripeAccount=await db.prisma.billingStripeAccount.findUniqueOrThrow({where:{id:binding.billingAccountId}});
     const customer = await db.prisma.billingStripeCustomer.create({
       data: {
         accountId: stripeAccount.id,
         orgId: org.id,
-        teamId: team.id,
-        scope: BillingAssignmentScope.TEAM,
-        scopeKey: `${org.id}:${team.id}`,
+        teamId: null,
+        scope: BillingAssignmentScope.ORGANISATION,
+        scopeKey: org.id,
         stripeCustomerId: 'cus_addon_contract_test',
       },
     });
@@ -109,10 +110,9 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
         stripePriceId: 'price_addon_contract_test',
       },
     });
-    await db.prisma.billingTeamMode.create({ data: { teamId: team.id, sandbox: true, revision: 1 } });
     const checkout = await db.prisma.billingRecurringAddonCheckout.create({
       data: {
-        billingModeTeamId: team.id, billingModeRevision: 1,
+        billingModeTeamId: team.id, billingModeRevision: 1,billingScopeEpoch,
         accountId: stripeAccount.id,
         appKeyId: appKey.id,
         customerId: customer.id,
@@ -131,10 +131,10 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
         requestedByUserId: owner.id,
         successUrlDigest: 'b'.repeat(64),
         cancelUrlDigest: 'c'.repeat(64),
-        leaseExpiresAt: new Date('2026-05-30T12:05:00.000Z'),
+        leaseExpiresAt: new Date('2030-05-30T12:05:00.000Z'),
       },
     });
-    const checkoutCompletedAt = new Date('2026-05-30T12:00:00.000Z');
+    const checkoutCompletedAt = new Date('2030-05-30T12:00:00.000Z');
     const completionEvent = await db.prisma.billingStripeWebhookEvent.create({
       data: {
         accountId: stripeAccount.id,
@@ -158,7 +158,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
         completedAt: checkoutCompletedAt,
       },
     });
-    const paidAt = new Date('2026-05-30T12:01:00.000Z');
+    const paidAt = new Date('2030-05-30T12:01:00.000Z');
     const paidEvent = await db.prisma.billingStripeWebhookEvent.create({
       data: {
         accountId: stripeAccount.id,
@@ -225,7 +225,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
       },
     });
     const contract = await db.prisma.billingOrganisationContract.create({
-      data: { orgId: org.id, reference: 'addon-contract', name: 'Add-on Contract' },
+      data: { ...binding,orgId: org.id, reference: 'addon-contract', name: 'Add-on Contract' },
     });
     const version = await db.prisma.billingOrganisationContractVersion.create({
       data: {
@@ -234,7 +234,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
         usageMarkupBps: 2000,
         currency: 'USD',
         paymentTermsDays: 30,
-        effectiveFromMonth: '2026-06',
+        effectiveFromMonth: '2030-06',
       },
     });
     await db.prisma.billingContractServiceTerm.create({
@@ -250,7 +250,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
       where: { id: contract.id },
       data: {
         status: BillingOrganisationContractStatus.ACTIVE,
-        activatedAt: new Date('2026-06-01T00:00:00.000Z'),
+        activatedAt: new Date('2030-06-01T00:00:00.000Z'),
       },
     });
     const issuer = await db.prisma.billingInvoiceIssuerProfile.create({
@@ -277,7 +277,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
         contractVersionId: version.id,
         issuerProfileId: issuer.id,
         buyerProfileId: buyer.id,
-        billingMonth: '2026-06',
+        billingMonth: '2030-06',
         revision: 1,
         currency: 'USD',
         subtotalMinor: 1000n,
@@ -300,7 +300,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract invoice recurring add-on ev
             serviceId: service.id,
             ledgerSnapshotCursor: 'addon-contract-metering',
             ledgerSnapshotSha256: 'e'.repeat(64),
-            capturedAt: new Date('2026-07-01T00:00:00.000Z'),
+            capturedAt: new Date('2030-07-01T00:00:00.000Z'),
           },
         },
         addonLines: {
