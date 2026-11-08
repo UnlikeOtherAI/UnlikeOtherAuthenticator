@@ -8,7 +8,8 @@ import { seedOrganisationConsent } from './organisation-consent-fixture.js';
  * Provider boundaries are synthetic; no DB guards are disabled. */
 export async function seedOrganisationAddonInvoices(db:PrismaClient,options:{providerSpies?:boolean;product?:string;tariffHistoryFromMonth?:string;
   period?:{startsAt:Date;endsAt:Date;paidAt:Date}}={}) {
-  const spy=options.providerSpies===false?<T extends(...args:never[])=>unknown>(fn:T):T=>fn:(await import('vitest')).vi.fn;
+  const vitest=options.providerSpies===false?null:(await import('vitest')).vi;
+  function spy<T extends(...args:never[])=>unknown>(fn:T):T{return vitest?vitest.fn(fn) as unknown as T:fn;}
   const seed=await seedOrganisationConsent(db,options),{account,selection}=seed;
   await db.team.create({data:{id:'addon-other-team',orgId:'control-org',name:'Other',slug:'other'}});
   await db.billingRecurringAddonOffer.create({data:{id:'invoice-addon-offer',serviceId:'control-service',key:'privacy',version:1,
@@ -16,7 +17,8 @@ export async function seedOrganisationAddonInvoices(db:PrismaClient,options:{pro
   await db.billingRecurringAddonCatalog.create({data:{id:'invoice-addon-catalog',accountId:account.id,serviceId:'control-service',
     offerId:'invoice-addon-offer',currency:'USD',monthlyAmountMinor:5000n,stripeLookupKey:'privacy-usd-v1',stripeProductId:'prod_privacy',stripePriceId:'price_privacy'}});
   const {startsAt,endsAt,paidAt}=options.period??{startsAt:new Date('2030-01-01T00:00:00Z'),endsAt:new Date('2030-02-01T00:00:00Z'),paidAt:new Date('2030-01-03T00:00:00Z')};
-  const sources=[];
+  const sources:Array<{suffix:'a'|'b';remote:Stripe.Subscription;invoice:Stripe.Invoice;paidAt:Date;
+    subscription:Awaited<ReturnType<typeof db.billingRecurringAddonSubscription.findUniqueOrThrow>>}>=[];
   for(const [suffix,teamId] of [['a','control-team'],['b','addon-other-team']] as const){
     await db.billingCustomerActionIntent.create({data:{appKeyId:seed.credential.id,serviceId:'control-service',orgId:'control-org',teamId,
       requestedByUserId:'control-owner',authorityScope:'ORGANISATION',operation:'recurring_addon_checkout',actorJti:`addon-${suffix}`,
@@ -52,7 +54,7 @@ export async function seedOrganisationAddonInvoices(db:PrismaClient,options:{pro
       automatic_tax:{enabled:false},number:`ADDON-${suffix}`,account_name:'Issuer Ltd',account_country:'GB',customer_name:'Buyer Ltd',
       customer_email:'buyer@example.test',customer_address:{country:'GB',line1:'Road'},status_transitions:{finalized_at:startsAt.getTime()/1000},
       invoice_pdf:`https://pay.stripe.com/invoice/addon-${suffix}.pdf`,effective_at:null};
-    sources.push({suffix,remote,subscription,invoice,paidAt});
+    sources.push({suffix,remote:remote as unknown as Stripe.Subscription,subscription,invoice:invoice as unknown as Stripe.Invoice,paidAt});
   }
   let event:unknown;
   const sourceFor=(id:string)=>sources.find(row=>[row.invoice.id,row.remote.id,`pi_addon_${row.suffix}`,`ch_addon_${row.suffix}`].includes(id))!;

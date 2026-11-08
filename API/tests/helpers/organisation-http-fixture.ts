@@ -15,6 +15,8 @@ import { prepareStripePaymentInvoice,persistStripePaymentInvoice } from '../../s
 import { issueStripePaymentInvoice } from '../../src/services/billing-stripe-payment-invoice-issue.service.js';
 import type { BillingInvoicePdfStorage } from '../../src/services/billing-invoice-storage.service.js';
 import { getEnv } from '../../src/config/env.js';
+import { computeJwkFingerprint,parsePublicRsaJwk } from '../../src/services/client-jwk.service.js';
+import { ORG_SUBJECT_ASSERTION_AUDIENCE } from '../../src/middleware/org-role-guard.js';
 
 /** Synthetic identities and provider objects; actual signatures, current UOA
  * authority, source assurance families, financial guards and HTTP routes. */
@@ -28,7 +30,7 @@ export async function seedOrganisationHttpFixture(db:PrismaClient,input:{publicB
   // production history backfill or a relaxation of the tariff reader.
   await db.billingTariffTermEvent.create({data:{serviceId:seed.credential.serviceId,source:'SERVICE_DEFAULT',scopeKey:seed.credential.serviceId,
     effectiveFromMonth:month,tariffId:tariff.id,reason:'synthetic-known-opening-terms'}});
-  const domain='control.example.test',issuer=`https://${domain}`,configUrl=`${issuer}/auth/config`,domainSecret=randomBytes(32).toString('base64url');
+  const domain='control.example.com',issuer=`https://${domain}`,configUrl=`${issuer}/auth/config`,domainSecret=randomBytes(32).toString('base64url');
   const domainBearer=await seedDomainSecret(db,domain,domainSecret);
   await db.enterpriseProductReadiness.create({data:{clientDomain:domain,minimumAssuranceVersion:1}});
   for(const [id,role,name] of [['http-org-admin','admin','Org administrator'],['http-team-manager','member','Cross-team manager'],
@@ -41,6 +43,8 @@ export async function seedOrganisationHttpFixture(db:PrismaClient,input:{publicB
     {teamId:'control-team',userId:'http-member',teamRole:'member'}]});
   const pair=await generateKeyPair('RS256'),kid='organisation-http-actor';
   const actorPrivateJwk={...await exportJWK(pair.privateKey),kid,alg:'RS256',use:'sig'},actorPublicJwk={...await exportJWK(pair.publicKey),kid,alg:'RS256',use:'sig'};
+  await db.clientDomainJwk.create({data:{domainId:(await db.clientDomain.findUniqueOrThrow({where:{domain}})).id,kid,
+    jwk:actorPublicJwk,fingerprint:computeJwkFingerprint(parsePublicRsaJwk(actorPublicJwk))}});
   const appKey=generateBillingAppKey();
   await db.billingAppKey.update({where:{id:seed.credential.id},data:{keyPrefix:billingAppKeyDisplayPrefix(appKey),secretDigest:digestBillingAppKey(appKey),
     actorIssuer:issuer,actorAudience:input.publicBaseUrl,actorKeyId:kid,actorPublicJwk}});
@@ -73,6 +77,16 @@ export async function seedOrganisationHttpFixture(db:PrismaClient,input:{publicB
     await issueStripePaymentInvoice(row.id,{prisma:db,stripe:seed.stripe,account:seed.account,storage:input.storage,download:async()=>new Response(bytes)});
   }
   const privateKey=await importJWK(actorPrivateJwk,'RS256');
+  const jwksUrl=`${issuer}/.well-known/jwks.json`;
+  const configJwt=await new SignJWT(baseClientConfigPayload({domain,jwks_url:jwksUrl,org_features:{enabled:true}}))
+    .setProtectedHeader({alg:'RS256',kid}).setAudience(new URL(input.publicBaseUrl).host).sign(privateKey);
+  const signSubject=async(name:string,claims:Record<string,unknown>={})=>{
+    const p=personas[name];if(!p)throw Error('UNKNOWN_PERSONA');
+    return new SignJWT({source_domain:domain,tv:p.tokenVersion,assurance_ref:p.assuranceRef,
+      active:{orgId:p.organisationId,teamId:p.teamId},...claims}).setProtectedHeader({alg:'RS256',kid})
+      .setIssuer(domain).setAudience(ORG_SUBJECT_ASSERTION_AUDIENCE).setSubject(p.userId)
+      .setIssuedAt().setExpirationTime('60s').setJti(randomUUID()).sign(privateKey);
+  };
   const sign=async(name:string,path:string,body:{product:string;organisation_id:string;team_id:string|null;user_id:string},
     options:{financial?:boolean;claims?:Record<string,unknown>;audience?:string}={})=>{
     const persona=personas[name];if(!persona)throw Error('UNKNOWN_PERSONA');
@@ -82,6 +96,6 @@ export async function seedOrganisationHttpFixture(db:PrismaClient,input:{publicB
       .setProtectedHeader({alg:'RS256',kid}).setIssuer(issuer).setAudience(options.audience??`${input.publicBaseUrl}${path}`)
       .setSubject(body.user_id).setIssuedAt().setExpirationTime('60s').setJti(randomUUID()).sign(privateKey);
   };
-  return {seed,personas,appKey,actorPrivateJwk,actorPublicJwk,issuer,domain,domainSecret,domainBearer,configUrl,config,sign,
+  return {seed,personas,appKey,actorPrivateJwk,actorPublicJwk,issuer,domain,domainSecret,domainBearer,configUrl,config,configJwt,jwksUrl,sign,signSubject,
     publicBaseUrl:input.publicBaseUrl,sharedSecret:getEnv().SHARED_SECRET};
 }

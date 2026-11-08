@@ -36,7 +36,7 @@ async function getTestConfigKeyPair(): Promise<{
 }> {
   testConfigKeyPairPromise ??= importJWK(TEST_CONFIG_PRIVATE_JWK, 'RS256').then(
     (privateKey) => ({
-      privateKey,
+      privateKey: privateKey as KeyLike, // The fixture imports an RSA JWK, never a symmetric byte key.
       publicJwk: TEST_CONFIG_PUBLIC_JWK,
     }),
   );
@@ -113,11 +113,11 @@ export async function signTestConfigJwt(
 
 export async function createTestConfigFetchHandler(
   configResponses: string | Record<string, string>,
-): Promise<(input: RequestInfo | URL) => Promise<Response>> {
+): Promise<(input: Request | string | URL) => Promise<Response>> {
   const jwks = await testConfigJwks();
   const jwksUrl = process.env.CONFIG_JWKS_URL ?? TEST_CONFIG_JWKS_URL;
 
-  return async (input: RequestInfo | URL): Promise<Response> => {
+  return async (input: Request | string | URL): Promise<Response> => {
     const url =
       typeof input === 'string'
         ? input

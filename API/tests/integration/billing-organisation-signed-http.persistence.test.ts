@@ -42,8 +42,30 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual sig
     app=await createApp();base=await app.listen({port:0,host:'127.0.0.1'});
     vi.stubEnv('PUBLIC_BASE_URL',base);vi.stubEnv('AUTH_SERVICE_IDENTIFIER',new URL(base).host);
     fixture=await seedOrganisationHttpFixture(db.prisma,{publicBaseUrl:base,storage});
+    vi.stubEnv('CONFIG_JWKS_URL',fixture.jwksUrl);
+    // Only partner config/JWKS transport is synthetic. Both JWT signatures and
+    // all current UOA identity/custody/authority checks run through real routes.
+    const actualFetch=globalThis.fetch;
+    vi.spyOn(globalThis,'fetch').mockImplementation((input,init)=>{
+      const url=typeof input==='string'?input:input instanceof URL?input.href:input.url;
+      if(url===fixture.configUrl)return Promise.resolve(new Response(fixture.configJwt));
+      if(url===fixture.jwksUrl)return Promise.resolve(Response.json({keys:[fixture.actorPublicJwk]}));
+      return actualFetch(input,init);
+    });
   });
-  afterAll(async()=>{await app?.close();await disconnectPrisma();await db?.cleanup();vi.unstubAllEnvs();});
+  afterAll(async()=>{await app?.close();await disconnectPrisma();await db?.cleanup();vi.restoreAllMocks();vi.unstubAllEnvs();});
+  it('validates original assurance through the actual confidential HTTP endpoint and same-host synthetic JWKS',async()=>{
+    const p=fixture.personas.ownerA!,url=`${base}/org/assurance/validate?${new URLSearchParams({domain:fixture.domain,config_url:fixture.configUrl})}`;
+    const body={assurance_ref:p.assuranceRef,org_id:p.organisationId,team_id:p.teamId};
+    for(const credential of [{'x-uoa-access-token':p.accessToken},{'x-uoa-subject-assertion':await fixture.signSubject('ownerA')}]){
+      const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${fixture.domainBearer}`,...credential},
+        body:JSON.stringify(body)});
+      expect(response.status).toBe(200);expect(await response.json()).toMatchObject({ok:true,active:true,assurance_id:p.assuranceId,client_domain:fixture.domain});
+    }
+    const borrowed=await fetch(url,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${fixture.domainBearer}`,
+      'x-uoa-subject-assertion':await fixture.signSubject('ownerA')},body:JSON.stringify({...body,assurance_ref:fixture.personas.memberA!.assuranceRef})});
+    expect(borrowed.status).toBe(401);
+  });
   it('admits fresh org owners/admins on any ACTIVE same-org team with no TeamMember and verifies null financial custody',async()=>{
     expect(await db.prisma.teamMember.count({where:{userId:{in:['control-owner','http-org-admin']}}})).toBe(0);
     for(const persona of ['ownerA','ownerB','adminA','adminB']){

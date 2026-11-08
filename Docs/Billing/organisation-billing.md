@@ -203,7 +203,9 @@ opaque `billing_context` contract and public `6.3.0` shapes remain unchanged.
 `billing-organisation-signed-http.persistence.test.ts` starts the actual API on
 a loopback HTTP socket with an isolated migrated PostgreSQL schema, a synthetic
 registered lifecycle key and RS256 actor key, and actual UOA assurance/refresh
-families. It does not inject an already-authorised actor. The six cases cover
+families. It does not inject an already-authorised actor. The seven cases cover
+the actual `/org/assurance/validate` endpoint with both access-token and
+confidential-subject transports and a refused borrowed custody reference;
 fresh org owners/admins with no TeamMember on either active team; cross-team
 management and member financial denial/nonfinancial Ask; exact audience,
 credential epoch and original custody checks; independently confirmed credits,
