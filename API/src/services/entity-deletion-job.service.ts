@@ -83,7 +83,7 @@ type Progress = { scopeCleaned: boolean; usersDone: string[]; audit?: AuditProgr
 const targetDigest = (id: string) => createHash('sha256').update(id).digest('hex');
 
 export async function executeEntityDeletion(id: string, actor: LifecycleActor) {
-  const leaseOwner = randomUUID(), prisma = getAdminPrisma();
+  const leaseOwner = `preserve-org-v2:${randomUUID()}`, prisma = getAdminPrisma();
   let job = await prisma.$transaction(async tx => {
     await lockEnterpriseOutbox(tx);
     const client = tx as unknown as PrismaClient;

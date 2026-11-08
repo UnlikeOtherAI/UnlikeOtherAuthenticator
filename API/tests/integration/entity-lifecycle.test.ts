@@ -14,6 +14,7 @@ import { hasTeamCapability } from '../../src/services/team.service.base.js';
 import type { OrgServicePrisma } from '../../src/services/organisation.service.base.js';
 import { assertBillingPeriodMode } from '../../src/services/billing-mode-period.service.js';
 import { createTeam } from '../../src/services/team.service.teams.js';
+import { assertTeamDeletionScope,type DeletionPreview } from '../../src/services/entity-deletion-preview.service.js';
 
 const store = vi.hoisted(() => ({ prisma: null as PrismaClient | null, mail: vi.fn() }));
 vi.mock('../../src/db/prisma.js', () => ({ getAdminPrisma: () => store.prisma!, getPrisma: () => store.prisma! }));
@@ -196,15 +197,20 @@ describe.skipIf(!process.env.DATABASE_URL)('entity lifecycle on PostgreSQL', () 
     expect(await handle.prisma.organisation.findUnique({where:{id:org.id}})).toMatchObject({lifecycleStatus:'ACTIVE',ownerId:owner.id});
     expect(await handle.prisma.billingCreditAccount.findUnique({where:{id:wallet.id}})).toEqual(before);
   });
-  it('refuses delivery and execution of an old TEAM preview expanded to organisation scope',async()=>{
+  it('fences legacy TEAM previews and old executors before destructive work',async()=>{
     const admin=await actor(),{org,team}=await container();const job=await start('TEAM',team.id,admin);
     const preview=job.preview as Record<string,unknown>;
-    await handle.prisma.entityDeletionJob.update({where:{id:job.id},data:{preview:{...preview,
-      effectiveScope:'ORGANISATION',effectiveTargetId:org.id,deletesEmptyOrganisation:true} as never}});
-    await expect(productDeletionJobs(job.participants[0]!.clientDomainId)).rejects.toThrow('DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED');
-    await expect(executeEntityDeletion(job.id,admin)).rejects.toThrow('DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED');
+    const unsafe={...preview,effectiveScope:'ORGANISATION',effectiveTargetId:org.id,deletesEmptyOrganisation:true};
+    await expect(handle.prisma.entityDeletionJob.update({where:{id:job.id},data:{preview:unsafe as never}}))
+      .rejects.toThrow('DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED');
+    expect(()=>assertTeamDeletionScope(unsafe as unknown as DeletionPreview)).toThrow('DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED');
+    await expect(handle.prisma.$executeRaw`SELECT uoa_assert_team_deletion_scope('TEAM',${team.id},${JSON.stringify(unsafe)}::jsonb)`)
+      .rejects.toThrow('DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED');
+    await expect(handle.prisma.entityDeletionJob.update({where:{id:job.id},data:{leaseOwner:'legacy-executor',leaseExpiresAt:new Date(Date.now()+60_000)}}))
+      .rejects.toThrow('DELETION_TEAM_EXECUTOR_UPGRADE_REQUIRED');
     expect(await handle.prisma.organisation.findUnique({where:{id:org.id}})).toMatchObject({lifecycleStatus:'ACTIVE'});
     expect(await handle.prisma.entityDeletionJob.findUnique({where:{id:job.id}})).toMatchObject({status:'WAITING_FOR_PRODUCTS'});
+    expect((await handle.prisma.entityDeletionJob.findUniqueOrThrow({where:{id:job.id}})).preview).toEqual(preview);
   });
   it('serializes simultaneous product acknowledgements and rejects wrong domain or conflicting replay', async () => {
     const admin = await actor(), target = await user();

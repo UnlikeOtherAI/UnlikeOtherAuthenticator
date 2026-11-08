@@ -69,12 +69,15 @@ export type DeletionPreview = {
   deletesEmptyOrganisation: boolean; candidates: { id: string; eligible: boolean; reasons: string[] }[];
   retainedEvidence: RetainedEvidence[]; participants: { clientDomainId: string; domain: string }[];
   blockers: string[]; confirmation: string; digest: string;
+  teamDeletionPolicy?:'preserve-org-v2';
 };
 
 /** Old confirmed TEAM jobs may contain the former organisation expansion.
  * Never send that broader destructive scope to a product or execute it. */
 export function assertTeamDeletionScope(preview:DeletionPreview):void {
-  if(preview.scope==='TEAM'&&(preview.effectiveScope!=='TEAM'||preview.effectiveTargetId!==preview.targetId)) {
+  if(preview.scope==='TEAM'&&(preview.effectiveScope!=='TEAM'||preview.effectiveTargetId!==preview.targetId||
+    preview.teamDeletionPolicy!=='preserve-org-v2'||preview.deletesEmptyOrganisation||
+    preview.teamIds.length!==1||preview.teamIds[0]!==preview.targetId)) {
     throw new AppError('BAD_REQUEST',409,'DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED');
   }
 }
@@ -172,6 +175,6 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
   }
   const base = { scope, targetId: id, effectiveScope, effectiveTargetId, mode, name: row.name ?? 'Deleted user', teamIds,
     organisationId: orgId, deletesEmptyOrganisation, candidates, retainedEvidence: evidence, participants, blockers,
-    confirmation: `DELETE ${id}` };
+    ...(scope==='TEAM'?{teamDeletionPolicy:'preserve-org-v2' as const}:{}),confirmation: `DELETE ${id}` };
   return { ...base, digest: createHash('sha256').update(JSON.stringify(base)).digest('hex') };
 }

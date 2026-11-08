@@ -34,6 +34,7 @@ export const lifecycleEndpoints: EndpointSchema[] = [
 export const lifecycleDocumentation = {
   access_status_debug: 'Disabled by default. AUTH_ACCESS_STATUS_ENABLED=true on the auth server enables the login diagnostic and all four website/native proof endpoints. When false or unset, every start/verify returns 404 before config/client lookup, mail or proof work, including outstanding proof redemption. Product config, DEBUG_ENABLED, URL parameters and browser storage cannot enable it.',
   states: ['ACTIVE', 'DISABLED', 'ARCHIVED', 'DELETING', 'DELETED'],
+  team_deletion_rollout:'Fresh TEAM previews carry teamDeletionPolicy=preserve-org-v2 and require exact TEAM target, one team ID and deletesEmptyOrganisation=false. Executors use preserve-org-v2 leases. The migration atomically refuses incompatible unfinished jobs; old revision writes/leases fail before destructive effects. Completed history remains retained.',
   team_archive: 'ARCHIVED is an all-products access denial with an immutable permanent-deletion hold. It is separate from executable deletion jobs. Completion waits for exact-team future billing to stop; organisation subscriptions and sibling teams remain independent.',
   deleted_identity: '{id,deleted:true,name:"Deleted user"}; PII null/omitted. The boolean derives from lifecycle state.',
   deletion_modes: 'RETAIN_REFERENCE retains a non-authenticating subject; ERASE_REFERENCE erases mutable references. Immutable financial/signing evidence can require a restricted identity stub and is explicitly listed.',
