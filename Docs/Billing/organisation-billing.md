@@ -59,7 +59,9 @@ selects the payer, wallet, billing mode or financial history filter.
 
 ## Release state and continuity gate
 
-**Activation is held for the revised authority and coordinated delivery gates.**
+**Activation is held for final coordinated consumer and production readiness checks.**
+The revised authority is implemented and has passed the focused signed HTTP and
+PostgreSQL checks below; the earlier broad-policy baseline is not its proof.
 The user has resolved the known legacy TEST spendability decision: **“Keep TEST
 history; start org wallets fresh.”** The source is the coordinator's explicit
 choice at position 5644, confirmed by Go at 5648, and its directed handoff at this
@@ -88,6 +90,24 @@ cohorts overlap. The read-only source is job
 timeout. Sanitized evidence:
 `D:/BuildArtifacts/nessie/organisation-billing-usability-20261107/org-continuity-count.json`.
 No amounts, customer IDs or provider secrets belong in this report.
+
+The parent's final read-only snapshot at `2026-11-08T12:10:09Z` used deployed
+source `324de4cce7c1ad77449bf03225466e0b8e16c785`, immutable image prefix
+`6bd4d40a`. The wallet/positive/consent counts above were unchanged. No unfinished
+or incompatible deletion jobs were found. Organisation policy/cutover tables
+were absent, and the legacy team policy table contained zero rows. Consequently
+no existing Sandbox organisation policy is claimed: installation defaults new
+organisation work to LIVE. Retained funded sources can prevent a later Sandbox
+selection under the unchanged quiescence guard.
+
+Provider work comprised six completed and two expired Sandbox top-ups, six
+successful automatic attempts, one active Sandbox recurring add-on and one
+uncertain SMS reservation. No usage exports, invoice closes, monthly charges,
+generic prepaid or Voice reservations were found. The sixteen customer action
+intents all had expired actors; they are immutable admission/audit evidence,
+not provider-work rows with a pending status. These counts do not establish
+provider invoice completeness. The captured add-on queues original-account
+invoice recovery; it is not adopted into current ORG subscription state.
 
 The three measured Sandbox organisations are covered by that accepted
 history-only disposition. The implementation does not rewrite TEAM wallet
@@ -137,9 +157,10 @@ access to their own team's data; this does not grant organisation money,
 other-team data or monetary mutations. The exact user answer to the organisation
 billing-authority question was: “Team only admins should only have read access
 to their teams data” (implementation thread position 5665). This supersedes the
-broader team-manager financial policy below. Its implementation and acceptance
-checks are being revised; the old broad-policy passes are not release evidence
-for this clarified authority. One organisation payer/mode remains mandatory;
+broader team-manager financial policy below. Its implementation and focused
+acceptance checks are described above and in the signed HTTP verification below;
+the old broad-policy passes are not release evidence for this clarified authority.
+One organisation payer/mode remains mandatory;
 read-only team attribution must not invent a share of the shared wallet or bill.
 
 
@@ -167,7 +188,8 @@ selected-team Ask for credits POST without reading a wallet or statement.
 
 ## Independent sections and financial evidence
 
-Public protocol remains `6.3.0`, organisation protocol `1.3.0`. Capabilities need
+Public protocol is `6.4.0`, organisation protocol `1.3.0`; the separately
+negotiated authority protocol is `1.0.0`. Capabilities need
 no wallet, metering, FX or provider read. Overview sections independently report
 `confirmed`, `pending_reconciliation` or `unavailable`. Unconfirmed bill sections
 have no data or numeric total. Confirmed credits are actual ledger money and
@@ -300,7 +322,48 @@ still be shared with its original wallet; no new isolation is claimed for it.
 Portal and cancellation-preview display tokens additionally capture immutable
 subscription/customer identities. Replacing a subscription makes that original
 display stale (409), even within the same org/account/mode/epoch/revision. The
-opaque `billing_context` contract and public `6.3.0` shapes remain unchanged.
+opaque `billing_context` contract and the financial shapes published in
+`6.3.0` remain unchanged in public `6.4.0`.
+
+## Retained uncertain SMS at cutover
+
+An existing SMS reservation does not need an organisation epoch or a new
+organisation wallet to recover. The cutover neither rewrites it nor runs the
+new-capture mode guard against it: `billing_effect_mode_guard` is INSERT-only.
+Settlement reads the original `creditAccountId`, Twilio `accountSid`, quote and
+FX, then checks the exact prepaid source before appending one liability and
+wallet debit. It never resolves the current organisation mode or substitutes a
+current ORG wallet. An uncertain or reconciliation outcome keeps its original
+hold and cannot use the no-dispatch release path.
+
+The parent's read-only `2026-11-08T12:15:08Z` inspection classified the retained
+October 2026 reservation as an original Sandbox wallet, uncertain, claimed,
+with a provider message reference, positive reserved credits and no debit. Its
+budget dispatch was ACTIVE, nonlegacy, PREPAID and `twilio-sms`, with matching
+organisation, team, user, service and quote. Those facts match the supported
+captured-recovery path; no cutover incompatibility is known from that binding.
+A stored provider message reference is not terminal price evidence. Nothing
+here claims that production settlement has completed or authorises manual
+recovery, a new dispatch, a refund or a release.
+
+Inspect the Stripe binding through reservation `credit_account_id` →
+`billing_credit_accounts.account_id` → `billing_stripe_accounts`; Twilio
+`account_sid` is a separate provider binding. Missing or contradictory source
+evidence must remain held. A legacy budget hold is refused by this SMS path with
+`LEGACY_RATING_SOURCE_REQUIRED`; a missing hold with
+`PAID_DISPATCH_EVIDENCE_MISSING`. Those are source limitations, never permission
+to attach today's account or fabricate a new hold. The unresolved reservation
+continues to contribute `sms_reservation` to the organisation mode blockers.
+
+The focused `billing-sms-retained-team.persistence.test.ts` regression passed
+both cases on Maxis against isolated, fully migrated PostgreSQL. Its synthetic
+previous-month TEAM Sandbox reservation has expired actor, quote and FX display
+windows and no new financial epoch/account metadata on its ACTIVE nonlegacy
+budget hold. The supported read/release/receipt services preserve uncertainty,
+refuse an unproven release, then settle/replay one verified receipt against that
+original wallet with every runtime database guard enabled. Both current ORG
+wallets, including LIVE, remain byte-for-byte unchanged. This proves local
+captured recovery, not the outcome of the production SMS or a provider write.
 
 ## Local signed HTTP verification
 
@@ -365,7 +428,7 @@ rolling billing deployment. The new database refuses new TEAM captures and
 per-team policy writes from an old revision. The new API returns 409
 `BILLING_ORGANISATION_OVERVIEW_REQUIRED` for superseded credits/statement reads;
 it does not silently upgrade an old client or its displayed actions. The Nessie
-consumer must already contain the exact 6.3 organisation capability/overview
+consumer must already contain the exact 6.4 organisation and negotiated authority
 contract, retain original action contexts and handle an unavailable capability
 without losing its authenticated session. During a deployment gap, billing may
 be unavailable; do not infer a balance, retry money automatically or claim that
