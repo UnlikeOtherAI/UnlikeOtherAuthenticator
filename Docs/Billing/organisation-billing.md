@@ -38,6 +38,14 @@ that narrower financial check. Existing runtime telephone grant operations keep
 their distinct product authority. Recovery retains its captured source; no
 historical row is copied, rebound or adopted by this authority migration.
 
+Mode-edit quiescence remains conservative across retained TEAM and current ORG
+sources. Historical funded balances, consent pointers, active subscriptions or
+current-month usage can therefore still block an explicit later mode edit even
+though retained TEAM money is excluded from the new organisation wallet. The
+approved history-only TEST disposition does not bypass that guard or release
+the inclusive month hold. A first-organisation Sandbox policy exception would
+need a separate reviewed locked/audited plan, without moving or adopting money.
+
 The separate member Ask remains a nonfinancial selected-team request and queries
 current organisation financial managers only. It opens or reads no wallet.
 Deploy a consumer pinned to 6.4 before presenting the new own-team reader branch;

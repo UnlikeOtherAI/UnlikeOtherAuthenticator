@@ -159,7 +159,7 @@ function deps(state: ReturnType<typeof setup>) {
 
 describe('Stripe customer subscription lifecycle', () => {
   it('returns an account-scoped ORG summary for a current manager without Stripe identifiers', async () => {
-    const state = setup({teamRole:'admin'});
+    const state = setup({orgRole:'admin',teamRole:'member'});
     const result = await getStripeSubscriptionSummary(
       { request, actorToken: 'signed-actor', credential },
       deps(state),
@@ -200,8 +200,8 @@ describe('Stripe customer subscription lifecycle', () => {
     );
   });
 
-  it('requires a current billing manager before reading financial subscription state or creating Portal', async () => {
-    const state = setup();
+  it.each(['member','admin'])('requires an Org manager before subscription reads or Portal for a team %s', async teamRole => {
+    const state = setup({orgRole:'member',teamRole});
     await expect(getStripeSubscriptionSummary({request,actorToken:'signed-actor',credential},deps(state)))
       .rejects.toThrow('BILLING_MANAGER_REQUIRED');
     await expect(
@@ -216,6 +216,7 @@ describe('Stripe customer subscription lifecycle', () => {
     ).rejects.toThrow('BILLING_MANAGER_REQUIRED');
     expect(state.stripe.billingPortal.sessions.create).not.toHaveBeenCalled();
     expect(state.stripe.accounts.retrieveCurrent).not.toHaveBeenCalled();
+    expect(state.prisma.billingStripeSubscription.findFirst).not.toHaveBeenCalled();
   });
 
   it('returns the last account-scoped projection with an explicit disabled flag', async () => {
@@ -255,8 +256,8 @@ describe('Stripe customer subscription lifecycle', () => {
     ).rejects.toThrow('BILLING_PRODUCT_MISMATCH');
   });
 
-  it('creates an allowlisted portal session for a team admin', async () => {
-    const state = setup({ teamRole: 'admin' });
+  it('creates an allowlisted portal session for an organisation admin', async () => {
+    const state = setup({ orgRole: 'admin', teamRole: 'member' });
     await expect(
       createStripePortalSession(
         {
@@ -279,7 +280,7 @@ describe('Stripe customer subscription lifecycle', () => {
   });
 
   it('does not call Stripe when authority is revoked after the readable preflight', async () => {
-    const state = setup({ teamRole: 'admin' });
+    const state = setup({ orgRole: 'admin', teamRole: 'member' });
     const dependencies = deps(state);
     dependencies.authorizeAction = vi
       .fn()
@@ -300,7 +301,7 @@ describe('Stripe customer subscription lifecycle', () => {
   });
 
   it('reuses the claimed intent idempotency key after a lost Stripe response', async () => {
-    const state = setup({ teamRole: 'admin' });
+    const state = setup({ orgRole: 'admin', teamRole: 'member' });
     const dependencies = deps(state);
     state.stripe.billingPortal.sessions.create
       .mockRejectedValueOnce(new Error('transport response lost'))
@@ -331,7 +332,7 @@ describe('Stripe customer subscription lifecycle', () => {
   });
 
   it('rejects a cross-origin portal redirect before calling Stripe', async () => {
-    const state = setup({ teamRole: 'admin' });
+    const state = setup({ orgRole: 'admin', teamRole: 'member' });
     await expect(
       createStripePortalSession(
         {

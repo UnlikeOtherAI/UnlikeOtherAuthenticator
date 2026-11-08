@@ -10,6 +10,10 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // Exact financial-manager invoice LIST needs a read-only recovery state, not an empty list.
   'BILLING_ADDON_HISTORY_RECONCILIATION_REQUIRED',
   'BILLING_ORGANISATION_OVERVIEW_REQUIRED',
+  // Current exact actor authority/profile outcomes; no directory or financial data.
+  'BILLING_MANAGER_REQUIRED',
+  'BILLING_TEAM_ACCESS_REQUIRED',
+  'BILLING_AUTHORITY_PROTOCOL_UNSUPPORTED',
   'BILLING_CONTEXT_INVALID',
   'BILLING_TEAM_MODE_CHANGED',
   'BILLING_TEAM_MODE_BLOCKED',

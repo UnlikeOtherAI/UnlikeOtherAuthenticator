@@ -122,6 +122,13 @@ export async function createStripeCheckoutSession(
   const successUrlDigest = digestUrl(successUrl);
   const cancelUrlDigest = digestUrl(cancelUrl);
   const prisma = deps?.prisma ?? getAdminPrisma();
+  // Authenticate the exact actor before role lookup or provider/account IO.
+  const { actor, payload } = await (deps?.resolveTariff ?? resolveFinancialTariffContext)({
+    request: params.request,
+    actorToken: params.actorToken,
+    credential: params.credential,
+    endpoint: params.endpoint,
+  }, { prisma });
   await requireBillingManager(params.request,prisma);
   const configured = deps?.stripe ? undefined : await requireTeamStripeBilling(params.request, prisma);
   const stripe = deps?.stripe ?? configured?.client;
@@ -131,12 +138,6 @@ export async function createStripeCheckoutSession(
   const livemode = deps?.stripeLivemode ?? configured?.livemode ?? false;
   const account = await resolveStripeAccountContext(stripe, livemode, prisma);
   const modeRevision = configured?.selection.revision ?? 0;
-  const { actor, payload } = await (deps?.resolveTariff ?? resolveFinancialTariffContext)({
-    request: params.request,
-    actorToken: params.actorToken,
-    credential: params.credential,
-    endpoint: params.endpoint,
-  });
   if (
     payload.tariff.collection_mode !== 'stripe' ||
     payload.tariff.mode === 'free' ||

@@ -33,6 +33,7 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual sig
     const handle=await createTestDb();if(!handle)throw Error('Disposable PG required');db=handle;
     vi.stubEnv('DATABASE_URL',db.databaseUrl);vi.stubEnv('DATABASE_ADMIN_URL',db.databaseUrl);vi.stubEnv('DATABASE_ENABLED','true');
     vi.stubEnv('STRIPE_BILLING_ENABLED','false');vi.stubEnv('BILLING_ACTOR_AUDIENCE_MODE','enforce');
+    vi.stubEnv('DEBUG_ENABLED','false');
     const storageRoot=await mkdtemp(join(tmpdir(),'uoa-organisation-http-'));
     storage=new FilesystemBillingInvoicePdfStorage(storageRoot);
     vi.stubEnv('BILLING_INVOICE_STORAGE_PROVIDER','filesystem');vi.stubEnv('BILLING_INVOICE_FILESYSTEM_ROOT',storageRoot);
@@ -121,9 +122,11 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual sig
       if(access==='team_reader')expect(verdict).toMatchObject({team_scope:{team_id:'addon-other-team'},
         overview_request:{path:'/billing/v1/team/overview',body:subject('managerB')}});
     }
-    expect((await request('managerB',path,subject('managerB'),{financial:false},'2.0.0')).status).toBe(400);
+    const unsupported=await request('managerB',path,subject('managerB'),{financial:false},'2.0.0');
+    expect(unsupported.status).toBe(400);expect(await unsupported.text()).toContain('BILLING_AUTHORITY_PROTOCOL_UNSUPPORTED');
     for(const persona of ['managerA','memberA']){
-      expect((await request(persona,'/billing/v1/team/overview',subject(persona),{financial:false})).status).toBe(403);
+      const refused=await request(persona,'/billing/v1/team/overview',subject(persona),{financial:false});
+      expect(refused.status).toBe(403);expect(await refused.text()).toContain('BILLING_TEAM_ACCESS_REQUIRED');
     }
     const overview=await request('managerB','/billing/v1/team/overview',subject('managerB'),{financial:false});
     expect(overview.status).toBe(200);const body=await overview.json() as {sections:Record<string,unknown>};
