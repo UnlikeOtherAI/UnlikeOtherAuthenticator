@@ -307,19 +307,27 @@ opaque `billing_context` contract and public `6.3.0` shapes remain unchanged.
 `billing-organisation-signed-http.persistence.test.ts` starts the actual API on
 a loopback HTTP socket with an isolated migrated PostgreSQL schema, a synthetic
 registered lifecycle key and RS256 actor key, and actual UOA assurance/refresh
-families. It does not inject an already-authorised actor. The nine cases cover
+families. It does not inject an already-authorised actor. The thirteen cases cover
 the actual `/org/assurance/validate` endpoint with both access-token and
 confidential-subject transports and a refused borrowed custody reference;
-fresh org owners/admins with no TeamMember on either active team; cross-team
-management and member financial denial/nonfinancial Ask; exact audience,
+fresh org owners/admins with no TeamMember on either active team; selected-team
+read-only authority, cross-team/member financial denial and nonfinancial Ask; exact audience,
 credential epoch and original custody checks; independently confirmed credits,
 saved funding controls and subscription beside the inclusive bill hold; invoice
 LIST reconciliation with confirmed DETAIL/PDF hash and original-source recovery;
 and missing, altered and stale original action contexts before a deliberate
 successful Disable. They also prove manager409/member403 on superseded reads
-and identical ORG invoice sources under both selected-team legacy subjects,
+and identical ORG invoice sources under both org-manager selected-team legacy subjects,
 with strict old-family response validation. Session authority survives those
-action refusals.
+action refusals. The 6.4 reader proof separates three captured account/mode
+sources, including two different Sandbox accounts, without exposing provider
+account IDs or another team's retained wallet. A simulated metering failure
+leaves independently confirmed retained records and organisation controls
+available. Production-debug-disabled cases preserve the documented profile and
+authority refusal codes. A separate PostgreSQL race observes the competing
+intent's real backend PID waiting on a winning organisation-role demotion,
+then proves that no new financial intent is admitted; all competing tasks are
+released and awaited on failure.
 
 Provider objects and initial authentication are synthetic. These checks prove
 the real signed HTTP/assurance/DB boundary, not a production browser login or a
