@@ -74,7 +74,7 @@ export type BillingCreditAttentionKind = BillingCreditAttentionV1['kind'];
 
 export async function resolveLatestBillingFundingCreditEntryId(
   params: { creditAccountId: string },
-  deps?: { prisma?: PrismaClient },
+  deps?: { prisma?: Pick<PrismaClient,'billingCreditEntry'> },
 ): Promise<string | null> {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const entry = await prisma.billingCreditEntry.findFirst({

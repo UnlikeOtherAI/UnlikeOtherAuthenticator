@@ -10,6 +10,9 @@ import { resolveBillingFundingRequestRecipients,createBillingCreditFundingReques
   from '../../src/services/billing-credit-funding-request.service.js';
 import { createRlsTestDb } from '../helpers/test-db.js';
 import { assertActiveTeamMembership } from '../../src/services/team-scope.service.js';
+import { readOrganisationAttention } from '../../src/services/billing-organisation-attention.service.js';
+import { readOrganisationCreditBalance } from '../../src/services/billing-organisation-wallet.service.js';
+import type { OrganisationBillingContext } from '../../src/services/billing-organisation-authority.service.js';
 
 describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS !== 'true')('organisation financial cutover', () => {
   let db: PrismaClient; let cleanup: () => Promise<void>;
@@ -152,5 +155,37 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS !== 'true')('organisa
     await expect(setOrganisationBillingMode({ organisationId: 'org-mode', actor, mode: 'live', expectedRevision: 1 }, db))
       .rejects.toThrow('BILLING_ORGANISATION_MODE_BLOCKED');
     expect(await db.billingCreditAccount.findUnique({ where: { id: before.id } })).toEqual(before);
+  });
+  it('authors current-org attention and discloses excluded TEAM funds without Ledger or provider calls',async()=>{
+    const month=new Date().toISOString().slice(0,7);
+    const service=await db.billingService.create({data:{identifier:'nessie',name:'Nessie',tariffHistoryFromMonth:month}});
+    const tariff=await db.billingTariff.create({data:{serviceId:service.id,key:'standard',version:1,name:'Standard',
+      mode:'STANDARD',collectionMode:'STRIPE',markupBps:3000,currency:'USD',monthlyAmountMinor:0n,usagePaymentMode:'PREPAID'}});
+    await db.billingTariffTermEvent.create({data:{serviceId:service.id,source:'SERVICE_DEFAULT',scopeKey:service.id,
+      tariffId:tariff.id,effectiveFromMonth:month,reason:'test_fixture'}});
+    const context={request:{product:'nessie',organisationId:'org-mode',teamId:'selected',userId:actor.userId},
+      credential:{id:'fixture-lifecycle-key',service},actorToken:'authority-tested-separately',
+      endpoint:'/billing/v1/organisation/overview'} as OrganisationBillingContext;
+    const account=await db.billingStripeAccount.findUniqueOrThrow({where:{id:'org-test'}});
+    const financialAccount=async()=>account;
+    const selection=await resolveOrganisationBillingMode('org-mode',db);
+    await expect(readOrganisationAttention(context,selection,db,new Date(),{financialAccount}))
+      .rejects.toThrow('BILLING_ATTENTION_POLICY_NOT_CONFIGURED');
+    await db.billingCreditFundingPolicy.create({data:{serviceId:service.id,currency:'USD',version:1,
+      automaticConsentVersion:'fixture-consent'}});
+    const before=await db.billingCreditAccount.findUniqueOrThrow({where:{id:'legacy-wallet'}});
+    const result=await readOrganisationAttention(context,selection,db,new Date(),{financialAccount});
+    expect(result.map(event=>event.kind)).toEqual(['credits_exhausted']);
+    expect(result[0]?.event_key).toMatch(/^bca1_[a-f0-9]{64}$/);
+    const balance=await readOrganisationCreditBalance(context,selection,db,'en-US',{financialAccount});
+    expect(balance.confirmed_balance.credits).toBe('0');
+    expect(balance.billing_status).toMatchObject({settlement_state:'pending_reconciliation'});
+    expect(balance.billing_status.message).toContain('Historical team credits and consents are retained separately');
+    expect(balance.billing_status.message).toContain('excluded from this organisation wallet');
+    expect(balance.credit_account_id).not.toBe(before.id);
+    expect(await db.billingCreditAccount.findUnique({where:{id:before.id}})).toEqual(before);
+    const live=await db.billingStripeAccount.findUniqueOrThrow({where:{id:'org-live'}});
+    await expect(readOrganisationAttention(context,selection,db,new Date(),{financialAccount:async()=>live}))
+      .rejects.toThrow('BILLING_ATTENTION_ACCOUNT_MISMATCH');
   });
 });

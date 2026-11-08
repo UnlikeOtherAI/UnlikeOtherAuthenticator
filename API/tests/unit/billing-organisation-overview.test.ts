@@ -16,6 +16,7 @@ function data<K extends 'credits'|'funding'|'subscription'>(key:K) {
 const deps={prisma:{} as PrismaClient,now:new Date('2026-11-08T00:00:00Z'),
   balance:vi.fn(async()=>data('credits')),funding:vi.fn(async()=>data('funding')),
   subscription:vi.fn(async()=>data('subscription')),
+  attention:vi.fn(async()=>[]),
   bill:vi.fn(async()=>{throw new AppError('INTERNAL',502,'LEDGER_METERING_PORTFOLIO_RESPONSE_INVALID');})};
 beforeEach(()=>{
   vi.clearAllMocks();mocks.authority.mockResolvedValue({billingManager:true});
@@ -29,6 +30,7 @@ describe('independent organisation overview',()=>{
     for(const key of ['credits','funding','subscription','history'] as const)expect(result.sections[key].state).toBe('confirmed');
     expect(result.sections.credits).toMatchObject({data:data('credits')});
     expect(result.sections.accrued_bill).not.toHaveProperty('data');
+    expect(result.sections.attention).toMatchObject({state:'confirmed',data:[]});
     expect(result.sections.history).toMatchObject({data:{captured_sources:[{mode:'live'},{mode:'sandbox'}]}});
   });
   it('returns the inclusive hold as pending, never zero',async()=>{

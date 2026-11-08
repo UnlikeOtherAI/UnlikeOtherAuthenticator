@@ -3,6 +3,8 @@
 This is an implementation checkpoint, not release or activation acceptance.
 Source starts at deployed `2694c8088a18525f68589d5516074020856d1db9`.
 Public protocol 6.2 is pinned at `e968ac99aa2469e7e0bd64763a8e8ab6dd0b4120`.
+The optional organisation attention contract is protocol 6.3 at
+`cae2fc86f58d1ba45112088ebbd2833d768b79bc`; the 6.2 financial family is unchanged.
 No credentials, provider configuration, payment or production database operations
 were performed by this implementation thread.
 
@@ -26,6 +28,17 @@ were performed by this implementation thread.
 
 Logs are ignored under `.billing-mode-qa` pending the final durable evidence
 archive outside worktrees. The original PR143 archive remains unchanged.
+
+The attention/overview/PostgreSQL gate passes 21 tests. Attention reads only the
+current organisation wallet, canonical reservations, captured consent and stored
+provider payment-method evidence. It does not call Ledger, FX, Checkout or Stripe.
+An absent policy or unproven card summary is unavailable, never a confirmed empty
+result. The PostgreSQL case retains a positive historical TEAM TEST wallet and
+proves that it neither supplies the organisation balance nor its attention. The
+confirmed credit response explicitly discloses excluded retained TEAM funds.
+An inclusive organisation mode-change month remains pending for settlement even
+when the confirmed wallet balance is available. Account lookup requires the named
+provider account as well as mode; mode-only lookup is refused.
 
 The revised real PostgreSQL lifecycle suite passes 23 tests. It executes actual
 TEAM deletion jobs with product acknowledgements, preserves the last team's

@@ -1,4 +1,5 @@
 import { activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
+import { ORGANISATION_FINANCIAL_ENDPOINTS } from './billing-financial-endpoints.service.js';
 import {
   BillingCollectionMode,
   BillingMonthlyChargeBasis,
@@ -273,8 +274,8 @@ export async function resolveEffectiveTariffContext(
     organisationId: request.organisationId,
     teamId: request.teamId,
     billingMonth: utcBillingMonth(new Date((deps?.now?.() ?? Math.floor(Date.now() / 1000)) * 1000)),
-    ...(['/billing/v1/stripe/checkout-session', '/billing/v1/stripe/subscription-summary',
-      '/billing/v1/stripe/portal-session', '/billing/v1/organisation/overview'].includes(params.endpoint)
+    ...((ORGANISATION_FINANCIAL_ENDPOINTS.has(params.endpoint)||
+      ['/billing/v1/credits','/billing/v1/customer-statement','/billing/v2/customer-statement'].includes(params.endpoint))
       ? { financialScope: 'organisation' as const } : {}),
   });
   const tariff = effective.tariff;

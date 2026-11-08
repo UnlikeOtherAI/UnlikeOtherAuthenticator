@@ -38,8 +38,9 @@ async function resolvePersistedCreditAccount(
   const selection = await resolveTeamBillingMode(params, prisma);
   const env = getEnv();
   const expectedId = selection.mode === 'live' ? env.STRIPE_LIVE_ACCOUNT_ID : env.STRIPE_SANDBOX_ACCOUNT_ID;
+  if(!expectedId)throw new AppError('SERVICE_UNAVAILABLE',503,'BILLING_STRIPE_MODE_NOT_CONFIGURED');
   const identity = { livemode: selection.mode === 'live',
-    ...(expectedId ? { stripeAccountId: expectedId } : {}) };
+    stripeAccountId: expectedId };
   const scoped = await prisma.billingCreditAccount.findMany({
     where: {
       account: identity,

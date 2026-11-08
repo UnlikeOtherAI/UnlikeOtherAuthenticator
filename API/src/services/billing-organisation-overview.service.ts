@@ -10,6 +10,7 @@ import { readOrganisationCreditBalance,readOrganisationFunding } from './billing
 import { readOrganisationSubscription } from './billing-organisation-subscription.service.js';
 import { readOrganisationAccruedBill } from './billing-organisation-accrual.service.js';
 import { organisationBillingPeriod } from './billing-organisation-period.service.js';
+import { readOrganisationAttention } from './billing-organisation-attention.service.js';
 
 function subject(context:OrganisationBillingContext) {
   return {product:context.request.product,organisation_id:context.request.organisationId,
@@ -44,7 +45,8 @@ async function section<T>(read:()=>Promise<T>,locale?:BillingCustomerLocale):Pro
 export async function organisationBillingOverview(context:OrganisationBillingContext,
   input:{month?:string;locale?:BillingCustomerLocale}={},deps:{prisma?:PrismaClient;now?:Date;
     balance?:typeof readOrganisationCreditBalance;funding?:typeof readOrganisationFunding;
-    subscription?:typeof readOrganisationSubscription;bill?:typeof readOrganisationAccruedBill}={}):Promise<BillingOrganisationOverviewV1> {
+    subscription?:typeof readOrganisationSubscription;bill?:typeof readOrganisationAccruedBill;
+    attention?:typeof readOrganisationAttention}={}):Promise<BillingOrganisationOverviewV1> {
   const prisma=deps.prisma??getAdminPrisma();const now=deps.now??new Date();
   const viewer=await authorizeOrganisationBilling(context,prisma);
   if(!viewer.billingManager)throw new AppError('FORBIDDEN',403,'BILLING_MANAGER_REQUIRED');
@@ -60,12 +62,13 @@ export async function organisationBillingOverview(context:OrganisationBillingCon
     if(!current)throw new AppError('INTERNAL',503,'BILLING_HISTORY_MODE_UNAVAILABLE');
     return {cycles_request:current.cycles_request,invoices_request:current.invoices_request,captured_sources};
   };
-  const [accrued_bill,credits,funding,subscription,historySection]=await Promise.all([
+  const [accrued_bill,credits,funding,subscription,historySection,attention]=await Promise.all([
     section(()=> (deps.bill??readOrganisationAccruedBill)(context,selection,month,now,prisma),input.locale),
     section(()=> (deps.balance??readOrganisationCreditBalance)(context,selection,prisma,input.locale),input.locale),
     section(()=> (deps.funding??readOrganisationFunding)(context,selection,prisma,input.locale,now),input.locale),
     section(()=> (deps.subscription??readOrganisationSubscription)(context,prisma,input.locale,now),input.locale),
     section(history,input.locale),
+    section(()=>(deps.attention??readOrganisationAttention)(context,selection,prisma,now),input.locale),
   ]);
   // Dependencies can take seconds. Recheck authority and policy before publishing actions or money.
   const finalViewer=await authorizeOrganisationBilling(context,prisma);
@@ -73,5 +76,5 @@ export async function organisationBillingOverview(context:OrganisationBillingCon
   const current=await resolveOrganisationBillingMode(context.request.organisationId,prisma);
   if(JSON.stringify(current)!==JSON.stringify(selection))throw new AppError('BAD_REQUEST',409,'BILLING_CONTEXT_STALE');
   return {schema_version:1,generated_at:now.toISOString(),subject:subject(context),financial_scope:scope(context,selection),
-    sections:{accrued_bill,credits,funding,subscription,history:historySection}};
+    sections:{accrued_bill,credits,funding,subscription,history:historySection,attention}};
 }

@@ -30,18 +30,23 @@ export async function organisationFinancialAccount(selection:OrganisationBilling
 
 /** A DB snapshot of confirmed money and holds, with no provider/FX/Ledger dependency. */
 export async function readOrganisationCreditBalance(context:OrganisationBillingContext,
-  selection:OrganisationBillingSelection,prisma:PrismaClient,locale?:BillingCustomerLocale):Promise<BillingOrganisationCreditBalanceV1> {
-  const account=await organisationFinancialAccount(selection,prisma);
+  selection:OrganisationBillingSelection,prisma:PrismaClient,locale?:BillingCustomerLocale,
+  deps:{financialAccount?:typeof organisationFinancialAccount}={}):Promise<BillingOrganisationCreditBalanceV1> {
+  const account=await (deps.financialAccount??organisationFinancialAccount)(selection,prisma);
+  if(account.livemode!==(selection.mode==='live'))throw new AppError('INTERNAL',409,'BILLING_CREDIT_ACCOUNT_MODE_MISMATCH');
   const wallet=await ensureOrganisationCreditAccount({account,organisationId:context.request.organisationId},{prisma});
   return prisma.$transaction(async tx=>{
     const current=await tx.billingCreditAccount.findUniqueOrThrow({where:{id:wallet.id}});
-    const [reserved,unsettled,retained]=await Promise.all([billingReservedMicrocredits(tx,wallet.id),
+    const period=currentBillingCreditPeriod(new Date());
+    const [reserved,unsettled,retained,changed]=await Promise.all([billingReservedMicrocredits(tx,wallet.id),
       tx.billingCreditSettlementWatch.count({where:{creditAccountId:wallet.id,
         OR:[{lastCheckedAt:null},{lastError:{not:null}}]}}),
       tx.billingCreditAccount.count({where:{orgId:context.request.organisationId,teamId:{not:null},
-        OR:[{balanceMicrocredits:{not:0n}},{autoTopUpConsentRevisionId:{not:null}}]}})]);
+        OR:[{balanceMicrocredits:{not:0n}},{autoTopUpConsentRevisionId:{not:null}}]}}),
+      tx.billingOrganisationModeEvent.count({where:{orgId:context.request.organisationId,
+        effectiveAt:{gte:period.startsAt,lt:period.endsAt}}})]);
     const epochMonth=selection.epoch.slice(0,7);
-    const pending=unsettled>0 || retained>0 || new Date().toISOString().slice(0,7)===epochMonth;
+    const pending=unsettled>0 || retained>0 || changed>0 || period.key===epochMonth;
     const copy=billingOrganisationCopy(locale);
     return {credit_account_id:wallet.id,confirmed_balance:billingCreditAmount(current.balanceMicrocredits,locale),
       reserved_credits:billingCreditAmount(reserved,locale),
