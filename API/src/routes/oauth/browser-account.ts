@@ -49,7 +49,7 @@ export function registerBrowserAccountRoutes<Account extends { userId: string }>
     const version = request.headers['if-match'];
     if (typeof version !== 'string' || !/^"[a-f0-9]{64}"$/.test(version)) throw new AppError('BAD_REQUEST', 428, 'SETTING_VERSION_REQUIRED');
     const updated = await updateUserSettings({ userId: account.userId, namespace, entries: { [key]: value } }, {
-      prisma: request.adminDb, authorizeWrite: (tx) => authorizeAccount(account, tx), expectedVersion: { key, version },
+      prisma: request.adminDb, authorizeWrite: async (tx) => { await authorizeAccount(account, tx); }, expectedVersion: { key, version },
     });
     const result = updated.settings[key] ?? null;
     reply.header('Cache-Control', 'no-store').header('ETag', settingVersion(result)).send({ value: result });

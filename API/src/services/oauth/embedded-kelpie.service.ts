@@ -25,7 +25,7 @@ const Claims = z.object({
   jti: z.string().min(1).max(256), scope: z.literal(SCOPES),
 });
 export type EmbeddedKelpieAccount = z.infer<typeof Claims>;
-const reject = (): never => { throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED'); };
+function reject(): never { throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED'); }
 const audience = () => `${getPublicBaseUrl()}/embedded/kelpie`;
 
 /** This grant is the gateway product's existing person session, never a public native registration. */
