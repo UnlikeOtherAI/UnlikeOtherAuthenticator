@@ -85,7 +85,7 @@ export async function verifyEmbeddedKelpieToken(authorization: string | undefine
       algorithms: ['RS256'], typ: 'at+jwt', issuer: getPublicBaseUrl(), audience: audience(),
     });
     if (payload.token_use !== 'embedded_kelpie_account' || payload.aud !== audience()) reject();
-    const account = ConnectionClaims.parse(payload);
+    const account = Claims.parse(payload);
     if (account.exp <= account.iat || account.exp - account.iat > KELPIE_TICKET_TTL_SECONDS ||
       account.iat > Date.now() / 1000 || !SCOPES.split(' ').includes(scope)) reject();
     return { ...account, userId: account.sub };
@@ -115,7 +115,7 @@ export async function validateEmbeddedKelpieConnection(ticket: string, db: Prism
       algorithms: ['RS256'], typ: 'at+jwt', issuer: getPublicBaseUrl(), audience: resource,
     });
     if (payload.token_use !== 'embedded_kelpie_connect' || payload.aud !== resource) reject();
-    account = Claims.parse(payload);
+    account = ConnectionClaims.parse(payload);
     if (account.exp <= account.iat || account.exp - account.iat > KELPIE_TICKET_TTL_SECONDS || account.iat > Date.now() / 1000) reject();
   } catch { return reject(); }
   return db.$transaction(async tx => {
