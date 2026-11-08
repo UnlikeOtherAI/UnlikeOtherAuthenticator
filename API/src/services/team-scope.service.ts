@@ -150,8 +150,9 @@ export async function assertActiveTeamScope(
  * Every client domain is equal: an organisation belongs to whoever founded it
  * and is usable from every UOA-integrated product, so which product is asking
  * says nothing about whether this person is a member of this team. Only the
- * membership rows decide, and DEACTIVATED/REMOVED rows are tombstones that
- * still refuse.
+ * current organisation authority or exact active membership decides. An active
+ * organisation owner/admin does not need a synthetic team membership. Everyone
+ * else remains subject to their selected team's membership tombstones.
  *
  * Callers that must additionally decide *which* teams a product may offer or
  * select keep using the client/product-aware assertions below — this one is for

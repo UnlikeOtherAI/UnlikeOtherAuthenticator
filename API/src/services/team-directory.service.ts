@@ -1,4 +1,5 @@
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
+import { organisationManagedTeams } from './organisation-team-authority.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
@@ -62,6 +63,7 @@ export type SidebarPendingInvite = {
 };
 
 type TeamDirectoryPrisma = {
+  team: PrismaClient['team'];
   teamMember: Pick<PrismaClient['teamMember'], 'findMany'>;
   refreshToken: Pick<PrismaClient['refreshToken'], 'groupBy'>;
   user: Pick<PrismaClient['user'], 'findUnique'>;
@@ -69,7 +71,7 @@ type TeamDirectoryPrisma = {
 };
 
 type TeamDirectoryDeps = {
-  crossProductPrisma?: Pick<PrismaClient, 'teamMember'>;
+  crossProductPrisma?: Pick<PrismaClient, 'teamMember'|'team'>;
   /**
    * The client the pending-invite read runs on. Defaults to the BYPASSRLS admin
    * client for the reason spelled out on `buildSidebarPendingInvites`: the
@@ -165,16 +167,19 @@ export async function buildSidebarTeams(
         },
       })
     : [];
+  const managedTeams=await organisationManagedTeams(
+    policy.scope==='all_active_memberships'?(deps?.crossProductPrisma??getAdminPrisma()):prisma,
+    {userId:params.userId,...(policy.scope==='all_active_memberships'?{}:{domain:params.domain})});
   const directoryMemberships = [
     ...new Map(
-      [...memberships, ...crossProductMemberships].map((membership) => [membership.teamId, membership]),
+      [...memberships, ...crossProductMemberships,...managedTeams].map((membership) => [membership.teamId, membership]),
     ).values(),
   ];
   if (directoryMemberships.length === 0) return [];
 
   // Login recency remains limited to this product's domain. Cross-product access grants a
   // team directory, not another product's session history.
-  const teamIds = memberships.map((membership) => membership.teamId);
+  const teamIds = directoryMemberships.map((membership) => membership.teamId);
   const loginRows = teamIds.length > 0 ? await prisma.refreshToken.groupBy({
     by: ['teamId'],
     where: {

@@ -5,6 +5,7 @@ import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { resolveTeamCreatorTeamRole } from './role-grants.js';
 import { lockOrganisationMemberships } from './organisation-membership-lock.service.js';
+import { activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
 
 import {
   assertDatabaseEnabled,
@@ -84,6 +85,8 @@ export async function listTeams(
             OR: [
               { NOT: { joinPolicy: 'HIDDEN' } },
               { members: { some: { userId: actorUserId, status: 'ACTIVE' } } },
+              { AND:[activeTeamAuthorityWhere(actorUserId)],org:{OR:[{ownerId:actorUserId},
+                {members:{some:{userId:actorUserId,status:'ACTIVE',role:{in:['owner','admin']}}}}]} },
             ],
           }
         : {}),

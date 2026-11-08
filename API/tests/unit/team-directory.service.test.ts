@@ -16,7 +16,7 @@ function makeTeamsPrisma(overrides: {
   refreshTokenGroupBy?: unknown[];
 }) {
   return {
-    teamMember: {
+    team: { findMany: vi.fn(async () => []) }, teamMember: {
       findMany: vi.fn(async () => overrides.teamMemberFindMany),
     },
     refreshToken: {
@@ -169,7 +169,7 @@ describe('team-directory service: buildSidebarTeams', () => {
       ],
     });
     const crossProductPrisma = {
-      teamMember: {
+      team: { findMany: vi.fn(async () => []) }, teamMember: {
         findMany: vi.fn(async () => [
           {
             teamId: 'team-local',
@@ -237,7 +237,7 @@ describe('team-directory service: buildSidebarPendingInvites', () => {
 
   function makeDirectoryPrisma(email: string | null) {
     return {
-      teamMember: { findMany: vi.fn() },
+      team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn() },
       refreshToken: { groupBy: vi.fn() },
       user: { findUnique: vi.fn(async () => (email === null ? null : { email })) },
       teamInvite: { findMany: vi.fn() },

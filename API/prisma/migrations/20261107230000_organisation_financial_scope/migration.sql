@@ -358,6 +358,7 @@ BEGIN
      OR organisation_row."lifecycle_status" IS DISTINCT FROM 'ACTIVE'
      OR (NEW.team_id IS NOT NULL AND team_row."lifecycle_status" IS DISTINCT FROM 'ACTIVE')
      OR user_row."lifecycle_status" IS DISTINCT FROM 'ACTIVE'
+     OR (user_row.account_expires_at IS NOT NULL AND user_row.account_expires_at <= (clock_timestamp() AT TIME ZONE 'UTC'))
      OR (NEW.team_id IS NOT NULL AND team_row."org_id" IS DISTINCT FROM NEW."org_id")
      OR org_member_row."status" IS DISTINCT FROM 'ACTIVE'
      OR (NEW.team_id IS NOT NULL AND team_member_row."status" IS DISTINCT FROM 'ACTIVE'
@@ -404,7 +405,8 @@ CREATE TRIGGER billing_stripe_monthly_org_payer BEFORE INSERT ON billing_stripe_
 CREATE OR REPLACE FUNCTION billing_assert_credit_scope_manager(expected_org_id text,expected_team_id text,expected_user_id text)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
-  PERFORM id FROM users WHERE id=expected_user_id AND lifecycle_status='ACTIVE' FOR SHARE;
+  PERFORM id FROM users WHERE id=expected_user_id AND lifecycle_status='ACTIVE'
+    AND (account_expires_at IS NULL OR account_expires_at > (clock_timestamp() AT TIME ZONE 'UTC')) FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'BILLING_MANAGER_REQUIRED' USING ERRCODE='23514'; END IF;
   PERFORM id FROM organisations WHERE id=expected_org_id AND lifecycle_status='ACTIVE' FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'BILLING_MANAGER_REQUIRED' USING ERRCODE='23514'; END IF;

@@ -4,6 +4,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { isOrganisationBillingManager } from './billing-org-responsibility.service.js';
 import { isCurrentOrganisationManager } from './organisation-team-authority.service.js';
+import { activeAuthorityUserWhere } from './organisation-team-authority.service.js';
 
 export type BillingFundingViewer = {
   userId: string;
@@ -28,7 +29,7 @@ export async function resolveBillingFundingViewer(
   const prisma = deps?.prisma ?? getAdminPrisma();
   const [user, team, organisationMembership, teamMembership] = await Promise.all([
     prisma.user.findUnique({
-      where: { lifecycleStatus: 'ACTIVE', id: params.userId },
+      where: { ...activeAuthorityUserWhere(), id: params.userId },
       select: { id: true, name: true },
     }),
     params.teamId === null ? prisma.organisation.findFirst({ where: {

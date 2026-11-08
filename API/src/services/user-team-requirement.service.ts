@@ -239,6 +239,11 @@ export async function ensureUserHasRequiredTeam(
     // around. Creating a new team here would bypass deactivation/removal.
     if (orgMembership.status !== 'ACTIVE') return null;
 
+    // An existing organisation with no current teams is an explicit Create team
+    // recovery. A login must not silently create a team after the last deletion.
+    const existingTeams=await tx.team.count({where:{orgId:orgMembership.orgId,lifecycleStatus:'ACTIVE'}});
+    if(existingTeams===0)return null;
+
     const teamMembershipCount = await tx.teamMember.count({
       where: {
         userId,

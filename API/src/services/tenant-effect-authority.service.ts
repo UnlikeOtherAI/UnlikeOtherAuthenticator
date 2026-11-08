@@ -8,6 +8,7 @@ import { AppError } from '../utils/errors.js';
 import { verifyDomainAuthToken } from './domain-secret.service.js';
 import { assertEntityAccess, isActiveUser } from './entity-lifecycle.service.js';
 import { lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
+import { activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
 import {
   lockRefreshSessionUser,
   lockRefreshSessionUserShared,
@@ -72,11 +73,11 @@ export async function assertTenantEffectAuthority(
         if (member?.status !== 'ACTIVE') deny();
       }
       if (claims.active?.teamId) {
-        const member = await adminDb.teamMember.findUnique({
-          where: { teamId_userId: { teamId: claims.active.teamId, userId: claims.userId } },
-          select: { status: true },
+        const member = await adminDb.team.findFirst({
+          where: { id:claims.active.teamId,orgId:selectedOrg,AND:[activeTeamAuthorityWhere(claims.userId)] },
+          select: { id: true },
         });
-        if (member?.status !== 'ACTIVE') deny();
+        if (!member) deny();
       }
     }
   }

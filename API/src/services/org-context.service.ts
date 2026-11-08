@@ -3,7 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
-import { activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
+import { activeAuthorityUserWhere,activeTeamAuthorityWhere } from './organisation-team-authority.service.js';
 import { assertOrgAccessPolicy } from './org-sso-policy.service.js';
 import type { ClientConfig } from './config.service.js';
 import { assertDatabaseEnabled, normalizeDomain } from './organisation.service.base.js';
@@ -75,7 +75,7 @@ export async function getActiveUserOrgContext(
       userId,
       ...(orgId ? { orgId } : {}),
       status: 'ACTIVE',
-      user: { lifecycleStatus: 'ACTIVE' },
+      user: activeAuthorityUserWhere(),
       org: { lifecycleStatus: 'ACTIVE', ...(params.allowCrossDomain ? {} : { domain }) },
     },
     select: {

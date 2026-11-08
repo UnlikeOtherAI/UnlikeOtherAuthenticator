@@ -63,6 +63,14 @@ and sanitized flow records are outside worktrees at
 new; it has no equivalent base screen. No provider calls or payments were made.
 API/Admin builds, focused Admin copy/page tests and changed-source lint pass.
 
+Shared org-manager admission passes three real PostgreSQL scenarios: owner/admin
+chooser, directory and hidden-team entry without TeamMember writes; ordinary
+member limits and immediate role/account-expiry refusal; and explicit empty-org
+Create team recovery without login creating a replacement team or organisation.
+The corresponding chooser/directory/scoped-login unit gate passes 32 tests with
+the intended DB-less unit environment. These are API/service checks; hosted
+chooser interaction remains to be exercised with the final integrated source.
+
 ## Work still required before release
 
 Complete the organisation history branch, remaining accrual sources and their

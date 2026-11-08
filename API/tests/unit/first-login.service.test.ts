@@ -50,7 +50,7 @@ describe('first-login.service', () => {
     const prisma = {
       user: { findUnique: vi.fn() },
       orgMember: { findMany: vi.fn() },
-      teamMember: { findMany: vi.fn() },
+      team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn() },
       teamInvite: { findMany: vi.fn() },
     };
 
@@ -70,7 +70,7 @@ describe('first-login.service', () => {
     const prisma = {
       user: { findUnique: vi.fn(async () => null) },
       orgMember: { findMany: vi.fn() },
-      teamMember: { findMany: vi.fn() },
+      team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn() },
       teamInvite: { findMany: vi.fn() },
     };
 
@@ -87,7 +87,7 @@ describe('first-login.service', () => {
     const prisma = {
       user: { findUnique: vi.fn(async () => ({ email: 'jane@solo.com' })) },
       orgMember: { findMany: vi.fn(async () => []) },
-      teamMember: { findMany: vi.fn(async () => []) },
+      team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
     };
 
@@ -115,7 +115,7 @@ describe('first-login.service', () => {
           { orgId: 'org-2', role: 'member' },
         ]),
       },
-      teamMember: {
+      team: { findMany: vi.fn(async () => []) }, teamMember: {
         findMany: vi.fn(async () => [
           { teamId: 'team-1', teamRole: 'member', team: { orgId: 'org-1' } },
         ]),
@@ -187,7 +187,7 @@ describe('first-login.service', () => {
     const prisma = {
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
       orgMember: { findMany: vi.fn(async () => []) },
-      teamMember: { findMany: vi.fn(async () => []) },
+      team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
     };
     const crossProductPrisma = {
@@ -195,7 +195,7 @@ describe('first-login.service', () => {
       orgMember: {
         findMany: vi.fn(async () => [{ orgId: 'org-nessie', role: 'member' }]),
       },
-      teamMember: {
+      team: { findMany: vi.fn(async () => []) }, teamMember: {
         findMany: vi.fn(async () => [
           {
             teamId: 'team-nessie',
@@ -258,7 +258,7 @@ describe('buildSessionChoices', () => {
     const prisma = {
       orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => null) },
-      teamMember: { findMany: vi.fn() },
+      team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn() },
       teamInvite: { findMany: vi.fn() },
     };
 
@@ -280,7 +280,7 @@ describe('buildSessionChoices', () => {
     const prisma = {
       orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
-      teamMember: {
+      team: { findMany: vi.fn(async () => []) }, teamMember: {
         findMany: vi.fn(async () => [
           {
             teamId: 'team-1',
@@ -330,7 +330,7 @@ describe('buildSessionChoices', () => {
       where: {
         userId: 'user-1',
         status: 'ACTIVE',
-        team: { org: { domain: 'client.example.com' } },
+        team: { lifecycleStatus:'ACTIVE',org: { domain: 'client.example.com',lifecycleStatus:'ACTIVE',members:{some:{userId:'user-1',status:'ACTIVE'}} } },
       },
       select: {
         teamId: true,
@@ -357,7 +357,7 @@ describe('buildSessionChoices', () => {
         // The inviter of a member-initiated invitation is recorded as a user id alone.
         findMany: vi.fn(async () => [{ id: 'user-9', name: 'Carol Owner' }]),
       },
-      teamMember: { findMany: vi.fn(async () => []) },
+      team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: {
         findMany: vi.fn(async () => [
           {
@@ -436,13 +436,13 @@ describe('buildSessionChoices', () => {
     const prisma = {
       orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })), findMany: vi.fn() },
-      teamMember: { findMany: vi.fn(async () => []) },
+      team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
     };
     const crossProductPrisma = {
       orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(), findMany: vi.fn() },
-      teamMember: { findMany: vi.fn(async () => []) },
+      team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
     };
 
@@ -470,13 +470,13 @@ describe('buildSessionChoices', () => {
     const prisma = {
       orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
-      teamMember: { findMany: vi.fn(async () => []) },
+      team: { findMany: vi.fn(async () => []) }, teamMember: { findMany: vi.fn(async () => []) },
       teamInvite: { findMany: vi.fn(async () => []) },
     };
     const crossProductPrisma = {
       orgMember: { findMany: vi.fn(async () => []) },
       user: { findUnique: vi.fn() },
-      teamMember: {
+      team: { findMany: vi.fn(async () => []) }, teamMember: {
         findMany: vi.fn(async () => [
           {
             teamId: 'team-nessie',
@@ -526,8 +526,8 @@ describe('buildSessionChoices', () => {
         userId: 'user-1',
         status: 'ACTIVE',
         team: {
-          org: {
-            members: {
+          lifecycleStatus: 'ACTIVE', org: {
+            lifecycleStatus: 'ACTIVE', members: {
               some: { userId: 'user-1', status: 'ACTIVE' },
             },
           },

@@ -1,6 +1,7 @@
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
+import { activeAuthorityUserWhere,organisationManagedTeams } from './organisation-team-authority.service.js';
 
 import type { ClientConfig } from './config.service.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
@@ -111,7 +112,8 @@ export function shouldPresentTeamChooser(
 ): boolean {
   return (
     !autoSelectedTeam &&
-    (choices.teams.length >= 2 || choices.pending_invites.length > 0 || choices.can_create_org || Boolean(choices.organization_id))
+    (choices.teams.length >= 2 || choices.pending_invites.length > 0 || choices.can_create_org ||
+      choices.creatable_orgs.length>0 || Boolean(choices.manageable_orgs?.length) || Boolean(choices.organization_id))
   );
 }
 
@@ -120,6 +122,7 @@ type TeamChooserPrisma = {
   // inviter as an id alone (`invite-inviter-label.service.ts`).
   user: Pick<PrismaClient['user'], 'findUnique' | 'findMany'>;
   orgMember: Pick<PrismaClient['orgMember'], 'findMany'>;
+  team: PrismaClient['team'];
   teamMember: Pick<PrismaClient['teamMember'], 'findMany'>;
   teamInvite: Pick<PrismaClient['teamInvite'], 'findMany'>;
 };
@@ -164,7 +167,7 @@ export async function buildSessionChoices(
   const chooserOrgId = allowedOrgId ?? requestedOrgId;
 
   const user = await prisma.user.findUnique({
-    where: { lifecycleStatus: 'ACTIVE', id: params.userId },
+    where: { ...activeAuthorityUserWhere(now), id: params.userId },
     select: { email: true },
   });
   if (!user || !user.email) {
@@ -194,7 +197,8 @@ export async function buildSessionChoices(
       where: {
         userId: params.userId,
         status: 'ACTIVE',
-        team: { ...(chooserOrgId ? { orgId: chooserOrgId } : {}), org: { domain } },
+        team: { lifecycleStatus:'ACTIVE',...(chooserOrgId ? { orgId: chooserOrgId } : {}), org: { domain,
+          lifecycleStatus:'ACTIVE',members:{some:{userId:params.userId,status:'ACTIVE'}} } },
       },
       select: {
         teamId: true,
@@ -227,8 +231,9 @@ export async function buildSessionChoices(
     }),
     canCreateTeams
       ? prisma.orgMember.findMany({
-          where: { userId: params.userId, status: 'ACTIVE', ...(requestedOrgId ? { orgId: requestedOrgId } : {}), org: { domain } },
-          select: { orgId: true, role: true, org: { select: { name: true } } },
+          where: { userId: params.userId, status: 'ACTIVE', ...(chooserOrgId ? { orgId: chooserOrgId } : {}),
+            org: { lifecycleStatus:'ACTIVE',...(policy.scope==='all_active_memberships'?{}:{domain}) } },
+          select: { orgId: true, role: true, org: { select: { name: true,ownerId:true } } },
         })
       : Promise.resolve([]),
   ]);
@@ -242,8 +247,10 @@ export async function buildSessionChoices(
         userId: params.userId,
         status: 'ACTIVE',
         team: {
+          lifecycleStatus:'ACTIVE',
           ...(chooserOrgId ? { orgId: chooserOrgId } : {}),
           org: {
+            lifecycleStatus:'ACTIVE',
             members: {
               some: { userId: params.userId, status: 'ACTIVE' },
             },
@@ -258,9 +265,12 @@ export async function buildSessionChoices(
     });
   }
 
+  const managedTeams=await organisationManagedTeams(
+    policy.scope==='all_active_memberships'?(deps?.crossProductPrisma??getAdminPrisma()):prisma,
+    {userId:params.userId,organisationId:chooserOrgId,...(policy.scope==='all_active_memberships'?{}:{domain})});
   const teamRows = [
     ...new Map(
-      [...sameDomainTeamRows, ...productTeamRows].map((row) => [row.teamId, row]),
+      [...sameDomainTeamRows, ...productTeamRows,...managedTeams].map((row) => [row.teamId, row]),
     ).values(),
   ];
 
@@ -292,7 +302,8 @@ export async function buildSessionChoices(
   // invite a call that would 403. The org's team cap is NOT pre-checked; `/auth/create-team`
   // enforces it.
   const creatableOrgs: TeamChoiceCreatableOrg[] = orgRows
-    .filter((row) => configRoleHoldsCapability(params.config, 'org', row.role, 'teams.manage'))
+    .filter((row) => configRoleHoldsCapability(params.config, 'org',
+      row.org.ownerId===params.userId?'owner':row.role, 'teams.manage'))
     .map((row) => ({ orgId: row.orgId, orgName: row.org.name }));
 
   const manageableOrgs = allowedOrgId ? [] : await (deps?.crossProductPrisma ?? prisma).orgMember.findMany({
