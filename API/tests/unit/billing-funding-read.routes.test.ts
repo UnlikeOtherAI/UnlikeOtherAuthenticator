@@ -1,6 +1,7 @@
 import { BillingAppKeyPurpose } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { assertBillingCreditsContract } from '../../src/routes/billing/credits.js';
 import { createApp } from '../../src/app.js';
 import {
   billingCreditsV1ConformanceFixture,
@@ -55,6 +56,12 @@ vi.mock('../../src/services/billing-recurring-addon-cancellation-confirm.service
   return { ...actual, ...addonConfirmService };
 });
 
+const legacyAuthority=vi.hoisted(()=>({authorizeBillingCycle:vi.fn()}));
+vi.mock('../../src/services/billing-cycle-authority.service.js',async()=>({
+  ...await vi.importActual<typeof import('../../src/services/billing-cycle-authority.service.js')>('../../src/services/billing-cycle-authority.service.js'),
+  ...legacyAuthority,
+}));
+
 const originalSharedSecret = process.env.SHARED_SECRET;
 const originalDatabaseUrl = process.env.DATABASE_URL;
 const credential = {
@@ -88,6 +95,7 @@ afterAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  legacyAuthority.authorizeBillingCycle.mockResolvedValue({billingManager:true});
   appKeyService.verifyBillingAppKey.mockResolvedValue(credential);
   creditsService.getBillingCredits.mockResolvedValue(billingCreditsV1ConformanceFixture);
   addonsService.getBillingRecurringAddons.mockResolvedValue(
@@ -158,89 +166,16 @@ describe('shared credits and recurring add-on read routes', () => {
     });
   });
 
-  it('binds the exact lifecycle credential, actor, user, organisation, and team for credits', async () => {
-    await withApp(async (app) => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/billing/v1/credits',
-        headers: { 'x-uoa-app-key': 'uoa_app_key', 'x-uoa-actor': 'signed-actor' },
-        payload: body,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.headers['cache-control']).toBe('private, no-store');
-      expect(response.json()).toMatchObject({ credit_balance: { label: 'Remaining credits' } });
-      expect(creditsService.getBillingCredits).toHaveBeenCalledWith({
-        credential,
-        actorToken: 'signed-actor',
-        endpoint: '/billing/v1/credits',
-        supportsBillingStatus: false,
-        supportsPurchaseCurrency: false,
-        supportsReloadCurrency: false,
-        supportsRegionValue: false,
-        log: expect.anything(),
-        request: {
-          product: 'deepwater',
-          organisationId: 'org_example',
-          teamId: 'team_example',
-          userId: 'user_example',
-        },
-      });
-      await app.inject({
-        method: 'POST',
-        url: '/billing/v1/credits',
-        headers: {
-          'x-uoa-app-key': 'uoa_app_key',
-          'x-uoa-actor': 'signed-actor',
-          'x-uoa-billing-credits-protocol': '2.0.0',
-        },
-        payload: body,
-      });
-      expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
-        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: false }),
-      );
-      await app.inject({
-        method: 'POST',
-        url: '/billing/v1/credits',
-        headers: {
-          'x-uoa-app-key': 'uoa_app_key',
-          'x-uoa-actor': 'signed-actor',
-          'x-uoa-billing-credits-protocol': '2.1.0',
-        },
-        payload: body,
-      });
-      expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
-        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
-          supportsReloadCurrency: false, supportsRegionValue: false }),
-      );
-      await app.inject({
-        method: 'POST',
-        url: '/billing/v1/credits',
-        headers: {
-          'x-uoa-app-key': 'uoa_app_key',
-          'x-uoa-actor': 'signed-actor',
-          'x-uoa-billing-credits-protocol': '2.2.0',
-        },
-        payload: body,
-      });
-      expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
-        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
-          supportsReloadCurrency: true, supportsRegionValue: false }),
-      );
-      await app.inject({
-        method: 'POST',
-        url: '/billing/v1/credits',
-        headers: {
-          'x-uoa-app-key': 'uoa_app_key',
-          'x-uoa-actor': 'signed-actor',
-          'x-uoa-billing-credits-protocol': '2.3.0',
-        },
-        payload: body,
-      });
-      expect(creditsService.getBillingCredits).toHaveBeenLastCalledWith(
-        expect.objectContaining({ supportsBillingStatus: true, supportsPurchaseCurrency: true,
-          supportsReloadCurrency: true, supportsRegionValue: true }),
-      );
+  it('authenticates exact legacy credit subjects without reopening the team projection through old negotiation',async()=>{
+    await withApp(async app=>{
+      for(const version of ['', '2.0.0','2.1.0','2.2.0','2.3.0']){
+        const response=await app.inject({method:'POST',url:'/billing/v1/credits',headers:{
+          'x-uoa-app-key':'uoa_app_key','x-uoa-actor':'signed-actor',...(version?{'x-uoa-billing-credits-protocol':version}:{})},payload:body});
+        expect(response.statusCode).toBe(409);expect(response.body).toContain('BILLING_ORGANISATION_OVERVIEW_REQUIRED');
+      }
+      expect(legacyAuthority.authorizeBillingCycle).toHaveBeenCalledWith({credential,actorToken:'signed-actor',endpoint:'/billing/v1/credits',
+        request:{product:'deepwater',organisationId:'org_example',teamId:'team_example',userId:'user_example'}});
+      expect(creditsService.getBillingCredits).not.toHaveBeenCalled();
     });
   });
 
@@ -415,7 +350,8 @@ describe('shared credits and recurring add-on read routes', () => {
     });
   });
 
-  it('rejects a service response that violates the public privacy contract', async () => {
+  it('keeps the pinned credit schema strict without executing its retired projection', async () => {
+    expect(()=>assertBillingCreditsContract({schema_version:1})).toThrow('BILLING_CREDITS_CONTRACT_INVALID');
     creditsService.getBillingCredits.mockResolvedValueOnce({ schema_version: 1 });
     await withApp(async (app) => {
       const response = await app.inject({
@@ -425,8 +361,9 @@ describe('shared credits and recurring add-on read routes', () => {
         payload: body,
       });
 
-      expect(response.statusCode).toBe(500);
-      expect(response.json()).toMatchObject({ error: 'Request failed' });
+      expect(response.statusCode).toBe(409);
+      expect(response.body).toContain('BILLING_ORGANISATION_OVERVIEW_REQUIRED');
+      expect(creditsService.getBillingCredits).not.toHaveBeenCalled();
     });
   });
 });

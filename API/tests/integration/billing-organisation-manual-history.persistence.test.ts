@@ -34,6 +34,7 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('captured o
     await p.user.create({data:{id:'manual-owner',email:'manual@example.test',userKey:'manual@example.test'}});
     await p.organisation.create({data:{id:'manual-org',name:'Manual',slug:'manual',domain:'manual.example.test',ownerId:'manual-owner'}});
     await p.orgMember.create({data:{orgId:'manual-org',userId:'manual-owner',role:'owner'}});
+    await p.team.create({data:{id:'manual-team',orgId:'manual-org',name:'Selected',slug:'selected'}});
     await p.billingStripeAccount.createMany({data:[{id:'manual-live',stripeAccountId:'acct_ManualHistory',livemode:true},
       {id:'manual-test',stripeAccountId:'acct_ManualHistory',livemode:false}]});
     await p.billingService.createMany({data:[{id:'manual-service',identifier:'manual',name:'Manual'},
@@ -103,6 +104,10 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('captured o
       snapshotSha256:billingCycleSnapshotDigest(snapshot,evidence)}});
     expect((await listBillingCycles(context,{},{prisma:p})).cycles.map(row=>row.cycle_id)).toEqual(['manual-cycle']);
     expect((await listBillingCycles({...context,billingMode:'sandbox'},{},{prisma:p})).cycles).toEqual([]);
+    const legacy={...context,financialScope:undefined,billingMode:undefined,request:{...context.request,teamId:'manual-team'}};
+    const legacyList=await listBillingCycles(legacy,{},{prisma:p});
+    expect(legacyList.cycles.map(row=>row.cycle_id)).toEqual(['manual-cycle']);
+    expect(legacyList.subject).toEqual({product:'manual',organisation_id:'manual-org',team_id:'manual-team',user_id:'manual-owner'});
     expect(await p.billingCreditEntry.count()).toBe(0);
   });
   it('confirms the issued ORG bill from actual allocations and later cash, without counting a product twice',async()=>{

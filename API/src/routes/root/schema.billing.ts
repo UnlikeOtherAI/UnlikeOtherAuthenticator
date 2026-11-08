@@ -171,7 +171,7 @@ export const billingEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/billing/v1/customer-statement',
     description:
-      'Return UOA’s display-ready canonical plan, subscription, customer charges, credit consumption, connected-service credit totals, exact commercial lines/totals, capabilities, and server-pinned actions. Token counts, provider costs and markup remain private. The statement pins immutable Ledger service/user snapshots and the exact UOA tariff version.',
+      'Superseded team aggregate read. Authenticate the exact current organisation billing manager, then require the independent organisation overview without reading Ledger or financial amounts.',
     auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL; both remain backend-only',
     body: {
       product: 'exact product identifier bound to the app key',
@@ -181,19 +181,17 @@ export const billingEndpoints: EndpointSchema[] = [
       billing_month: 'optional UTC YYYY-MM; current or past only',
     },
     response: {
-      200: 'BillingStatementV1 exactly matching /schemas/billing-statement-v1.json',
+      409:'BILLING_ORGANISATION_OVERVIEW_REQUIRED; use /billing/v1/organisation/overview and preserve the session',
       '401/403': 'Invalid purpose-bound app key, actor, product, membership, or subject',
-      '502/503':
-        'Ledger raw metering is invalid/unavailable or its dedicated reader is unconfigured',
     },
     notes:
-      'Products render this model and proxy only whitelisted action ID/path pairs. They never derive totals, private price terms, direct access, or cancellation choices. The browser receives neither app key nor actor JWT.',
+      'The old strict response schema remains published for pinned clients and historical fixtures. It is not a current organisation bill. Original frozen action context or absence must never be replaced through a refetch.',
   },
   {
     method: 'POST',
     path: '/billing/v2/customer-statement',
     description:
-      'Return BillingStatementV2: the complete v1 commercial statement plus a display-ready, team-wide raw connected-service portfolio grouped by billing service, origin product, and user. UOA rates only the requested product; other-service totals are explanatory and never become charges on this statement.',
+      'Superseded team aggregate read. Authenticate the exact current organisation billing manager, then require the independent organisation overview without reading Ledger or financial amounts.',
     auth: 'The requested product’s customer_lifecycle X-UOA-App-Key plus a fresh credential-bound X-UOA-Actor assertion whose aud is this exact endpoint URL; both remain backend-only',
     body: {
       product: 'exact product identifier bound to the app key and portfolio perspective',
@@ -203,13 +201,11 @@ export const billingEndpoints: EndpointSchema[] = [
       billing_month: 'optional UTC YYYY-MM; current or past only',
     },
     response: {
-      200: 'BillingStatementV2 exactly matching /schemas/billing-statement-v2.json',
+      409:'BILLING_ORGANISATION_OVERVIEW_REQUIRED; use /billing/v1/organisation/overview and preserve the session',
       '401/403': 'Invalid purpose-bound app key, actor, product, membership, or subject',
-      '502/503':
-        'Ledger’s immutable metering-portfolio-v1 snapshot is invalid/unavailable or the dedicated UOA reader is unconfigured',
     },
     notes:
-      'UOA derives commercial rating plus every service, origin, and per-user total from one exact user-grouped metering-portfolio-v1 snapshot. Products render the title, descriptions, totals, origin shares, per-user shares, and action model verbatim. The portfolio uses origin_product for delegated attribution, so Nessie→DeepWater usage contributes to Nessie’s share without creating direct DeepWater access or a related cancellation choice. Null origins render as Unattributed origin and likewise create no access or choice. Products perform no aggregation, rating, or cancellation inference.',
+      'The old strict response schema remains published for pinned clients and historical fixtures. Use the organisation overview for independently confirmed sections; never sum team statements or replace an original displayed action context.',
   },
   {
     method: 'POST',

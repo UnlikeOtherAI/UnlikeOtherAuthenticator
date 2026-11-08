@@ -17,7 +17,7 @@ export async function organisationHistoryAccount(context:BillingCycleContext,pri
 }
 export function organisationHistorySubject(context:BillingCycleContext) {
   return {product:context.request.product,organisation_id:context.request.organisationId,team_id:context.request.teamId,
-    user_id:context.request.userId,financial_scope:'organisation' as const,
+    user_id:context.request.userId,...(context.financialScope?{financial_scope:'organisation' as const}:{}),
     ...(context.billingMode?{billing_mode:context.billingMode}:{})};
 }
 export function historyCursorBinding(context:BillingCycleContext,accountId:string,namespace='cycles') {

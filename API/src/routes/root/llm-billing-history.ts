@@ -7,9 +7,11 @@ of Stripe's accepted payment event even if legal issue finishes later. Pending
 documents have verified payment and purchased credits but no invented tax,
 invoice number or download. An organisation invoice or pool purchase requires
 current organisation billing-manager authority, including an active admin/owner
-of any active same-org team. Legacy 5.9 requests retain their selected-team
-financial filter. The explicit organisation financial family instead spans all
-products/teams and selects one captured account/mode; see the organisation billing
+of any active same-org team. Every history request spans all products/teams and
+selects one captured account/mode. Old non-null request subjects retain their
+strict wire shape and default to the current named org mode; the selected team
+only admits the actor. The explicit organisation financial family additionally
+selects historical mode and permits the narrow null financial subject; see the organisation billing
 section and its 6.3 schemas. Legal PDFs list charges and tax, not private usage
 units, provider cost or markup. The strict contract and synthetic examples are
 at /schemas/billing-customer-invoices-v1.json and its example and OpenAPI
@@ -30,16 +32,16 @@ The canonical BillingCyclesV2 contract is published at
 \`/schemas/billing-cycles-v2.openapi.json\`. A product's billing page calls
 \`POST /billing/v1/cycles/list\` and \`/detail\` with its exact lifecycle app key,
 fresh endpoint-audience actor assertion, and product/organisation/team/user body.
-The caller must be a current billing manager for the cycle's frozen payer
-scope. The requested team can have a measured-usage cycle even when its payer
-is the organisation. Verified organisation billing managers also see a
-separate organisation subscription cycle with null team id; that null is never
-general permission to expose another team's content. The explicit organisation
-financial family is a narrow manager-only exception for captured financial
-history across products/teams, bound to one account/mode. The legacy list cursor includes
-month and cycle scope. The detail contains customer seat charges, consumed credits,
+The caller must be a current organisation billing manager, including an active
+admin/owner of any active same-org team. The selected team is actor context;
+captured cycle/payer scope stays visible on the original financial source.
+Every request is a narrow financial-only exception across products/teams,
+bound to one account/mode, and grants no general content access. Every list cursor is
+opaque and account-bound; never construct or reuse one from the old team view.
+The detail contains customer seat charges, consumed credits,
 and persisted invoice/breakdown metadata, never provider cost or markup.
-An open preview has no final invoice download. Only a document's server-authored
+The current accrued bill belongs to the independent overview; history does not
+invent an empty preview as today's bill. Only a document's server-authored
 \`download_action\` may be relayed to \`POST /billing/v1/cycles/download\`; UOA
 rechecks the same authority and streams immutable SHA-verified bytes. Products
 must not build a storage URL or invoice ID locally.
@@ -83,16 +85,18 @@ deactivated rather than deleted. Ledger never receives them.
 
 ### Shared team credits and recurring add-ons
 
-\`POST /billing/v1/credits\` is UOA's display-ready shared credit read. A product calls it
-with its own \`customer_lifecycle\` app key, a fresh bound actor assertion, and the exact
-product/organisation/team/user subject. The first field is always **Remaining credits**.
+\`POST /billing/v1/credits\` and both customer-statement versions are superseded
+team aggregate reads. They authenticate current financial authority, then return
+409 \`BILLING_ORGANISATION_OVERVIEW_REQUIRED\` without metering or settlement.
+Keep the session and use the independent organisation overview. Their old strict
+schemas remain published; no team aggregate is relabelled as an org bill.
 Current ACTIVE organisation billing managers receive financial reads. Ordinary
 members cannot read credits, statements, cycles, invoices or purchase status;
 the old member-shaped DTO does not grant access. Members can still explicitly
 POST the separate selected-team nonfinancial Ask for credits action without a
 preceding wallet read. New consumers use the independent organisation overview.
 
-Before projecting a read, UOA pins one exact user-grouped Ledger portfolio cursor for
+The retained legacy credit engine pins one exact user-grouped Ledger portfolio cursor for
 the team and settles every service in that snapshot together under a serializable team
 credit-account lock. Replay is idempotent. Corrections release prior allocations before
 reallocating them deterministically. Available credits never cross below zero from new

@@ -107,6 +107,14 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual sig
       disable_action:{enabled:true}},collection:{stripe_collection_enabled:false}}});
     const plan=overview.sections.subscription as {state:string;code?:string};expect(plan.state,JSON.stringify({code:plan.code})).toBe('confirmed');
   });
+  it('refuses superseded team aggregate reads for managers without financial dependencies, and denies members',async()=>{
+    for(const path of ['/billing/v1/credits','/billing/v1/customer-statement','/billing/v2/customer-statement']){
+      const manager=await request('ownerA',path,subject('ownerA'),{financial:false});
+      expect(manager.status,path).toBe(409);expect(await manager.text()).toContain('BILLING_ORGANISATION_OVERVIEW_REQUIRED');
+      expect((await request('memberA',path,subject('memberA'),{financial:false})).status,path).toBe(403);
+    }
+    expect((await request('ownerA','/billing/v1/organisation/capabilities',subject('ownerA'))).status).toBe(200);
+  });
   it('holds incomplete invoice LIST, preserves verified DETAIL/PDF and recovers without a financial action retry',async()=>{
     const row=await db.prisma.billingStripePaymentInvoice.findFirstOrThrow(),invoiceId=`stripe:${row.id}`,
       body={...subject('ownerB'),financial_scope:'organisation',billing_mode:'live'};
@@ -119,6 +127,22 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual sig
     for(let index=0;index<2;index++)expect(await runAddonInvoiceRecoveryCycle({prisma:db.prisma,
       runtime:async()=>({client:fixture.seed.stripe,livemode:true,webhookSecret:'fixture'})})).toMatchObject({completed:1,held:0});
     expect((await request('ownerB','/billing/v1/invoices/list',{...body,charge_month:new Date().toISOString().slice(0,7)})).status).toBe(200);
+  });
+  it('keeps strict legacy history subjects while reading the same ORG finances from either selected team',async()=>{
+    const ids:string[][]=[];
+    for(const persona of ['ownerA','ownerB','managerA']){
+      const list=await request(persona,'/billing/v1/invoices/list',{...subject(persona),charge_month:new Date().toISOString().slice(0,7)},
+        {financial:false});
+      expect(list.status,persona).toBe(200);const body=await list.json() as {subject:Record<string,unknown>;invoices:Array<{invoice_id:string}>};
+      expect(body.subject).toEqual(subject(persona));ids.push(body.invoices.map(row=>row.invoice_id).sort());
+      const detail=await request(persona,'/billing/v1/invoices/detail',{...subject(persona),invoice_id:ids.at(-1)![0]}, {financial:false});
+      expect(detail.status).toBe(200);const value=await detail.json() as {document:{download_action:{body:Record<string,unknown>}}};
+      expect(value.document.download_action.body).not.toHaveProperty('financial_scope');
+      expect(value.document.download_action.body.team_id).toBe(fixture.personas[persona]!.teamId);
+    }
+    expect(ids[0]).toHaveLength(2);expect(ids[1]).toEqual(ids[0]);expect(ids[2]).toEqual(ids[0]);
+    expect((await request('memberA','/billing/v1/invoices/list',{...subject('memberA'),charge_month:new Date().toISOString().slice(0,7)},
+      {financial:false})).status).toBe(403);
   });
   it('refuses missing/stale/altered original Disable contexts without ending the session, then consumes the displayed action',async()=>{
     const overview=await (await request('ownerA','/billing/v1/organisation/overview',subject('ownerA'))).json() as {

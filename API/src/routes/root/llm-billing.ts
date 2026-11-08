@@ -176,7 +176,7 @@ using DeepWater through Ledger remains indirect: Nessie must not confirm DeepWat
 access. This authenticated direct-session seam, never Ledger metering, determines
 which products can appear as related direct cancellation choices.
 
-### Canonical customer statement
+### Organisation billing replaces team statements
 
 UOA is the sole commercial billing engine. Ledger returns only immutable
 \`metering-usage-v1\` facts; it never returns tariff, subscription, markup,
@@ -192,14 +192,17 @@ is the TypeScript source used by UOA itself; it has no private server imports or
 credentials. Until registry publication, consumers can vendor/pack that package
 directory or fetch the matching synthetic fixture from
 \`GET /schemas/billing-statement-v2.example.json\` and its exact OpenAPI 3.1
-component from \`GET /schemas/billing-statement-v2.openapi.json\`. Product backends
-call:
+component from \`GET /schemas/billing-statement-v2.openapi.json\`. These strict
+artifacts remain available for pinned historical clients. The former read:
 
 \`POST /billing/v2/customer-statement\`
 
-with their own \`customer_lifecycle\` app key, a fresh bound \`X-UOA-Actor\`, and the
-same product/organisation/team/user subject body (plus optional \`billing_month\`).
-The response is display-ready: exact current plan and subscription, customer
+with its own \`customer_lifecycle\` app key, a fresh bound \`X-UOA-Actor\`, and the
+same product/organisation/team/user subject body (plus optional \`billing_month\`)
+now checks current manager authority and returns409
+\`BILLING_ORGANISATION_OVERVIEW_REQUIRED\`. The v1 statement and old credits read
+do the same. Use \`/billing/v1/organisation/overview\`; preserve the session and
+the original displayed action context or absence. The former response described exact plan and subscription, customer
 charges, credit consumption, monthly/usage/add-on/credit lines, exact currency
 totals, capabilities, and action descriptors. V2 includes connected-service
 customer credit totals without exposing token counts or provider costs. UOA

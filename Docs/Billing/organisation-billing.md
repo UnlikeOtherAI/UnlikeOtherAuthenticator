@@ -118,6 +118,22 @@ documents and financial snapshots remain immutable; download bytes are checked
 against their persisted hashes. History cursors bind org/account and, for
 invoices, charge month.
 
+The selected-team request family also uses these ORG-wide history readers and
+the current named org mode. Its non-null subject/download bodies remain strict
+and unchanged; it cannot silently select another mode. The explicit financial
+family selects retained historical mode and permits the narrow null-team actor.
+History source team/product labels describe original evidence, not a financial
+filter chosen by the current team. Old team-filtered cursors are refused.
+
+The former `/billing/v1/credits`, `/billing/v1/customer-statement` and
+`/billing/v2/customer-statement` aggregates cannot represent independently
+confirmed organisation sections. They verify the exact actor and current
+manager, then return409 `BILLING_ORGANISATION_OVERVIEW_REQUIRED` without metering,
+settlement or financial projection. Members receive403. Keep the session and
+use the organisation overview; never invent an org total from old team DTOs.
+Pinned old schemas remain unchanged. Member Ask is a direct nonfinancial POST,
+and frozen action context or absence is never upgraded by a read/refetch.
+
 New manual invoice calculations require the contract's captured account before
 reading metering. Funding evidence selects settlements and separately paid
 add-ons from that exact account, which identifies both provider account and
@@ -212,7 +228,7 @@ opaque `billing_context` contract and public `6.3.0` shapes remain unchanged.
 `billing-organisation-signed-http.persistence.test.ts` starts the actual API on
 a loopback HTTP socket with an isolated migrated PostgreSQL schema, a synthetic
 registered lifecycle key and RS256 actor key, and actual UOA assurance/refresh
-families. It does not inject an already-authorised actor. The seven cases cover
+families. It does not inject an already-authorised actor. The nine cases cover
 the actual `/org/assurance/validate` endpoint with both access-token and
 confidential-subject transports and a refused borrowed custody reference;
 fresh org owners/admins with no TeamMember on either active team; cross-team
@@ -221,7 +237,10 @@ credential epoch and original custody checks; independently confirmed credits,
 saved funding controls and subscription beside the inclusive bill hold; invoice
 LIST reconciliation with confirmed DETAIL/PDF hash and original-source recovery;
 and missing, altered and stale original action contexts before a deliberate
-successful Disable. Session authority survives those action refusals.
+successful Disable. They also prove manager409/member403 on superseded reads
+and identical ORG invoice sources under both selected-team legacy subjects,
+with strict old-family response validation. Session authority survives those
+action refusals.
 
 Provider objects and initial authentication are synthetic. These checks prove
 the real signed HTTP/assurance/DB boundary, not a production browser login or a
