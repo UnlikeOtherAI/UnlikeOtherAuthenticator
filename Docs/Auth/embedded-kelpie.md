@@ -90,3 +90,5 @@ connection, settings-stream and confidential original-proof regressions. These
 machine-only APIs have no UOA UI. Nessie owns reachable browser entry points and
 must verify installed native flows, account replacement/sign-out, live agent
 connectivity and recovery separately.
+
+Verified on Maxis at aac2ef113650aabeb2025de4b6dfb3e514a5bc6f: API typecheck and changed-file ESLint passed. With an isolated local PostgreSQL database and the hosted Auth bundle built, all 50 tests passed across embedded Kelpie, native connectivity, native account/streaming, confidential settings and original global assurance. The host stream delivered committed snapshots/deltas and closed before another value after original-proof revocation. The database stopped cleanly. These are local protocol checks; installed Nessie and production rollout remain separate.
