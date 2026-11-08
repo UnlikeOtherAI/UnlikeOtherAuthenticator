@@ -58,6 +58,7 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual sig
       const url=typeof input==='string'?input:input instanceof URL?input.href:input.url;
       if(url===fixture.configUrl)return Promise.resolve(new Response(fixture.configJwt));
       if(url===fixture.jwksUrl)return Promise.resolve(Response.json({keys:[fixture.actorPublicJwk]}));
+      if(ledger.matches(url))return ledger.fetch(url,init);
       return actualFetch(input,init);
     });
   });

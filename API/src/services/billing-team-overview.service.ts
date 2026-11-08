@@ -9,6 +9,7 @@ import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js'
 import { fetchVerifiedLedgerPaidReceiptSet } from './billing-ledger-paid-receipt-proof.service.js';
 import { billingTeamCopy } from './billing-team-copy.catalog.js';
 import { readTeamRecordedUsage, readTeamRetainedCredits } from './billing-team-records.service.js';
+import { billingLocale } from './billing-copy-locale.js';
 
 async function teamAuthority(context: OrganisationBillingContext, prisma: PrismaClient): Promise<string> {
   const viewer = await authorizeOrganisationBilling(context, prisma);
@@ -48,7 +49,7 @@ export async function billingTeamOverview(context: OrganisationBillingContext,
     section(async () => {
       const usage = await metering;
       return { as_of: usage.snapshot.capturedAt, recorded_calls: { quantity: usage.calls,
-        display: new Intl.NumberFormat(input.locale).format(BigInt(usage.calls)), label: copy.calls } };
+        display: new Intl.NumberFormat(billingLocale(input.locale)).format(BigInt(usage.calls)), label: copy.calls } };
     }, copy.activity, input.locale),
     section(async () => {
       const usage = await metering, proof = await (deps.proof ?? fetchVerifiedLedgerPaidReceiptSet)(scope);

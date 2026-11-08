@@ -1,4 +1,6 @@
-import { createServer } from 'node:http';
+import { createServer, get as httpGet, type RequestOptions } from 'node:http';
+import https from 'node:https';
+import { syncBuiltinESMExports } from 'node:module';
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { CompactSign, exportJWK, generateKeyPair, jwtVerify } from 'jose';
@@ -16,8 +18,8 @@ export async function startTeamReaderLedger(db: PrismaClient, uoaBase: string) {
       if (failure) { response.writeHead(503); response.end('{}'); return; }
       const { payload } = await jwtVerify(String(request.headers['x-uoa-service-assertion']), service.publicKey,
         { algorithms: ['RS256'], audience: base, issuer: uoaBase, subject: 'uoa-metering-reader' });
-      if (request.headers['x-ledger-app-key'] !== 'owned-local-ledger-reader' || payload.scope !== 'metering.read' ||
-        payload.azp !== 'owned-reader' || payload.product !== 'nessie' || payload.organization_id !== 'control-org' ||
+      if (request.headers['x-ledger-app-key'] !== 'lk_owned_local_ledger_reader_00000000' || payload.scope !== 'metering.read' ||
+        payload.azp !== 'tk_owned_reader' || payload.product !== 'nessie' || payload.organization_id !== 'control-org' ||
         !['control-team', 'addon-other-team'].includes(String(payload.team_id))) throw Error('SCOPE_REFUSED');
       const teamId = String(payload.team_id), month = String(payload.billing_month), now = new Date().toISOString();
       const rows = await db.billingPaidUsageLiability.findMany({ where: { serviceId: 'control-service',
@@ -51,11 +53,25 @@ export async function startTeamReaderLedger(db: PrismaClient, uoaBase: string) {
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address(); if (!address || typeof address === 'string') throw Error('LOOPBACK_REQUIRED');
-  base = `http://127.0.0.1:${address.port}`;
-  return { env: { LEDGER_BILLING_BASE_URL: base, LEDGER_BILLING_APP_KEY: 'owned-local-ledger-reader',
-    LEDGER_BILLING_APP_KEY_ID: 'owned-reader', LEDGER_BILLING_ASSERTION_AUDIENCE: base,
+  base = `https://127.0.0.1:${address.port}`;
+  const transport = `http://127.0.0.1:${address.port}`, originalGet = https.get, originalFetch = globalThis.fetch;
+  const matches = (value: string | URL) => new URL(value).origin === base;
+  const target = (value: string | URL) => new URL(new URL(value).pathname + new URL(value).search, transport);
+  // Only this exact synthetic origin maps onto the loopback HTTP producer.
+  // Production HTTPS/config checks and every other transport stay unchanged.
+  https.get = ((value: string | URL, ...args: unknown[]) => {
+    if ((typeof value === 'string' || value instanceof URL) && matches(value)) {
+      return httpGet(target(value), args[0] as RequestOptions);
+    }
+    return Reflect.apply(originalGet, https, [value, ...args]);
+  }) as typeof https.get;
+  syncBuiltinESMExports();
+  return { matches, fetch: (value: string | URL, init?: RequestInit) => originalFetch(target(value), init),
+    env: { LEDGER_BILLING_BASE_URL: base, LEDGER_BILLING_APP_KEY: 'lk_owned_local_ledger_reader_00000000',
+    LEDGER_BILLING_APP_KEY_ID: 'tk_owned_reader', LEDGER_BILLING_ASSERTION_AUDIENCE: base,
     UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK: JSON.stringify({ ...await exportJWK(service.privateKey), kid: 'owned-uoa-reader', alg: 'RS256' }),
     UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON: JSON.stringify({ keys: [{ ...await exportJWK(service.publicKey), kid: 'owned-uoa-reader', alg: 'RS256' }] }) },
   fail: (value: boolean) => { failure = value; },
-  close: () => new Promise<void>((resolve, reject) => { server.close(error => error ? reject(error) : resolve()); server.closeAllConnections(); }) };
+  close: () => { https.get = originalGet; syncBuiltinESMExports();
+    return new Promise<void>((resolve, reject) => { server.close(error => error ? reject(error) : resolve()); server.closeAllConnections(); }); } };
 }
