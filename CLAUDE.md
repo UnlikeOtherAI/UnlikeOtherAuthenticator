@@ -135,3 +135,5 @@ confidential signed website configuration/finalization path.
 Kelpie connection-ticket issuance and live gateway validation use the existing native
 account and resource-signing boundaries; read [Kelpie account connectivity](Docs/Auth/kelpie-connect.md)
 before changing the scope, operator gateway allowlist, grant migration or validation.
+
+Embedded Kelpie uses the host product's original independent UOA proof and distinct short-lived token classes; follow [host sessions](Docs/Auth/embedded-kelpie.md). It never impersonates the standalone native registration or copies refresh credentials.

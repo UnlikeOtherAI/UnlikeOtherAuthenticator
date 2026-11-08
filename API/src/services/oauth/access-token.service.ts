@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 
 import { type JWK, type KeyLike, SignJWT, importJWK } from 'jose';
 
-import { getEnv } from '../../config/env.js';
+import { getEnv, getPublicBaseUrl } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
 import type { PublicCredentialSource } from './credential-source.service.js';
 import type { OrgContext } from '../org-context.service.js';
@@ -236,4 +236,11 @@ export async function signConfidentialAccessToken(
   } catch {
     throw new AppError('INTERNAL', 500, 'TOKEN_SIGN_FAILED');
   }
+}
+
+/** A host session and a gateway capability have distinct audiences and token classes. */
+export async function signEmbeddedKelpieToken(claims: Record<string, unknown>, audience: string, tokenUse: 'embedded_kelpie_account' | 'embedded_kelpie_connect'): Promise<string> {
+  const { privateKey, kid } = await load();
+  return new SignJWT({ ...claims, token_use: tokenUse }).setProtectedHeader({ alg: ALG, kid, typ: 'at+jwt' })
+    .setIssuer(getPublicBaseUrl()).setAudience(audience).sign(privateKey);
 }

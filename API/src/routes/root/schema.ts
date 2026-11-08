@@ -1,3 +1,4 @@
+import { embeddedKelpieEndpoints } from './schema.embedded-kelpie.js';
 import { billingModeEndpoints } from './schema.billing-modes.js';
 import { organisationBillingEndpoints } from './schema.billing-organisation.js';
 import { telephoneEndpoints } from './schema.telephone.js';
@@ -79,5 +80,6 @@ export const endpoints: EndpointSchema[] = [
   ...internalAdminAuthFunnelEndpoints,
   ...oauthEndpoints,
   ...oauthAccountEndpoints,
+  ...embeddedKelpieEndpoints,
   ...signatureEndpoints,
 ];
