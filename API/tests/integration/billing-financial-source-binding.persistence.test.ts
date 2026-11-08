@@ -4,7 +4,7 @@ import { createRlsTestDb } from '../helpers/test-db.js';
 import { getAdminAuthDomain } from '../../src/config/env.js';
 import { captureOrganisationFinancialSource,assertCurrentFinancialSource } from '../../src/services/billing-financial-source-binding.service.js';
 import { createBillingContract } from '../../src/services/billing-contract.service.js';
-import { createCommercialAdjustment,deactivateCommercialAdjustment } from '../../src/services/billing-commercial-adjustment.service.js';
+import { createCommercialAdjustment,deactivateCommercialAdjustment,listApplicableCommercialAdjustments } from '../../src/services/billing-commercial-adjustment.service.js';
 import { setOrganisationBillingMode } from '../../src/services/billing-organisation-mode.service.js';
 import { paidUsageRatingScopeKey } from '../../src/services/billing-paid-liability.service.js';
 
@@ -54,6 +54,11 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('forward fi
       .rejects.toThrow('BILLING_ORGANISATION_MODE_BLOCKED');
     await deactivateCommercialAdjustment({serviceId:'binding-service',adjustmentId:adjustment.id,actor},{prisma:db});
     await setOrganisationBillingMode({organisationId:'binding-org',mode:'sandbox',expectedRevision:0,actor},db);
+    const period=new Date(),startsAt=new Date(Date.UTC(period.getUTCFullYear(),period.getUTCMonth(),1)),
+      endsAt=new Date(Date.UTC(period.getUTCFullYear(),period.getUTCMonth()+1,1)),read={serviceId:'binding-service',
+      organisationId:'binding-org',teamId:'binding-team',startsAt,endsAt};
+    expect((await listApplicableCommercialAdjustments({...read,accountId:'binding-live'},{prisma:db})).map(row=>row.id)).toEqual([adjustment.id]);
+    expect(await listApplicableCommercialAdjustments({...read,accountId:'binding-test'},{prisma:db})).toEqual([]);
     await expect(db.$transaction(tx=>assertCurrentFinancialSource(tx,contract))).rejects.toThrow('BILLING_FINANCIAL_SOURCE_RECONCILIATION_REQUIRED');
     expect((await db.billingOrganisationContract.findUniqueOrThrow({where:{id:contract.id}})).billingAccountId).toBe('binding-live');
     await expect(db.billingCommercialAdjustment.delete({where:{id:adjustment.id}})).rejects.toThrow('BILLING_FINANCIAL_SOURCE_BINDING_IMMUTABLE');

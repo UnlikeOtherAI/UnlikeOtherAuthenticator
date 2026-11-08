@@ -9,6 +9,7 @@ import type { BillingCycleContext } from '../../src/services/billing-cycle-read.
 import type { BillingInvoicePdfStorage } from '../../src/services/billing-invoice-storage.service.js';
 import { readOrganisationAccruedBill } from '../../src/services/billing-organisation-accrual.service.js';
 import { runAddonInvoiceRecoveryCycle } from '../../src/services/billing-addon-invoice-recovery.service.js';
+import { collectContractFundingEvidence } from '../../src/services/billing-contract-funding-evidence.service.js';
 vi.mock('../../src/services/billing-actor.service.js',()=>({verifyBillingActor:async()=>({})}));
 describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual add-on invoice financial sources',()=>{
   let handle:NonNullable<Awaited<ReturnType<typeof createTestDb>>>,seed:Awaited<ReturnType<typeof seedOrganisationAddonInvoices>>;
@@ -42,6 +43,16 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual add
     expect(await handle.prisma.billingStripeSubscription.count()).toBe(0);
     expect(await handle.prisma.billingStripePaymentInvoice.count()).toBe(2);expect(await handle.prisma.billingStripePaymentInvoiceCashPayment.count()).toBe(2);
     expect(await handle.prisma.billingCreditEntry.count()).toBe(0);
+  });
+  it('selects genuine add-on funding evidence by the exact captured provider account across both entitlement teams',async()=>{
+    const p=handle.prisma,tariff=await p.billingTariff.create({data:{serviceId:'control-service',key:'manual-proof',version:1,
+      name:'Manual',mode:'CUSTOM',collectionMode:'MANUAL',markupBps:3000,currency:'USD',monthlyAmountMinor:1000n}});
+    const input={serviceId:'control-service',tariffId:tariff.id,organisationId:'control-org',billingMonth:'2030-01',
+      startsAt:new Date('2030-01-01'),endsAt:new Date('2030-02-01')};
+    const live=await collectContractFundingEvidence({...input,accountId:seed.account.id},{prisma:p});
+    expect(live.addons.map(row=>row.subscriptionId).sort()).toEqual(seed.sources.map(row=>row.subscription.id).sort());
+    expect(await collectContractFundingEvidence({...input,accountId:'control-test'},{prisma:p})).toEqual({credits:[],addons:[]});
+    expect(await p.billingCreditEntry.count()).toBe(0);expect(await p.billingRecurringAddonSubscription.count()).toBe(2);
   });
   it('reads financial history for both entitlement teams and downloads the exact captured PDF',async()=>{
     const p=handle.prisma;

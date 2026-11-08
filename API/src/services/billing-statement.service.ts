@@ -1,4 +1,5 @@
 import { billingSubscriptionProjection } from './billing-subscription-projection.service.js';
+import { organisationHistoryAccount } from './billing-organisation-history.service.js';
 import { requireBillingManager } from './billing-financial-authority.service.js';
 import { bindStatementActions } from './billing-statement-mode.service.js';
 
@@ -169,6 +170,7 @@ async function buildCanonicalBillingStatement(
     deps?.resolveSummary ?? ((params) => getStripeSubscriptionSummary(params, { prisma }))
   )(context);
   const statementProduct = currentSummary.product.identifier;
+  const account=await organisationHistoryAccount(context,prisma);
   const canonicalRequest = { ...context.request, product: statementProduct };
 
   const fetchMetering = deps?.fetchMetering ?? fetchLedgerMeteringUsage;
@@ -222,6 +224,7 @@ async function buildCanonicalBillingStatement(
         organisationId: context.request.organisationId,
         teamId: context.request.teamId,
         startsAt: period.startsAtDate,
+        accountId:account.id,
         endsAt: period.endsAtDate,
       },
       { prisma },
@@ -453,6 +456,7 @@ async function buildCanonicalBillingStatement(
           )(
             {
               organisationId: context.request.organisationId,
+              accountId:account.id,
               serviceId: context.credential.service.id,
               statementProduct,
               billingMonth: period.key,

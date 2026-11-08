@@ -37,6 +37,8 @@ export async function collectContractFundingEvidence(
     serviceId: string;
     tariffId: string;
     organisationId: string;
+    /** Immutable provider account/mode identity captured by the contract. */
+    accountId:string;
     billingMonth: string;
     startsAt: Date;
     endsAt: Date;
@@ -46,6 +48,7 @@ export async function collectContractFundingEvidence(
   credits: ContractCreditSettlementEvidence[];
   addons: ContractAddonEvidence[];
 }> {
+  if(!params.accountId)throw new AppError('BAD_REQUEST',409,'BILLING_INVOICE_ACCOUNT_BINDING_RECONCILIATION_REQUIRED');
   const [settlements, subscriptions] = await Promise.all([
     deps.prisma.billingCreditUsageSettlement.findMany({
       where: {
@@ -53,7 +56,8 @@ export async function collectContractFundingEvidence(
         tariffId: params.tariffId,
         billingMonth: params.billingMonth,
         status: BillingCreditUsageSettlementStatus.APPLIED,
-        creditAccount: { orgId: params.organisationId, currency: 'USD' },
+        accountId:params.accountId,
+        creditAccount: { accountId:params.accountId,orgId: params.organisationId, currency: 'USD' },
       },
       include: {
         creditAccount: { select: { accountId: true, teamId: true, currency: true } },
@@ -81,6 +85,7 @@ export async function collectContractFundingEvidence(
       where: {
         serviceId: params.serviceId,
         orgId: params.organisationId,
+        accountId:params.accountId,
         initialInvoicePaidAt: { not: null, lt: params.endsAt },
         entitlementActivatedAt: { not: null, lt: params.endsAt },
         OR: [
@@ -100,6 +105,8 @@ export async function collectContractFundingEvidence(
   const accountByTeam = new Map<string | null, string>();
   const credits = settlements.flatMap((settlement) => {
     const latest = settlement.adjustments[0];
+    if(settlement.accountId!==params.accountId||settlement.creditAccount.accountId!==params.accountId)
+      throw new AppError('BAD_REQUEST',409,'BILLING_INVOICE_CREDIT_ACCOUNT_MISMATCH');
     if (!latest) {
       throw new AppError('INTERNAL', 500, 'BILLING_INVOICE_CREDIT_EVIDENCE_MISSING');
     }
@@ -131,6 +138,7 @@ export async function collectContractFundingEvidence(
   const addons = subscriptions.map((subscription) => {
     if (
       !subscription.initialInvoiceId ||
+      subscription.accountId!==params.accountId||subscription.catalog.accountId!==params.accountId||
       !subscription.activationWebhookEventId ||
       !subscription.entitlementActivatedAt ||
       subscription.offer.id !== subscription.offerId ||

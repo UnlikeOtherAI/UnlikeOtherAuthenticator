@@ -118,6 +118,15 @@ documents and financial snapshots remain immutable; download bytes are checked
 against their persisted hashes. History cursors bind org/account and, for
 invoices, charge month.
 
+New manual invoice calculations require the contract's captured account before
+reading metering. Funding evidence selects settlements and separately paid
+add-ons from that exact account, which identifies both provider account and
+mode; a contradictory catalog or settlement refuses. An old unbound contract
+cannot acquire today's account through a fresh calculation. Existing issued
+legal records stay unchanged. Commercial adjustment readers likewise select the
+captured account, preserve its historical effective period after deactivation,
+and hold relevant unbound rows rather than assigning them to either mode.
+
 Recurring add-on controls retain their existing per-offer entitlement target:
 the selected TEAM or displayed SUBSCRIBING_USER, while the payer is ORG. The
 canonical description says this is not every add-on instance in the org. Missing

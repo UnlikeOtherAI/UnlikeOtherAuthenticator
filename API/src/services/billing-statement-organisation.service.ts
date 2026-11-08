@@ -42,6 +42,7 @@ import {
  */
 export type OrganisationStatementContext = {
   organisationId: string;
+  accountId:string;
   serviceId: string;
   statementProduct: string;
   billingMonth: string;
@@ -170,6 +171,7 @@ async function buildTeamUsage(
         organisationId: context.organisationId,
         teamId: team.id,
         startsAt: context.periodStartsAt,
+        accountId:context.accountId,
         endsAt: context.periodEndsAt,
       },
       { prisma: deps.prisma },

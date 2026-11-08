@@ -6,6 +6,7 @@ import { captureOrganisationFinancialSource } from '../../src/services/billing-f
 import { issueBillingInvoice } from '../../src/services/billing-invoice-lifecycle.service.js';
 import { readOrganisationAccruedBill } from '../../src/services/billing-organisation-accrual.service.js';
 import { resolveOrganisationBillingMode } from '../../src/services/billing-organisation-mode.service.js';
+import { calculateBillingContractInvoice } from '../../src/services/billing-invoice-calculation.service.js';
 import { listCustomerInvoices,getCustomerInvoiceDetail,downloadCustomerInvoice } from '../../src/services/billing-customer-invoice-read.service.js';
 import { billingCycleSnapshotDigest,listBillingCycles } from '../../src/services/billing-cycle-read.service.js';
 import type { BillingCycleContext } from '../../src/services/billing-cycle-read.service.js';
@@ -113,6 +114,19 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('captured o
     expect(bill.lines.filter(line=>line.kind==='subscription')).toHaveLength(2);
     await expect(readOrganisationAccruedBill(context,selection,'2030-02',new Date('2030-03-05T12:00:00Z'),p))
       .rejects.toThrow('BILLING_ACCRUAL_MANUAL_TAX_RECONCILIATION_REQUIRED');
+    expect(await p.billingCreditEntry.count()).toBe(0);
+  });
+  it('calculates a new manual draft using the contract captured account without rebinding existing issued evidence',async()=>{
+    const p=handle.prisma,original=await p.billingInvoice.findUniqueOrThrow({where:{id:invoiceId}});
+    const invoice=await calculateBillingContractInvoice({contractId:original.contractId,issuerProfileId:original.issuerProfileId,
+      billingMonth:'2030-01',taxTerms:{treatment:'NO_TAX_CHARGED',rateBps:0,legalBasis:'Outside tax scope'},
+      actor:{email:'operator@example.test'}},{prisma:p,now:()=>new Date('2030-02-01T00:00:00Z'),
+      fetchMetering:async input=>({schemaVersion:1,product:input.product,groupBy:'service',scope:{organizationId:'manual-org',teamId:null,
+        userId:null,month:'2030-01',startsAt:'2030-01-01T00:00:00.000Z',endsAt:'2030-02-01T00:00:00.000Z'},calls:'0',lines:[],
+        billingCompleteness:{state:'complete',unresolvedPaidAttempts:'0'},snapshot:{id:'empty',cursor:'empty',capturedAt:'2030-02-01T00:00:00Z',
+          immutable:true,sha256:'c'.repeat(64)}})});
+    expect(invoice).toMatchObject({status:'DRAFT',subtotalMinor:2000n,creditsAppliedMinor:0n});
+    expect(await p.billingInvoice.findUniqueOrThrow({where:{id:invoiceId}})).toEqual(original);
     expect(await p.billingCreditEntry.count()).toBe(0);
   });
 });
