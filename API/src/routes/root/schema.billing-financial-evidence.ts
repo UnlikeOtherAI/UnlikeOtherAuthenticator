@@ -58,7 +58,8 @@ export const billingFinancialEvidenceEndpoints=(adminAuth:string):EndpointSchema
     body: { product: 'string', organisation_id: 'string', team_id: 'selected ACTIVE team; null only explicit financial realm', user_id: 'string',
       financial_scope: 'optional organisation; required for organisation financial history',billing_mode:'optional live | sandbox; requires financial_scope',
       charge_month: 'YYYY-MM UTC', limit: 'optional integer 1–50', cursor: 'optional opaque cursor' },
-    response: { 200: 'BillingCustomerInvoicesListV1; no provider units or private markup' },
+    response: { 200: 'BillingCustomerInvoicesListV1; no provider units or private markup',
+      409:'BILLING_ADDON_HISTORY_RECONCILIATION_REQUIRED while original add-on invoice sources in the requested org/account/mode are incomplete. Read-only refresh; no empty-history or stale-action interpretation. Confirmed detail/PDF remains accessible.' },
   },
   {
     method: 'POST', path: '/billing/v1/invoices/detail',

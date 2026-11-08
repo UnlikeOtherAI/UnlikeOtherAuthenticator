@@ -1,0 +1,117 @@
+import { randomBytes,createHash } from 'node:crypto';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { generateKeyPair,exportJWK } from 'jose';
+import { beforeAll,afterAll,describe,expect,it,vi } from 'vitest';
+import type { FastifyInstance } from 'fastify';
+import { createTestDb } from '../helpers/test-db.js';
+import { seedOrganisationHttpFixture } from '../helpers/organisation-http-fixture.js';
+import { createApp } from '../../src/app.js';
+import { disconnectPrisma } from '../../src/db/prisma.js';
+import { runAddonInvoiceRecoveryCycle } from '../../src/services/billing-addon-invoice-recovery.service.js';
+import { mintBillingActionContext } from '../../src/services/billing-action-context.service.js';
+import { FilesystemBillingInvoicePdfStorage,type BillingInvoicePdfStorage } from '../../src/services/billing-invoice-storage.service.js';
+
+describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('actual signed organisation HTTP + assurance',()=>{
+  let db:NonNullable<Awaited<ReturnType<typeof createTestDb>>>,app:FastifyInstance,fixture:Awaited<ReturnType<typeof seedOrganisationHttpFixture>>,base:string;
+  let storage:BillingInvoicePdfStorage;
+  async function request(persona:string,path:string,body:Record<string,unknown>,options:Parameters<typeof fixture.sign>[3]={}){
+    const token=await fixture.sign(persona,path,body as never,options);
+    return fetch(`${base}${path}`,{method:'POST',headers:{'content-type':'application/json','x-uoa-app-key':fixture.appKey,'x-uoa-actor':token,
+      'x-uoa-billing-mode-protocol':'1.0.0','x-uoa-billing-credits-protocol':'2.3.0',
+      'x-uoa-billing-presentation':'1.5.0','x-uoa-billing-locale':'en-US'},body:JSON.stringify(body)});
+  }
+  function subject(persona:string,teamId:string|null=fixture.personas[persona]!.teamId){return {product:'nessie',organisation_id:'control-org',
+    team_id:teamId,user_id:fixture.personas[persona]!.userId};}
+  beforeAll(async()=>{
+    const handle=await createTestDb();if(!handle)throw Error('Disposable PG required');db=handle;
+    vi.stubEnv('DATABASE_URL',db.databaseUrl);vi.stubEnv('DATABASE_ADMIN_URL',db.databaseUrl);vi.stubEnv('DATABASE_ENABLED','true');
+    vi.stubEnv('STRIPE_BILLING_ENABLED','false');vi.stubEnv('BILLING_ACTOR_AUDIENCE_MODE','enforce');
+    const storageRoot=await mkdtemp(join(tmpdir(),'uoa-organisation-http-'));
+    storage=new FilesystemBillingInvoicePdfStorage(storageRoot);
+    vi.stubEnv('BILLING_INVOICE_STORAGE_PROVIDER','filesystem');vi.stubEnv('BILLING_INVOICE_FILESYSTEM_ROOT',storageRoot);
+    vi.stubEnv('ENTERPRISE_SSO_CUSTODY_PROVIDER','local');vi.stubEnv('ENTERPRISE_SSO_KEYRING',JSON.stringify({current:'http-test',keys:{'http-test':randomBytes(32).toString('base64')}}));
+    for(const mode of ['LIVE','SANDBOX']){
+      vi.stubEnv(`STRIPE_${mode}_ACCOUNT_ID`,'acct_Controls');vi.stubEnv(`STRIPE_${mode}_SECRET_KEY`,mode==='LIVE'?'rk_live_http':'rk_test_http');
+      vi.stubEnv(`STRIPE_${mode}_WEBHOOK_SECRET`,`whsec_http_${mode}`);
+    }
+    const keys=await generateKeyPair('RS256'),kid='uoa-http-access';
+    vi.stubEnv('USER_ACCESS_TOKEN_PRIVATE_JWK',JSON.stringify({...await exportJWK(keys.privateKey),kid,alg:'RS256',use:'sig'}));
+    vi.stubEnv('USER_ACCESS_TOKEN_PUBLIC_JWKS_JSON',JSON.stringify({keys:[{...await exportJWK(keys.publicKey),kid,alg:'RS256',use:'sig'}]}));
+    app=await createApp();base=await app.listen({port:0,host:'127.0.0.1'});
+    vi.stubEnv('PUBLIC_BASE_URL',base);vi.stubEnv('AUTH_SERVICE_IDENTIFIER',new URL(base).host);
+    fixture=await seedOrganisationHttpFixture(db.prisma,{publicBaseUrl:base,storage});
+  });
+  afterAll(async()=>{await app?.close();await disconnectPrisma();await db?.cleanup();vi.unstubAllEnvs();});
+  it('admits fresh org owners/admins on any ACTIVE same-org team with no TeamMember and verifies null financial custody',async()=>{
+    expect(await db.prisma.teamMember.count({where:{userId:{in:['control-owner','http-org-admin']}}})).toBe(0);
+    for(const persona of ['ownerA','ownerB','adminA','adminB']){
+      const response=await request(persona,'/billing/v1/organisation/capabilities',subject(persona));
+      expect(response.status,persona).toBe(200);expect(await response.json()).toMatchObject({capabilities:{can_view_billing:true,can_manage_billing:true},
+        financial_scope:{kind:'organisation',organisation_id:'control-org',mode:'live'}});
+    }
+    const response=await request('ownerA','/billing/v1/organisation/capabilities',subject('ownerA',null));
+    expect(response.status).toBe(200);
+    expect((await db.prisma.sessionAssurance.findUniqueOrThrow({where:{id:fixture.personas.ownerA!.assuranceId}})).teamId).toBe('control-team');
+    expect((await fetch(`${base}/oauth/jwks.json`)).status).toBe(200);
+  });
+  it('admits a cross-team manager and denies ordinary financial reads while preserving direct nonfinancial Ask',async()=>{
+    const cap='/billing/v1/organisation/capabilities',overview='/billing/v1/organisation/overview';
+    expect((await request('managerA',cap,subject('managerA'))).status).toBe(200);
+    const response=await request('memberA',cap,subject('memberA'));
+    expect(response.status).toBe(200);expect(await response.json()).toMatchObject({capabilities:{can_view_billing:false,can_manage_billing:false}});
+    expect((await request('memberA',overview,subject('memberA'))).status).toBe(403);
+    expect((await request('memberA','/billing/v1/credits',subject('memberA'),{financial:false})).status).toBe(403);
+    const ask=await request('memberA','/billing/v1/credits/funding-request',subject('memberA'),{financial:false});
+    expect(ask.status).toBe(200);expect(await ask.json()).toMatchObject({recipient_user_ids:['control-owner','http-org-admin','http-team-manager']});
+    expect(await db.prisma.billingCreditEntry.count()).toBe(0);
+  });
+  it('requires the exact signature audience, subject, original custody client and current epoch',async()=>{
+    const path='/billing/v1/organisation/capabilities',body=subject('ownerA');
+    for(const options of [{audience:`${base}/billing/v1/organisation/overview`},{claims:{tv:1}},
+      {claims:{assurance_ref:fixture.personas.memberA!.assuranceRef}},{claims:{assurance_ref:undefined}}]){
+      expect((await request('ownerA',path,body,options)).status).toBe(401);
+    }
+    expect((await request('ownerA',path,{...body,team_id:'addon-other-team'})).status).toBe(401); // Original custody remains A.
+  });
+  it('keeps confirmed money, saved funding controls and the plan beside the inclusive bill hold',async()=>{
+    const response=await request('ownerA','/billing/v1/organisation/overview',subject('ownerA'));
+    expect(response.status).toBe(200);const overview=await response.json() as {sections:Record<string,unknown>};
+    expect(overview.sections.accrued_bill).toMatchObject({state:'pending_reconciliation'});
+    expect(overview.sections.accrued_bill).not.toHaveProperty('data');
+    expect(overview.sections.credits).toMatchObject({state:'confirmed',data:{confirmed_balance:{credits:'0'}}});
+    expect(overview.sections.funding).toMatchObject({state:'confirmed',data:{funding_policy:{offers:[]},automatic_top_up:{state:'active',
+      disable_action:{enabled:true}},collection:{stripe_collection_enabled:false}}});
+    const plan=overview.sections.subscription as {state:string;code?:string};expect(plan.state,JSON.stringify({code:plan.code})).toBe('confirmed');
+  });
+  it('holds incomplete invoice LIST, preserves verified DETAIL/PDF and recovers without a financial action retry',async()=>{
+    const row=await db.prisma.billingStripePaymentInvoice.findFirstOrThrow(),invoiceId=`stripe:${row.id}`,
+      body={...subject('ownerB'),financial_scope:'organisation',billing_mode:'live'};
+    const list=await request('ownerB','/billing/v1/invoices/list',{...body,charge_month:new Date().toISOString().slice(0,7)});
+    expect(list.status).toBe(409);expect(await list.text()).toContain('BILLING_ADDON_HISTORY_RECONCILIATION_REQUIRED');
+    const detail=await request('ownerB','/billing/v1/invoices/detail',{...body,invoice_id:invoiceId});expect(detail.status).toBe(200);
+    const document=await request('ownerB','/billing/v1/invoices/download',{...body,invoice_id:invoiceId,document_id:invoiceId});
+    expect(document.status).toBe(200);const bytes=Buffer.from(await document.arrayBuffer());
+    expect(bytes.subarray(0,5).toString()).toBe('%PDF-');expect(createHash('sha256').update(bytes).digest('hex')).toBe(row.pdfSha256);
+    for(let index=0;index<2;index++)expect(await runAddonInvoiceRecoveryCycle({prisma:db.prisma,
+      runtime:async()=>({client:fixture.seed.stripe,livemode:true,webhookSecret:'fixture'})})).toMatchObject({completed:1,held:0});
+    expect((await request('ownerB','/billing/v1/invoices/list',{...body,charge_month:new Date().toISOString().slice(0,7)})).status).toBe(200);
+  });
+  it('refuses missing/stale/altered original Disable contexts without ending the session, then consumes the displayed action',async()=>{
+    const overview=await (await request('ownerA','/billing/v1/organisation/overview',subject('ownerA'))).json() as {
+      sections:{funding:{data:{automatic_top_up:{disable_action:{request:{path:string;body:Record<string,unknown>}}}}}}};
+    const action=overview.sections.funding.data.automatic_top_up.disable_action.request;
+    const {billing_context:_context,...unbound}=action.body;
+    expect((await request('ownerA',action.path,unbound)).status).toBe(409);
+    expect((await request('ownerA',action.path,{...action.body,billing_context:String(action.body.billing_context)+'x'})).status).toBe(400);
+    const stale=mintBillingActionContext({account:fixture.seed.account,revision:fixture.seed.selection.revision+1,
+      scopeEpoch:fixture.seed.selection.epoch,appKeyId:fixture.seed.credential.id},action.path,action.body);
+    expect((await request('ownerA',action.path,{...action.body,billing_context:stale})).status).toBe(409);
+    expect((await request('ownerA','/billing/v1/organisation/capabilities',subject('ownerA'))).status).toBe(200);
+    expect((await request('ownerA',action.path,action.body)).status).toBe(204);
+    expect(await db.prisma.billingCreditAccount.findUniqueOrThrow({where:{id:'control-wallet'}})).toMatchObject({autoTopUpState:'DISABLED',autoTopUpConsentRevisionId:null});
+    expect(await db.prisma.billingCreditAutoTopUpDisableEvent.count()).toBe(1);expect(await db.prisma.billingCreditEntry.count()).toBe(0);
+    expect(await db.prisma.refreshToken.count({where:{familyId:fixture.personas.ownerA!.familyId,revokedAt:null}})).toBe(1);
+  });
+});

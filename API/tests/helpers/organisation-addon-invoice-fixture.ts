@@ -1,20 +1,21 @@
 import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
-import { vi } from 'vitest';
 import { applyRecurringAddonWebhook } from '../../src/services/billing-recurring-addon-webhook-apply.service.js';
 import { recurringAddonMetadata } from '../../src/services/billing-recurring-addon-stripe-binding.service.js';
 import { seedOrganisationConsent } from './organisation-consent-fixture.js';
 
 /** Captures two real DB checkout/subscription sources under one ORG payer.
  * Provider boundaries are synthetic; no DB guards are disabled. */
-export async function seedOrganisationAddonInvoices(db:PrismaClient) {
-  const seed=await seedOrganisationConsent(db),{account,selection}=seed;
+export async function seedOrganisationAddonInvoices(db:PrismaClient,options:{providerSpies?:boolean;product?:string;tariffHistoryFromMonth?:string;
+  period?:{startsAt:Date;endsAt:Date;paidAt:Date}}={}) {
+  const spy=options.providerSpies===false?<T extends(...args:never[])=>unknown>(fn:T):T=>fn:(await import('vitest')).vi.fn;
+  const seed=await seedOrganisationConsent(db,options),{account,selection}=seed;
   await db.team.create({data:{id:'addon-other-team',orgId:'control-org',name:'Other',slug:'other'}});
   await db.billingRecurringAddonOffer.create({data:{id:'invoice-addon-offer',serviceId:'control-service',key:'privacy',version:1,
     name:'Private research',description:'Private research',monthlyAmountMinor:5000n,currency:'USD'}});
   await db.billingRecurringAddonCatalog.create({data:{id:'invoice-addon-catalog',accountId:account.id,serviceId:'control-service',
     offerId:'invoice-addon-offer',currency:'USD',monthlyAmountMinor:5000n,stripeLookupKey:'privacy-usd-v1',stripeProductId:'prod_privacy',stripePriceId:'price_privacy'}});
-  const startsAt=new Date('2030-01-01T00:00:00Z'),endsAt=new Date('2030-02-01T00:00:00Z'),paidAt=new Date('2030-01-03T00:00:00Z');
+  const {startsAt,endsAt,paidAt}=options.period??{startsAt:new Date('2030-01-01T00:00:00Z'),endsAt:new Date('2030-02-01T00:00:00Z'),paidAt:new Date('2030-01-03T00:00:00Z')};
   const sources=[];
   for(const [suffix,teamId] of [['a','control-team'],['b','addon-other-team']] as const){
     await db.billingCustomerActionIntent.create({data:{appKeyId:seed.credential.id,serviceId:'control-service',orgId:'control-org',teamId,
@@ -55,18 +56,18 @@ export async function seedOrganisationAddonInvoices(db:PrismaClient) {
   }
   let event:unknown;
   const sourceFor=(id:string)=>sources.find(row=>[row.invoice.id,row.remote.id,`pi_addon_${row.suffix}`,`ch_addon_${row.suffix}`].includes(id))!;
-  const stripe={accounts:{retrieveCurrent:vi.fn().mockResolvedValue({id:account.stripeAccountId})},
-    subscriptions:{retrieve:vi.fn(async(id:string)=>sourceFor(id).remote)},invoices:{retrieve:vi.fn(async(id:string)=>sourceFor(id).invoice),
-      list:vi.fn(async({subscription}:{subscription:string})=>({data:sources.filter(row=>row.remote.id===subscription).map(row=>row.invoice),has_more:false}))},
-    invoicePayments:{list:vi.fn(async(input:{invoice?:string;payment?:{payment_intent:string}})=>{
+  const stripe={accounts:{retrieveCurrent:spy(async()=>({id:account.stripeAccountId}))},
+    subscriptions:{retrieve:spy(async(id:string)=>sourceFor(id).remote)},invoices:{retrieve:spy(async(id:string)=>sourceFor(id).invoice),
+      list:spy(async({subscription}:{subscription:string})=>({data:sources.filter(row=>row.remote.id===subscription).map(row=>row.invoice),has_more:false}))},
+    invoicePayments:{list:spy(async(input:{invoice?:string;payment?:{payment_intent:string}})=>{
       const source=sourceFor(input.invoice??input.payment!.payment_intent);return {data:[{
       id:`inpay_addon_${source.suffix}`,invoice:source.invoice.id,livemode:true,currency:'usd',status:'paid',amount_paid:5000,
       payment:{type:'payment_intent',payment_intent:`pi_addon_${source.suffix}`},status_transitions:{paid_at:paidAt.getTime()/1000}}],has_more:false};})},
-    paymentIntents:{retrieve:vi.fn(async(id:string)=>({id,latest_charge:`ch_addon_${sourceFor(id).suffix}`,customer:'cus_controls',currency:'usd',
+    paymentIntents:{retrieve:spy(async(id:string)=>({id,latest_charge:`ch_addon_${sourceFor(id).suffix}`,customer:'cus_controls',currency:'usd',
       livemode:true,status:'succeeded',amount_received:5000}))},
-    charges:{retrieve:vi.fn(async(id:string)=>({id,payment_intent:`pi_addon_${sourceFor(id).suffix}`,customer:'cus_controls',currency:'usd',
+    charges:{retrieve:spy(async(id:string)=>({id,payment_intent:`pi_addon_${sourceFor(id).suffix}`,customer:'cus_controls',currency:'usd',
       livemode:true,status:'succeeded',paid:true,captured:true,amount_captured:5000,refunded:false,amount_refunded:0,disputed:false}))},
-    webhooks:{constructEvent:vi.fn(()=>event)}};
+    webhooks:{constructEvent:spy(()=>event)}};
   return {...seed,sources,stripe:stripe as unknown as Stripe,startsAt,endsAt,paidAt,setEvent:(index:number)=>{
     const source=sources[index]!;event={id:`evt_addon_invoice_${source.suffix}`,type:'invoice.paid',api_version:'2026-06-24.dahlia',
       account:account.stripeAccountId,livemode:true,created:paidAt.getTime()/1000,data:{object:source.invoice}};return event;}};

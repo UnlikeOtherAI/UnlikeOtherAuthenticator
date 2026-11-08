@@ -4,12 +4,13 @@ import { applyCreditFundingWebhook } from '../../src/services/billing-credit-fun
 
 /** All guards stay enabled: the saved consent is created by the actual setup
  * completion applier against exact captured UOA/webhook rows, without a payment. */
-export async function seedOrganisationConsent(db:PrismaClient) {
+export async function seedOrganisationConsent(db:PrismaClient,options:{product?:string;tariffHistoryFromMonth?:string}={}) {
   await db.user.create({data:{id:'control-owner',email:'control@example.test',userKey:'control@example.test'}});
   await db.organisation.create({data:{id:'control-org',name:'Controls',domain:'control.example.test',slug:'controls',ownerId:'control-owner'}});
   await db.orgMember.create({data:{orgId:'control-org',userId:'control-owner',role:'owner'}});
   await db.team.create({data:{id:'control-team',orgId:'control-org',name:'Selected',slug:'selected'}});
-  await db.billingService.create({data:{id:'control-service',identifier:'control',name:'Controls'}});
+  await db.billingService.create({data:{id:'control-service',identifier:options.product??'control',name:options.product==='nessie'?'Nessie':'Controls',
+    ...(options.tariffHistoryFromMonth?{tariffHistoryFromMonth:options.tariffHistoryFromMonth}:{})}});
   const credential=await db.billingAppKey.create({data:{id:'control-key',serviceId:'control-service',purpose:'CUSTOMER_LIFECYCLE',name:'Lifecycle',
     keyPrefix:'control',secretDigest:'a'.repeat(64),actorIssuer:'https://control.example.test',actorAudience:'https://uoa.example.test',
     actorKeyId:'control',actorPublicJwk:{kty:'RSA',n:'AQAB',e:'AQAB'},checkoutReturnOrigins:['https://control.example.test']},include:{service:true}});

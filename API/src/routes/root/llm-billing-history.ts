@@ -16,6 +16,13 @@ at /schemas/billing-customer-invoices-v1.json and its example and OpenAPI
 siblings. Refund and dispute effects are shown separately from
 the original immutable legal PDF.
 
+Organisation invoice LIST returns409
+\`BILLING_ADDON_HISTORY_RECONCILIATION_REQUIRED\` while an original captured
+add-on invoice source in the requested org/account/mode is incomplete. Preserve
+already confirmed history and offer an explicit read-only refresh. This is not
+an empty list or a stale displayed-action context; never retry a money mutation.
+Already confirmed invoice DETAIL/PDF remains independently accessible.
+
 ### Monthly billing cycles and documents
 
 The canonical BillingCyclesV2 contract is published at
@@ -79,9 +86,11 @@ deactivated rather than deleted. Ledger never receives them.
 \`POST /billing/v1/credits\` is UOA's display-ready shared credit read. A product calls it
 with its own \`customer_lifecycle\` app key, a fresh bound actor assertion, and the exact
 product/organisation/team/user subject. The first field is always **Remaining credits**.
-Billing managers receive the full per-service and per-user breakdown plus safe payment
-and consent summaries; members receive their own usage, other-team-member aggregates,
-and unattributed totals without another user's identity or card detail.
+Current ACTIVE organisation billing managers receive financial reads. Ordinary
+members cannot read credits, statements, cycles, invoices or purchase status;
+the old member-shaped DTO does not grant access. Members can still explicitly
+POST the separate selected-team nonfinancial Ask for credits action without a
+preceding wallet read. New consumers use the independent organisation overview.
 
 Before projecting a read, UOA pins one exact user-grouped Ledger portfolio cursor for
 the team and settles every service in that snapshot together under a serializable team

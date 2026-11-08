@@ -7,6 +7,8 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // Authenticated billing display bindings require a new deliberate action, never a new login.
   'BILLING_CONTEXT_REQUIRED',
   'BILLING_CONTEXT_STALE',
+  // Exact financial-manager invoice LIST needs a read-only recovery state, not an empty list.
+  'BILLING_ADDON_HISTORY_RECONCILIATION_REQUIRED',
   'BILLING_CONTEXT_INVALID',
   'BILLING_TEAM_MODE_CHANGED',
   'BILLING_TEAM_MODE_BLOCKED',
