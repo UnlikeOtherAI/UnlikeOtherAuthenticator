@@ -8,6 +8,19 @@ import { billingOrganisationProtocolV1JsonSchema } from '../src/organisation-ove
 const ajv = new Ajv2020({ strict: true, allErrors: true }); addFormats(ajv);
 const validate = ajv.compile(billingOrganisationProtocolV1JsonSchema);
 describe('organisation financial overview', () => {
+  it('distinguishes source-owned confirmed attention from missing or unavailable attention',()=>{
+    const changed=structuredClone(overview);
+    for(const attention of [
+      {state:'confirmed' as const,message:'Confirmed current organisation attention.',data:[]},
+      {state:'confirmed' as const,message:'Confirmed current organisation attention.',data:[{event_key:'opaque-org-wallet-event',kind:'credits_exhausted' as const}]},
+      {state:'unavailable' as const,message:'Attention unavailable.',code:'BILLING_ATTENTION_SOURCE_UNAVAILABLE'},
+    ]){
+      changed.sections.attention=attention;expect(validate(changed),JSON.stringify(validate.errors)).toBe(true);
+    }
+    const invalid=structuredClone(changed) as unknown as {sections:{attention:Record<string,unknown>}};
+    invalid.sections.attention.data=[];expect(validate(invalid)).toBe(false);
+    expect(overview.sections.attention).toBeUndefined();
+  });
   it('admits independent confirmed controls and balance while the bill is held without a numeric total', () => {
     expect(validate(capability), JSON.stringify(validate.errors)).toBe(true);
     expect(validate(overview), JSON.stringify(validate.errors)).toBe(true);

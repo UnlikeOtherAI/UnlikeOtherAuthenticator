@@ -1,4 +1,4 @@
-# Organisation financial overview — protocol 1.2.0 / package 6.2.0
+# Organisation financial overview — protocol 1.3.0 / package 6.3.0
 
 This supersedes per-team customer billing. One UOA organisation owns one financial
 scope, one LIVE/Sandbox policy and independent money/customer bindings in each
@@ -120,3 +120,5 @@ vendoring must pin the exact package source commit. A missing endpoint is an
 integration-unavailable state, never permission to fall back to member-visible team
 finances. Credentials, account IDs, Stripe API version and webhook contracts remain
 unchanged; provider changes or money migration are outside this protocol rollout.
+
+Protocol 1.3.0 (package 6.3.0) adds optional `sections.attention` to the overview. It is an independent section of canonical `BillingCreditAttentionV1[]` (`event_key`, `kind`) for the CURRENT organisation wallet and configured account/mode only. `confirmed` with `data:[]` is an authoritative empty set. Missing, unavailable or pending attention is not an empty set and must not clear/reconcile alerts as though confirmed. Consumers use the overview's exact financial organisation/mode/epoch/revision and UOA opaque event keys, never local balances, thresholds or retained TEAM/Sandbox warnings as current money. This adds no endpoint, credential, actor audience, header or action. Legacy 5.9 and complete 6.2 financial lifecycle schemas remain unchanged.

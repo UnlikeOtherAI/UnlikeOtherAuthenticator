@@ -3483,6 +3483,80 @@
                               ]
                             }
                           ]
+                        },
+                        "attention": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "state": {
+                                  "const": "confirmed"
+                                },
+                                "message": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "data": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "event_key",
+                                      "kind"
+                                    ],
+                                    "properties": {
+                                      "event_key": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "kind": {
+                                        "enum": [
+                                          "low_credits",
+                                          "credits_exhausted",
+                                          "payment_action_required",
+                                          "card_expired",
+                                          "auto_top_up_paused"
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "required": [
+                                "state",
+                                "message",
+                                "data"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "state": {
+                                  "enum": [
+                                    "pending_reconciliation",
+                                    "unavailable"
+                                  ]
+                                },
+                                "message": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "code": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "state",
+                                "message",
+                                "code"
+                              ]
+                            }
+                          ]
                         }
                       },
                       "required": [

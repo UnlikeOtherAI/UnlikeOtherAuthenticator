@@ -56,4 +56,3 @@ describe('explicit financial lifecycle schemas',()=>{
     accepted('region_response',{region:null,currency:null,suggested_region:'US',suggested_currency:'USD',suggested_from:null,can_set:true});
   });
 });
-

@@ -4,6 +4,7 @@ import { billingSubjectRequestJsonSchema, creditAmountSchema, moneySchema } from
 import { billingStatementV1JsonSchema } from './schema.js';
 import { BILLING_ORGANISATION_SCHEMA_PATH } from './organisation-overview-types.js';
 import { organisationFinancialSubjectSchema } from './organisation-financial-subject-schema.js';
+import { billingCreditAttentionV1JsonSchema } from './credits-attention-schema.js';
 
 const object = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({
   type: 'object', additionalProperties: false, properties, required,
@@ -68,7 +69,9 @@ export const billingOrganisationOverviewV1JsonSchema = object({ ...common,
   financial_scope: billingOrganisationScopeV1JsonSchema,
   sections: object({ accrued_bill: section(billingOrganisationAccruedBillV1JsonSchema),
     credits: section(billingOrganisationCreditBalanceV1JsonSchema), funding: section(billingOrganisationFundingV1JsonSchema),
-    subscription: section(billingOrganisationSubscriptionV1JsonSchema), history: section(billingOrganisationHistoryV1JsonSchema) }),
+    subscription: section(billingOrganisationSubscriptionV1JsonSchema), history: section(billingOrganisationHistoryV1JsonSchema),
+    attention:section({type:'array',items:billingCreditAttentionV1JsonSchema}) },
+  ['accrued_bill','credits','funding','subscription','history']),
 });
 export const billingOrganisationProtocolV1JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema', $id: BILLING_ORGANISATION_SCHEMA_PATH,

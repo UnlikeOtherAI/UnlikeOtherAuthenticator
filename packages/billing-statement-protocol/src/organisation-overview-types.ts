@@ -3,8 +3,9 @@ import type { BillingCyclePeriod, BillingCycleTotals } from './cycle-types.js';
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 import type { BillingStatementV1, ExactMoney } from './types.js';
 import type { BillingOrganisationHistorySubjectV1 } from './organisation-financial-types.js';
+import type { BillingCreditAttentionV1 } from './credits-attention-types.js';
 
-export const BILLING_ORGANISATION_PROTOCOL_VERSION = '1.2.0' as const;
+export const BILLING_ORGANISATION_PROTOCOL_VERSION = '1.3.0' as const;
 export const BILLING_ORGANISATION_CAPABILITIES_PATH = '/billing/v1/organisation/capabilities' as const;
 export const BILLING_ORGANISATION_OVERVIEW_PATH = '/billing/v1/organisation/overview' as const;
 export const BILLING_ORGANISATION_SCHEMA_PATH = '/schemas/billing-organisation-v1.json' as const;
@@ -74,5 +75,8 @@ export type BillingOrganisationOverviewV1 = {
     funding: BillingOrganisationSectionV1<BillingOrganisationFundingV1>;
     subscription: BillingOrganisationSectionV1<BillingOrganisationSubscriptionV1>;
     history: BillingOrganisationSectionV1<BillingOrganisationHistoryV1>;
+    /** UOA verdicts for the current org wallet/account/mode only. Missing or
+     * unconfirmed is not an authoritative empty alert set. */
+    attention?:BillingOrganisationSectionV1<BillingCreditAttentionV1[]>;
   };
 };
