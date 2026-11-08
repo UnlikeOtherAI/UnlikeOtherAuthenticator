@@ -1,3 +1,4 @@
+import { captureTestOrganisationFinancialBinding,createTestSandboxOrganisationPolicy } from '../helpers/organisation-financial-binding.js';
 import {
   BillingAssignmentScope,
   BillingCollectionMode,
@@ -5,7 +6,7 @@ import {
   BillingTariffMode,
   BillingTariffSource,
 } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it,vi } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
 
@@ -21,7 +22,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
   });
 
   afterAll(async () => {
-    await db?.cleanup();
+    await db?.cleanup();vi.unstubAllEnvs();
   });
 
   it('blocks manual activation during completed-Checkout reconciliation in both directions', async () => {
@@ -79,10 +80,9 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
       },
     });
     const modeTeam = await db.prisma.team.create({ data: { orgId: org.id, name: 'TEST billing team', slug: 'test-billing' } });
-    await db.prisma.billingTeamMode.create({ data: { teamId: modeTeam.id, sandbox: true, revision: 1 } });
-    const account = await db.prisma.billingStripeAccount.create({
-      data: { stripeAccountId: 'acct_contract_stripe_race', livemode: false },
-    });
+    const billingScopeEpoch=await createTestSandboxOrganisationPolicy(db.prisma,org.id);
+    const binding=await captureTestOrganisationFinancialBinding(db.prisma,org.id,{stripeAccountId:'acct_ContractStripeRace',livemode:false});
+    const account=await db.prisma.billingStripeAccount.findUniqueOrThrow({where:{id:binding.billingAccountId}});
     const customer = await db.prisma.billingStripeCustomer.create({
       data: {
         accountId: account.id,
@@ -95,7 +95,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
     });
     const checkout = await db.prisma.billingStripeCheckoutSession.create({
       data: {
-      billingModeTeamId: modeTeam.id, billingModeRevision: 1,
+      billingModeTeamId: modeTeam.id, billingModeRevision: 1,billingScopeEpoch,
         accountId: account.id,
         appKeyId: appKey.id,
         customerId: customer.id,
@@ -113,13 +113,13 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
         cancelUrlDigest: 'b'.repeat(64),
         stripeCheckoutSessionId: 'cs_contract_stripe_race',
         status: 'complete',
-        leaseExpiresAt: new Date('2026-07-21T12:10:00.000Z'),
-        expiresAt: new Date('2026-07-21T12:30:00.000Z'),
-        completedAt: new Date('2026-07-21T12:00:00.000Z'),
+        leaseExpiresAt: new Date('2030-07-21T12:10:00.000Z'),
+        expiresAt: new Date('2030-07-21T12:30:00.000Z'),
+        completedAt: new Date('2030-07-21T12:00:00.000Z'),
       },
     });
     const contract = await db.prisma.billingOrganisationContract.create({
-      data: { orgId: org.id, reference: 'stripe-race', name: 'Stripe Race Contract' },
+      data: { ...binding,orgId: org.id, reference: 'stripe-race', name: 'Stripe Race Contract' },
     });
     const version = await db.prisma.billingOrganisationContractVersion.create({
       data: {
@@ -128,7 +128,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
         usageMarkupBps: 2000,
         currency: 'USD',
         paymentTermsDays: 30,
-        effectiveFromMonth: '2026-07',
+        effectiveFromMonth: '2030-07',
       },
     });
     const manualTariff = await db.prisma.billingTariff.create({
@@ -211,7 +211,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
         where: { id: contract.id },
         data: {
           status: BillingOrganisationContractStatus.ACTIVE,
-          activatedAt: new Date('2026-07-21T12:00:00.000Z'),
+          activatedAt: new Date('2030-07-21T12:00:00.000Z'),
         },
       }),
     ).rejects.toThrow(/Stripe checkout or subscription blocks manual contract activation/);
@@ -223,7 +223,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
       where: { id: contract.id },
       data: {
         status: BillingOrganisationContractStatus.ACTIVE,
-        activatedAt: new Date('2026-07-21T12:00:00.000Z'),
+        activatedAt: new Date('2030-07-21T12:00:00.000Z'),
       },
     });
 
@@ -236,7 +236,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
     await expect(
       db.prisma.billingStripeCheckoutSession.create({
         data: {
-      billingModeTeamId: modeTeam.id, billingModeRevision: 1,
+      billingModeTeamId: modeTeam.id, billingModeRevision: 1,billingScopeEpoch,
           accountId: account.id,
           appKeyId: appKey.id,
           customerId: customer.id,
@@ -253,7 +253,7 @@ describe.skipIf(!process.env.DATABASE_URL)('contract and Stripe database exclusi
           successUrlDigest: 'c'.repeat(64),
           cancelUrlDigest: 'd'.repeat(64),
           status: 'creating',
-          leaseExpiresAt: new Date('2026-07-21T13:00:00.000Z'),
+          leaseExpiresAt: new Date('2030-07-21T13:00:00.000Z'),
         },
       }),
     ).rejects.toThrow(/active manual contract blocks Stripe checkout or subscription projection/);

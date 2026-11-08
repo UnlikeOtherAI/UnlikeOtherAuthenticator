@@ -256,22 +256,22 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on cancellation persistenc
     if (handle) await handle.cleanup();
   });
 
-  it('rejects member-forged top-up and automatic-top-up setup checkouts', async () => {
+  it('refuses member-forged funding and new work on a retained TEAM wallet', async () => {
     if (!handle) throw new Error('db handle missing');
 
     await expect(
       insertTopUpCheckout(handle.prisma, 'bctuc_member_forgery', ids.member),
-    ).rejects.toThrow('billing action requires an active exact-team manager');
+    ).rejects.toThrow('BILLING_MANAGER_REQUIRED');
     await expect(
       insertSetupCheckout(handle.prisma, 'bcsc_member_forgery', ids.member),
-    ).rejects.toThrow('billing action requires an active exact-team manager');
+    ).rejects.toThrow('BILLING_MANAGER_REQUIRED');
 
     await expect(
       insertTopUpCheckout(handle.prisma, 'bctuc_owner_valid', ids.owner),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('BILLING_CONTEXT_REQUIRED');
     await expect(
       insertSetupCheckout(handle.prisma, 'bcsc_owner_valid', ids.owner),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('BILLING_CONTEXT_REQUIRED');
   });
 
   it('allows exactly one concurrent cancellation preview for a subscription', async () => {
@@ -320,7 +320,7 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on cancellation persistenc
         tokenCharacter: '1',
         idempotencyKey: 'cancel-member-0001',
       }),
-    ).rejects.toThrow('new recurring add-on cancellation intent is not available');
+    ).rejects.toThrow('BILLING_MANAGER_REQUIRED');
 
     await handle.prisma.$executeRaw(Prisma.sql`
       UPDATE "org_members"
@@ -335,7 +335,7 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on cancellation persistenc
         tokenCharacter: '2',
         idempotencyKey: 'cancel-inactive-0001',
       }),
-    ).rejects.toThrow('recurring add-on cancellation actor tenancy is inactive');
+    ).rejects.toThrow('BILLING_MANAGER_REQUIRED');
     await handle.prisma.$executeRaw(Prisma.sql`
       UPDATE "org_members"
       SET "status" = 'ACTIVE', "status_changed_at" = CURRENT_TIMESTAMP,

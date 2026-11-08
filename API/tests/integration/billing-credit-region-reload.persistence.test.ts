@@ -1,3 +1,4 @@
+import { configureSyntheticStripeMode } from '../helpers/stripe-mode-config.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -10,7 +11,7 @@ import { createTestDb } from '../helpers/test-db.js';
 
 const enabled = process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' && Boolean(process.env.DATABASE_URL);
 const ADMIN_DOMAIN = 'region-reload-admin.example.test';
-const account = { id: 'bsa_region_reload', stripeAccountId: 'acct_region_reload', livemode: false };
+const account = { id: 'bsa_region_reload', stripeAccountId: 'acct_RegionReload', livemode: false };
 const user = 'usr_region_reload';
 const service = 'svc_region_reload';
 const appKey = 'bak_region_reload';
@@ -29,6 +30,7 @@ const scoped = (currency: Currency) => {
 };
 
 async function seed(prisma: PrismaClient) {
+  configureSyntheticStripeMode(account.stripeAccountId,false);
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
     await tx.user.create({ data: { id: user, email: 'reload@example.test', userKey: 'reload@example.test',
@@ -47,12 +49,13 @@ async function seed(prisma: PrismaClient) {
         slug: ids.org, ownerId: user } });
       await tx.orgMember.create({ data: { orgId: ids.org, userId: user, role: 'owner', status: 'ACTIVE' } });
       await tx.team.create({ data: { id: ids.team, orgId: ids.org, name: ids.team, slug: ids.team } });
-      await tx.billingTeamMode.create({ data: { teamId: ids.team, sandbox: true, revision: 1 } });
+      await tx.billingOrganisationMode.create({ data: { orgId: ids.org, sandbox: true, revision: 1 } });
+      await tx.billingOrganisationModeEvent.create({data:{orgId:ids.org,sandbox:true,revision:1}});
       await tx.teamMember.create({ data: { teamId: ids.team, userId: user, teamRole: 'owner', status: 'ACTIVE' } });
       await tx.billingOrganisationRegion.create({ data: { orgId: ids.org, region: regions[currency].region, currency,
         setByUserId: user, usdPerUnit: regions[currency].rate } });
       await tx.billingStripeCustomer.create({ data: { id: ids.customer, accountId: account.id, orgId: ids.org,
-        teamId: ids.team, scope: 'TEAM', scopeKey: `${ids.org}:${ids.team}`, stripeCustomerId: ids.cus } });
+        teamId: null, scope: 'ORGANISATION', scopeKey: ids.org, stripeCustomerId: ids.cus } });
       await tx.billingCreditFundingPolicy.create({ data: { id: ids.policy, serviceId: service, currency, version: 1,
         topUpEnabled: true, automaticTopUpEnabled: true, automaticConsentVersion: 'auto-v1' } });
       await tx.billingCreditTopUpOffer.create({ data: { id: ids.offer, policyId: ids.policy, serviceId: service,
@@ -67,7 +70,7 @@ async function seed(prisma: PrismaClient) {
         creditsReceivedMicrocredits: 0n, stripeLookupKey: `uoa_credits_${currency.toLowerCase()}_25_v1`,
         stripeProductId: 'prod_reload', stripePriceId: `price_reload_${currency.toLowerCase()}` } });
       await tx.billingCreditAutoTopUpConsentRevision.create({ data: { id: ids.revision, accountId: account.id,
-        creditAccountId: ids.credit, orgId: ids.org, teamId: ids.team, serviceId: service, appKeyId: appKey,
+        creditAccountId: ids.credit, orgId: ids.org, teamId: null, serviceId: service, appKeyId: appKey,
         policyId: ids.policy, optionId: ids.option, refillOfferId: ids.offer, source: 'CUSTOMER_UPDATE',
         actorJti: `actor-${ids.revision}`, consentedByUserId: user, consentVersion: 'auto-v1',
         thresholdMicrocredits: 0n, thresholdAmountMinor: 500n, refillCreditsMicrocredits: 0n,
@@ -75,7 +78,7 @@ async function seed(prisma: PrismaClient) {
         consentedAt } });
       // 7,000 credits bought in USD before the region: EUR 6.03 or GBP 5.26 at the region's rate.
       await tx.billingCreditAccount.create({ data: { id: ids.credit, accountId: account.id, customerId: ids.customer,
-        orgId: ids.org, teamId: ids.team, scopeKey: `${ids.org}:${ids.team}`, balanceMicrocredits: 7_000_000_000n,
+        orgId: ids.org, teamId: null,scope:'ORGANISATION', scopeKey: ids.org, balanceMicrocredits: 7_000_000_000n,
         autoTopUpState: 'ACTIVE', autoTopUpPolicyId: ids.policy, autoTopUpServiceId: service, autoTopUpAppKeyId: appKey,
         autoTopUpConsentRevisionId: ids.revision, autoTopUpOptionId: ids.option, autoTopUpThresholdMicrocredits: 0n,
         autoTopUpRefillOfferId: ids.offer, autoTopUpMonthlyChargeCapMinor: 10_000n, autoTopUpConsentVersion: 'auto-v1',
@@ -127,7 +130,7 @@ describe.skipIf(!enabled)('automatic reload in the billing region currency (Post
       await tx.$executeRaw(Prisma.sql`SELECT set_config('app.admin_auth_domain', ${ADMIN_DOMAIN}, true)`);
       const balance = await lockCreditBalance(tx, ids.credit);
       await tx.billingCreditAdminAdjustment.create({ data: { id: `bcaa_${id}`, accountId: account.id,
-        creditAccountId: ids.credit, orgId: ids.org, teamId: ids.team, signedAmountMicrocredits: -microcredits,
+        creditAccountId: ids.credit, orgId: ids.org, teamId: null, signedAmountMicrocredits: -microcredits,
         reason: 'Reload proof', idempotencyKey: id, createdByUserId: user, createdByEmail: 'reload@example.test',
         createdByAdminDomain: ADMIN_DOMAIN, creditEntryId: `bce_${id}` } });
       await tx.billingCreditEntry.create({ data: { id: `bce_${id}`, creditAccountId: ids.credit, direction: 'DEBIT',
@@ -157,7 +160,7 @@ describe.skipIf(!enabled)('automatic reload in the billing region currency (Post
   });
 
   afterAll(async () => {
-    if (handle) await handle.cleanup();
+    if (handle) await handle.cleanup();vi.unstubAllEnvs();
   });
 
   it.each(Object.keys(regions) as Currency[])('reloads %s 25.00 once a debit takes the lots below 5.00', async (currency) => {

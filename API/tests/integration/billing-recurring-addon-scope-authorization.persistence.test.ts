@@ -115,7 +115,8 @@ async function seedOrganisationSubscription(prisma: PrismaClient): Promise<void>
         'active', false, false, CURRENT_TIMESTAMP
       )
     `);
-    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_team_modes(team_id,sandbox,revision) VALUES (${ids.team},true,1)`);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_organisation_modes(org_id,sandbox,revision) VALUES (${ids.org},true,1)`);
+    await tx.$executeRaw(Prisma.sql`INSERT INTO billing_organisation_mode_events(org_id,sandbox,revision) VALUES (${ids.org},true,1)`);
   });
 }
 
@@ -132,26 +133,28 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on scope authorization', (
     if (handle) await handle.cleanup();
   });
 
-  it('does not let an exact-team admin buy or cancel an organisation add-on', async () => {
+  it('admits current team managers for org billing and refuses their demoted member successor', async () => {
     if (!handle) throw new Error('db handle missing');
 
+    await handle.prisma.$queryRaw(Prisma.sql`SELECT billing_assert_org_financial_actor(${ids.org},${ids.team},${ids.teamAdmin})::text`);
+    await handle.prisma.teamMember.update({where:{id:'tm_scope_team_admin'},data:{teamRole:'member'}});
     await expect(
       handle.prisma.$executeRaw(Prisma.sql`
         INSERT INTO "billing_recurring_addon_checkouts" (
-          "id", "billing_mode_team_id", "billing_mode_revision", "account_id", "app_key_id", "customer_id", "catalog_id",
+          "id", "billing_mode_team_id", "billing_mode_revision", "billing_scope_epoch", "account_id", "app_key_id", "customer_id", "catalog_id",
           "service_id", "offer_id", "offer_key", "org_id", "team_id",
           "requested_team_id", "subscribing_user_id", "scope", "scope_key",
           "actor_jti", "subject_fingerprint", "requested_by_user_id",
           "success_url_digest", "cancel_url_digest", "lease_expires_at", "updated_at"
         ) VALUES (
-          'rac_scope_team_admin', ${ids.team}, 1, ${ids.account}, ${ids.appKey}, ${ids.customer}, ${ids.catalog},
+          'rac_scope_team_admin', ${ids.team}, 1, (SELECT activated_at FROM billing_organisation_scope_cutover WHERE id=1), ${ids.account}, ${ids.appKey}, ${ids.customer}, ${ids.catalog},
           ${ids.service}, ${ids.offer}, 'privacy', ${ids.org}, NULL, ${ids.team}, NULL,
           'ORGANISATION', ${ids.org}, 'actor-scope-team-admin', ${'b'.repeat(64)},
           ${ids.teamAdmin}, ${'c'.repeat(64)}, ${'d'.repeat(64)},
           CURRENT_TIMESTAMP + INTERVAL '5 minutes', CURRENT_TIMESTAMP
         )
       `),
-    ).rejects.toThrow('recurring add-on checkout requires a billing manager');
+    ).rejects.toThrow('BILLING_MANAGER_REQUIRED');
 
     await expect(
       handle.prisma.$executeRaw(Prisma.sql`
@@ -168,6 +171,6 @@ describe.skipIf(!databaseTestsEnabled)('recurring add-on scope authorization', (
           CURRENT_TIMESTAMP + INTERVAL '5 minutes', CURRENT_TIMESTAMP
         )
       `),
-    ).rejects.toThrow('new recurring add-on cancellation intent is not available');
+    ).rejects.toThrow('BILLING_MANAGER_REQUIRED');
   });
 });

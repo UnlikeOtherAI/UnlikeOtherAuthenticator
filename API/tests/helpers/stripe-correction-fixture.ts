@@ -14,7 +14,11 @@ export async function correctionFixture(prisma: PrismaClient) {
     markupBps: 3000, currency: 'USD' } });
   await prisma.billingStripeCustomer.update({ where: { id: ids.teamCustomer },
     data: { stripeCustomerId: 'cus_correction' } });
-  const checkout = await prisma.billingStripeCheckoutSession.create({ data: {
+  // Captured pre-epoch TEST subscription. Corrections and archive fencing
+  // below use every production guard and its exact original customer/account.
+  const sub=await prisma.$transaction(async tx=>{
+    await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+  const checkout = await tx.billingStripeCheckoutSession.create({ data: { createdAt:new Date('2026-01-01T00:00:00Z'),
     billingModeTeamId: ids.teamA, billingModeRevision: 1,
     accountId: ids.account, appKeyId: ids.appKey, customerId: ids.teamCustomer,
     serviceId: ids.service, tariffId: tariff.id, tariffSource: 'SERVICE_DEFAULT',
@@ -23,12 +27,14 @@ export async function correctionFixture(prisma: PrismaClient) {
     successUrlDigest: 'a'.repeat(64), cancelUrlDigest: 'b'.repeat(64),
     leaseExpiresAt: new Date('2026-10-02T00:00:00Z'),
   } });
-  const sub = await prisma.billingStripeSubscription.create({ data: {
+  const sub = await tx.billingStripeSubscription.create({ data: { createdAt:new Date('2026-01-01T00:00:00Z'),
     accountId: ids.account, customerId: ids.teamCustomer, checkoutId: checkout.id,
     serviceId: ids.service, tariffId: tariff.id, tariffSource: 'SERVICE_DEFAULT',
     orgId: ids.org, teamId: ids.teamA, scope: 'TEAM', scopeKey: `${ids.org}:${ids.teamA}`,
     stripeSubscriptionId: 'sub_correction', stripeUsageItemId: 'si_correction',
     status: 'active', livemode: false } });
+    return sub;
+  });
   const close = await prisma.billingStripeInvoiceClose.create({ data: {
     accountId: ids.account, subscriptionId: sub.id, stripeInvoiceId: 'in_original',
     billingMonth: '2026-08', periodStartsAt: new Date('2026-08-01T00:00:00Z'),

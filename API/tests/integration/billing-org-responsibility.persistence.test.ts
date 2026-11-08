@@ -7,19 +7,17 @@ import { reconcileStripeUsageExport } from '../../src/services/billing-stripe-re
 import { recordStripeInvoiceClose } from '../../src/services/billing-stripe-invoice-close-state.service.js';
 import { runStripeInvoiceCloseCycle } from '../../src/services/billing-stripe-invoice-close-scheduler.service.js';
 import { compensateFinalizedStripeInvoice } from '../../src/services/billing-stripe-invoice-close-resolution.service.js';
-import {
-  assertOrgBillingAssumable,
-  BillingOrgResponsibilityBlockedError,
-} from '../../src/services/billing-org-responsibility-guard.service.js';
+import { readOrganisationBillingMode } from '../../src/services/billing-organisation-mode.service.js';
 import {
   assumeOrgBillingResponsibility,
   releaseOrgBillingResponsibility,
 } from '../../src/services/billing-org-responsibility-lifecycle.service.js';
 import { createTestDb } from '../helpers/test-db.js';
 import {
-  credential, ids, lifecycleDeps, portfolio, request, seed, stripeAccount,
+  credential, ids, lifecycleDeps, portfolio, request, seed,
 } from './billing-org-responsibility.persistence.fixture.js';
 
+const currentLive={id:'bsa_org_current_live',stripeAccountId:'acct_OrgCurrentLive',livemode:true};
 const databaseTestsEnabled =
   process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' && Boolean(process.env.DATABASE_URL);
 
@@ -33,22 +31,20 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
     prisma = handle.prisma;
     cleanup = handle.cleanup;
     await seed(prisma);
+    await prisma.billingStripeAccount.create({data:currentLive});
   });
 
   afterAll(async () => {
     await cleanup?.();
   });
 
-  it('resolves the team account while no organisation has taken billing over', async () => {
-    const resolved = await resolveCreditAccount(
-      { account: stripeAccount, organisationId: ids.org, teamId: ids.teamA },
-      { prisma },
-    );
-
-    expect(resolved.id).toBe(ids.teamCreditAccount);
-    expect(resolved.scope).toBe('TEAM');
-    expect(resolved.teamId).toBe(ids.teamA);
-    expect(resolved.scopeKey).toBe(`${ids.org}:${ids.teamA}`);
+  it('defaults both teams to one LIVE org wallet and leaves retained TEST funds separate',async()=>{
+    const one=await resolveCreditAccount({account:currentLive,organisationId:ids.org,teamId:ids.teamA},{prisma});
+    const two=await resolveCreditAccount({account:currentLive,organisationId:ids.org,teamId:ids.teamB},{prisma});
+    expect(one).toMatchObject({scope:'ORGANISATION',teamId:null,scopeKey:ids.org,balanceMicrocredits:0n});
+    expect(two.id).toBe(one.id);
+    expect(await prisma.billingCreditAccount.findUniqueOrThrow({where:{id:ids.teamCreditAccount}}))
+      .toMatchObject({scope:'TEAM',accountId:ids.account,balanceMicrocredits:500000000n});
   });
 
   it('refuses to assume while a team funding action is still in flight', async () => {
@@ -69,13 +65,9 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
       )
     `);
 
-    await expect(
-      assertOrgBillingAssumable({ organisationId: ids.org, now: new Date() }, { prisma }),
-    ).rejects.toThrow('FUNDING_ACTION_IN_FLIGHT');
-
-    await prisma.$executeRaw(Prisma.sql`
-      DELETE FROM "billing_cancellation_intents" WHERE "id" = 'bci_org_billing_open'
-    `);
+    await expect(assumeOrgBillingResponsibility({request,actorToken:'signed-actor',credential},lifecycleDeps(prisma)))
+      .rejects.toThrow('BILLING_ORGANISATION_SCOPE_REQUIRED');
+    expect(await prisma.billingCancellationIntent.findUnique({where:{id:'bci_org_billing_open'}})).toMatchObject({state:'AVAILABLE'});
   });
 
   it('refuses to assume while a live team subscription exists, naming it', async () => {
@@ -94,23 +86,8 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
       `);
     });
 
-    const error = await assertOrgBillingAssumable(
-      { organisationId: ids.org, now: new Date() },
-      { prisma },
-    ).catch((thrown: unknown) => thrown);
-
-    expect(error).toBeInstanceOf(BillingOrgResponsibilityBlockedError);
-    expect((error as BillingOrgResponsibilityBlockedError).reason).toBe(
-      'TEAM_SUBSCRIPTIONS_ACTIVE',
-    );
-    expect((error as BillingOrgResponsibilityBlockedError).subscriptions).toEqual([
-      {
-        subscriptionId: 'bss_org_billing_team',
-        serviceId: ids.service,
-        scopeKey: `${ids.org}:${ids.teamA}`,
-        status: 'active',
-      },
-    ]);
+    expect((await readOrganisationBillingMode(ids.org,prisma)).blockers)
+      .toContainEqual({code:'subscription',count:1});
 
     await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
@@ -121,120 +98,21 @@ describe.skipIf(!databaseTestsEnabled)('organisation billing responsibility pers
     });
   });
 
-  it('moves every team onto the organisation account once billing is assumed', async () => {
-    const assumed = await assumeOrgBillingResponsibility(
-      { request, actorToken: 'signed-actor', credential },
-      lifecycleDeps(prisma, new Date('2026-06-01T00:00:00.000Z')),
-    );
-    expect(assumed).toMatchObject({ organisation_id: ids.org, active: true });
-
-    const fromTeamA = await resolveCreditAccount(
-      { account: stripeAccount, organisationId: ids.org, teamId: ids.teamA },
-      { prisma },
-    );
-    const fromTeamB = await resolveCreditAccount(
-      { account: stripeAccount, organisationId: ids.org, teamId: ids.teamB },
-      { prisma },
-    );
-
-    // Both teams resolve to the one organisation account: this is the whole of
-    // the money side. No caller had to change.
-    expect(fromTeamA.id).toBe(fromTeamB.id);
-    expect(fromTeamA.id).not.toBe(ids.teamCreditAccount);
-    expect(fromTeamA.scope).toBe('ORGANISATION');
-    expect(fromTeamA.teamId).toBeNull();
-    expect(fromTeamA.scopeKey).toBe(ids.org);
-    expect(fromTeamA.balanceMicrocredits).toBe(0n);
-
-    // The team's own balance is not swept: it stays exactly where it was.
-    const teamAccount = await prisma.billingCreditAccount.findUnique({
-      where: { id: ids.teamCreditAccount },
-    });
-    expect(teamAccount?.balanceMicrocredits).toBe(500000000n);
-
-    const audit = await prisma.orgAuditLog.findFirst({
-      where: { orgId: ids.org, action: 'billing.org_responsibility_assumed' },
-    });
-    expect(audit).not.toBeNull();
+  it('refuses retired assume/release without switching wallets or rewriting history',async()=>{
+    const before=await prisma.billingCreditAccount.findMany({orderBy:{id:'asc'}});
+    for(const action of [assumeOrgBillingResponsibility,releaseOrgBillingResponsibility]) {
+      await expect(action({request,actorToken:'signed-actor',credential},lifecycleDeps(prisma)))
+        .rejects.toThrow('BILLING_ORGANISATION_SCOPE_REQUIRED');
+    }
+    expect(await prisma.billingCreditAccount.findMany({orderBy:{id:'asc'}})).toEqual(before);
+    expect(await prisma.billingOrgResponsibility.count()).toBe(0);
   });
-
-  it("settles a team's metered usage against the organisation account", async () => {
-    const organisationAccount = await resolveCreditAccount(
-      { account: stripeAccount, organisationId: ids.org, teamId: ids.teamB },
-      { prisma },
-    );
-
-    // This fixture simulates an organisation payer already present in July.
-    await prisma.$transaction(async tx => {
-      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
-      await tx.billingCreditAccount.update({ where: { id: organisationAccount.id },
-        data: { createdAt: new Date('2026-06-01T00:00:00Z') } });
-    });
-    await settleCreditPortfolio(
-      {
-        creditAccountId: organisationAccount.id,
-        portfolio: portfolio(ids.teamB, 'mup_org_billing_team_b'),
-        credential,
-      },
-      { prisma },
-    );
-
-    // The snapshot keeps the team it came from, even though the credits are
-    // the organisation's.
-    const snapshot = await prisma.billingCreditPortfolioSnapshot.findFirst({
-      where: { creditAccountId: organisationAccount.id },
-    });
-    expect(snapshot?.teamId).toBe(ids.teamB);
-
-    // The usage is rated against the organisation account, and attributed to a
-    // user who belongs to the team the portfolio came from. Before this change
-    // the attribution assert demanded membership of the *account's* team, and
-    // an organisation account has none — this row is the proof it now asks the
-    // organisation instead.
-    const settlement = await prisma.billingCreditUsageSettlement.findFirst({
-      where: { creditAccountId: organisationAccount.id, billingMonth: '2026-07' },
-      include: { adjustments: { orderBy: { sequence: 'desc' }, take: 1 } },
-    });
-    expect(settlement).not.toBeNull();
-    expect(settlement?.adjustments[0]?.cumulativeRatedUsageAmountMicroMinor).toBeGreaterThan(0n);
-
-    const allocation = await prisma.billingCreditUsageAllocation.findFirst({
-      where: { settlementId: settlement?.id ?? '' },
-    });
-    expect(allocation?.attributedUserId).toBe(ids.member);
-
-    // How much of that rated usage is drawn down is the settlement rules'
-    // business (a fresh account holds no credits to draw), and is covered by
-    // billing-credit-settlement.persistence.test.ts. What matters here is that
-    // the draw is aimed at the organisation's account at all.
-  });
-
-  it('returns teams to their own accounts on release, without re-scoping history', async () => {
-    const organisationAccount = await resolveCreditAccount(
-      { account: stripeAccount, organisationId: ids.org, teamId: ids.teamA },
-      { prisma },
-    );
-
-    const released = await releaseOrgBillingResponsibility(
-      { request, actorToken: 'signed-actor', credential },
-      lifecycleDeps(prisma),
-    );
-    expect(released).toMatchObject({ active: false });
-    expect(released.released_at).not.toBeNull();
-
-    const resolved = await resolveCreditAccount(
-      { account: stripeAccount, organisationId: ids.org, teamId: ids.teamA },
-      { prisma },
-    );
-    expect(resolved.id).toBe(ids.teamCreditAccount);
-    expect(resolved.balanceMicrocredits).toBe(500000000n);
-
-    // The organisation account and everything settled against it stay exactly
-    // where the spend was incurred.
-    const organisationRows = await prisma.billingCreditPortfolioSnapshot.count({
-      where: { creditAccountId: organisationAccount.id },
-    });
-    expect(organisationRows).toBeGreaterThan(0);
+  it('does not debit historical TEST usage from the current LIVE organisation wallet',async()=>{
+    const live=await resolveCreditAccount({account:currentLive,organisationId:ids.org,teamId:ids.teamB},{prisma});
+    await expect(settleCreditPortfolio({creditAccountId:live.id,portfolio:portfolio(ids.teamB,'mup_wrong_live_history'),credential},{prisma}))
+      .rejects.toThrow('BILLING_MODE_HISTORY_RECONCILIATION_REQUIRED');
+    expect(await prisma.billingCreditEntry.count({where:{creditAccountId:live.id}})).toBe(0);
+    expect((await prisma.billingCreditAccount.findUniqueOrThrow({where:{id:ids.teamCreditAccount}})).balanceMicrocredits).toBe(500000000n);
   });
 
   it('records immutable evidence before resolving an expired uncertain Stripe delivery', async () => {

@@ -6,36 +6,40 @@ import { settleCreditPortfolio } from '../../src/services/billing-credit-settlem
 import { ids, deepwaterCredential, line, portfolio, handle } from './billing-credit-settlement.suite-fixture.js';
 
 export function registerCases2() {
-  it('does not consume a later top-up for an accepted Stripe charge but funds new usage', async () => {
+  it('recovers captured historical TEAM funding without paying an accepted Stripe charge twice', async () => {
     if (!handle) throw new Error('db handle missing');
     const teamId = 'team_credit_export_cap';
     const customerId = 'bsc_credit_export_cap';
     const creditAccountId = 'bca_credit_export_cap';
     const subscriptionId = 'bss_credit_export_cap';
-    await handle.prisma.team.create({
-      data: { id: teamId, orgId: ids.org, name: 'Export Cap Team', slug: 'export-cap' },
+    // Opening historical TEAM capture. Settlement/refund logic below runs with
+    // every guard enabled; this never adopts these funds into current ORG money.
+    await handle.prisma.$transaction(async tx=>{
+      await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
+    await tx.team.create({
+      data: { createdAt:new Date('2026-01-01T00:00:00Z'),id: teamId, orgId: ids.org, name: 'Export Cap Team', slug: 'export-cap' },
     });
-    await handle.prisma.billingTeamMode.create({ data: { teamId, sandbox: true, revision: 1 } });
-    await handle.prisma.teamMember.create({
+    await tx.billingTeamMode.create({ data: { teamId, sandbox: true, revision: 1 } });
+    await tx.teamMember.create({
       data: { id: 'tm_credit_export_cap', teamId, userId: ids.owner, teamRole: 'owner' },
     });
-    await handle.prisma.billingStripeCustomer.create({
+    await tx.billingStripeCustomer.create({
       data: {
         id: customerId, accountId: ids.account, orgId: ids.org, teamId,
         scope: 'TEAM', scopeKey: `${ids.org}:${teamId}`,
         stripeCustomerId: 'cus_credit_export_cap',
       },
     });
-    await handle.prisma.billingCreditAccount.create({
+    await tx.billingCreditAccount.create({
       data: {
         createdAt: new Date('2026-01-01T00:00:00Z'),
         id: creditAccountId, accountId: ids.account, customerId, orgId: ids.org,
         teamId, scope: 'TEAM', scopeKey: `${ids.org}:${teamId}`, currency: 'USD',
       },
     });
-    const checkout = await handle.prisma.billingStripeCheckoutSession.create({
+    const checkout = await tx.billingStripeCheckoutSession.create({
       data: {
-        billingModeTeamId: teamId, billingModeRevision: 1,
+        createdAt:new Date('2026-01-01T00:00:00Z'),billingModeTeamId: teamId, billingModeRevision: 1,
         id: 'bsch_credit_export_cap', accountId: ids.account, appKeyId: ids.deepwaterKey,
         customerId, serviceId: ids.deepwater, tariffId: ids.deepwaterTariff,
         tariffSource: 'SERVICE_DEFAULT', orgId: ids.org, teamId,
@@ -45,15 +49,16 @@ export function registerCases2() {
         leaseExpiresAt: new Date('2026-10-04T12:00:00.000Z'),
       },
     });
-    await handle.prisma.billingStripeSubscription.create({
+    await tx.billingStripeSubscription.create({
       data: {
-        id: subscriptionId, accountId: ids.account, checkoutId: checkout.id,
+        createdAt:new Date('2026-01-01T00:00:00Z'),id: subscriptionId, accountId: ids.account, checkoutId: checkout.id,
         customerId, serviceId: ids.deepwater, tariffId: ids.deepwaterTariff,
         tariffSource: 'SERVICE_DEFAULT', orgId: ids.org, teamId,
         scope: 'TEAM', scopeKey: `${ids.org}:${teamId}`,
         stripeSubscriptionId: 'sub_credit_export_cap', stripeUsageItemId: 'si_credit_export_cap',
         status: 'active', livemode: false,
       },
+    });
     });
     const october = (cursor: string, capturedAt: string, cost: string) => {
       const result = portfolio(cursor, capturedAt, [line('deepwater', ids.owner, cost)]);

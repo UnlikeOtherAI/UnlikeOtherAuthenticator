@@ -172,7 +172,7 @@ It retries temporary failures without deleting or resetting a source. Captured
 credentials remain usable independently of new collection admission. No old
 entitlement, balance, consent, customer or subscription is moved into ORG.
 
-Invoice LIST returns409 `BILLING_ADDON_HISTORY_RECONCILIATION_REQUIRED` while a
+Invoice LIST returns 409 `BILLING_ADDON_HISTORY_RECONCILIATION_REQUIRED` while a
 source in that exact org/account/mode remains incomplete. This is a history
 reconciliation state, not a stale action context or an empty history. Confirmed
 invoice DETAIL/PDF remains independently accessible. Existing base invoice
@@ -272,3 +272,29 @@ TEAM deletion jobs: each must have exact TEAM effective scope/target and the new
 preserve-org marker. The migration takes a conflicting table lock and refuses
 incompatible unfinished jobs; old executors cannot claim new jobs. Do not cancel,
 rewrite or delete a job to make that readiness check pass.
+
+Coordinate this as an explicit financial cutover, not a backward-compatible
+rolling billing deployment. The new database refuses new TEAM captures and
+per-team policy writes from an old revision. The new API returns 409
+`BILLING_ORGANISATION_OVERVIEW_REQUIRED` for superseded credits/statement reads;
+it does not silently upgrade an old client or its displayed actions. The Nessie
+consumer must already contain the exact 6.3 organisation capability/overview
+contract, retain original action contexts and handle an unavailable capability
+without losing its authenticated session. During a deployment gap, billing may
+be unavailable; do not infer a balance, retry money automatically or claim that
+the old billing UI remains compatible.
+
+Before releasing traffic, the parent must review the retained-source
+dispositions, current pending work, deletion readiness and the exact immutable
+heads, then coordinate consumer/API deployment and verify authentication
+independently. Run the real capability, overview, saved-consent disable,
+subscription and history checks in the selected organisation mode. Read-only
+add-on recovery is a separate reviewed operation and does not release retained
+TEAM funds or the inclusive change-month hold.
+
+Rolling an application back does not roll the financial epoch back. An older
+revision against the new schema must remain unable to create TEAM financial
+work. Do not remove guards, reset epochs, rewrite pending captures or revert the
+migration to restore an old billing screen. Keep billing held and repair or
+redeploy the compatible consumer/API while preserving authentication and the
+original captured recovery sources.
