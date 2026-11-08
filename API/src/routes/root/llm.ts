@@ -1,6 +1,7 @@
 import { embeddedKelpieMarkdown } from './llm-embedded-kelpie.js';
 import { llmBillingModesMarkdown } from './llm-billing-modes.js';
 import { llmOrganisationBillingMarkdown } from './llm-billing-organisation.js';
+// Includes negotiated authority v2 and the separate own-team read-only overview.
 import { llmTelephoneAdmissionMarkdown, llmTelephoneSmsMarkdown } from './llm-telephone.js';
 import { llmBillingVoiceMarkdown } from './llm-billing-voice.js';
 import { llmTelephoneMarkdown } from './llm-telephone.js';

@@ -12,13 +12,14 @@ import { BILLING_CREDIT_ATTENTION_COPY } from '../../src/services/billing-credit
 
 describe('billing credit funding request', () => {
   it('returns deduplicated manager IDs selected by the fresh organisation authority query', async () => {
-    const findMany=vi.fn().mockResolvedValue([{userId:'org-admin'},{userId:'other-team-admin'},{userId:'org-admin'}]);
+    const findMany=vi.fn().mockResolvedValue([{userId:'org-admin'},{userId:'org-owner'},{userId:'org-admin'}]);
     const database={organisation:{findFirst:vi.fn().mockResolvedValue({ownerId:'org-owner'})},orgMember:{findMany}};
     const result=await resolveBillingFundingRequestRecipients({organisationId:'org-a',teamId:'request-team',
       requesterUserId:'member',organisationPays:true},{prisma:database as never});
-    expect(result).toEqual(['org-admin','other-team-admin']);
+    expect(result).toEqual(['org-admin','org-owner']);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({orgId:'org-a',
-      status:'ACTIVE',userId:{not:'member'},user:{lifecycleStatus:'ACTIVE'}})}));
+      status:'ACTIVE',userId:{not:'member'},user:expect.objectContaining({lifecycleStatus:'ACTIVE'}),
+      OR:[{role:{in:['owner','admin']}},{userId:'org-owner'}]})}));
     // No requester-team predicate: real-PG tests establish roles, lifecycle and foreign-org exclusion.
     expect(JSON.stringify(findMany.mock.calls[0])).not.toContain('request-team');
   });

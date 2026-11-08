@@ -64,9 +64,10 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS !== 'true')('organisa
     await expect(db.billingTeamMode.create({ data: { teamId: 'selected', sandbox: true } }))
       .rejects.toThrow('BILLING_MODE_EVIDENCE_IMMUTABLE');
   });
-  it('admits an active manager in the same org, never a former or foreign manager', async () => {
+  it('never upgrades an active manager of another or selected team to Org money authority', async () => {
     const subject = { organisationId: 'org-mode', teamId: 'selected', userId: actor.userId };
-    expect((await resolveBillingFundingViewer(subject, { prisma: db })).billingManager).toBe(true);
+    expect((await resolveBillingFundingViewer(subject, { prisma: db })).billingManager).toBe(false);
+    expect((await resolveBillingFundingViewer({...subject,teamId:'managed'}, { prisma: db })).billingManager).toBe(false);
     await db.teamMember.update({ where: { teamId_userId: { teamId: 'managed', userId: actor.userId } },
       data: { status: 'REMOVED' } });
     expect((await resolveBillingFundingViewer(subject, { prisma: db })).billingManager).toBe(false);
@@ -120,7 +121,7 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS !== 'true')('organisa
       {teamId:'managed',userId:'former-manager',teamRole:'admin',status:'REMOVED'}]});
     const recipients=await resolveBillingFundingRequestRecipients({organisationId:'org-mode',teamId:'selected',
       requesterUserId:'requester',organisationPays:true},{prisma:db});
-    expect(recipients).toEqual(['org-admin','org-mode-operator','org-mode-owner','other-manager']);
+    expect(recipients).toEqual(['org-admin','org-mode-owner']);
     const before=await db.billingCreditAccount.count();
     const request=await createBillingCreditFundingRequest({request:{product:'nessie',organisationId:'org-mode',
       teamId:'selected',userId:'requester'},actorToken:'verified-by-fixture',credential:{} as never,
@@ -180,8 +181,9 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS !== 'true')('organisa
     const balance=await readOrganisationCreditBalance(context,selection,db,'en-US',{financialAccount});
     expect(balance.confirmed_balance.credits).toBe('0');
     expect(balance.billing_status).toMatchObject({settlement_state:'pending_reconciliation'});
-    expect(balance.billing_status.message).toContain('Historical team credits and consents are retained separately');
-    expect(balance.billing_status.message).toContain('excluded from this organisation wallet');
+    expect(balance.billing_status.message).toContain('Historical team credits and consents remain separate records');
+    expect(balance.billing_status.message).toContain('excluded from spendable organisation funds');
+    expect(balance.billing_status.message).toContain('not an all-history balance');
     expect(balance.credit_account_id).not.toBe(before.id);
     expect(await db.billingCreditAccount.findUnique({where:{id:before.id}})).toEqual(before);
     const live=await db.billingStripeAccount.findUniqueOrThrow({where:{id:'org-live'}});

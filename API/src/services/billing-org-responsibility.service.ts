@@ -50,9 +50,9 @@ export async function resolveOrgBillingResponsibility(
 }
 
 /**
- * Current organisation financial authority: an active org owner/admin, or an
- * active owner/admin of any active team in the organisation. The selected team
- * supplies admission context, not a financial row filter.
+ * Current organisation financial authority: active organisation owner/admin only.
+ * A team-only administrator has separate read-only own-team records, never money
+ * authority. The selected team still supplies current actor admission context.
  */
 export async function isOrganisationBillingManager(
   params: { organisationId: string; userId: string },
@@ -70,10 +70,7 @@ export async function isOrganisationBillingManager(
     scope: BillingAssignmentScope.ORGANISATION,
     orgRole: membership.role,
   })) return true;
-  return Boolean(await prisma.teamMember.findFirst({ where: {
-    userId: params.userId, status: MembershipStatus.ACTIVE, teamRole: { in: ['owner', 'admin'] },
-    team: { orgId: params.organisationId, lifecycleStatus: 'ACTIVE', org: { lifecycleStatus: 'ACTIVE' } },
-  }, select: { id: true } }));
+  return false;
 }
 
 /**

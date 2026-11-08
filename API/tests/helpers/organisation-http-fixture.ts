@@ -53,7 +53,8 @@ export async function seedOrganisationHttpFixture(db:PrismaClient,input:{publicB
     assuranceId:string;familyId:string;refreshToken:string;accessToken:string;assuranceExpiresAt:string}>= {};
   for(const [name,userId,teamId] of [['ownerA','control-owner','control-team'],['ownerB','control-owner','addon-other-team'],
     ['adminA','http-org-admin','control-team'],['adminB','http-org-admin','addon-other-team'],
-    ['managerA','http-team-manager','control-team'],['memberA','http-member','control-team']] as const){
+    ['managerA','http-team-manager','control-team'],['managerB','http-team-manager','addon-other-team'],
+    ['memberA','http-member','control-team']] as const){
     await db.domainRole.upsert({where:{domain_userId:{domain,userId}},create:{domain,userId,role:'USER'},update:{}});
     const familyId=randomUUID(),expiresAt=new Date(now.getTime()+6*60*60_000);
     const family=await issueRefreshToken({familyId,userId,domain,clientId:domainBearer,configUrl,orgId:'control-org',teamId,twoFaCompleted:false},

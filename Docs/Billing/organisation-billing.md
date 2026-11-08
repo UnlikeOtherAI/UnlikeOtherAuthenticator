@@ -1,5 +1,48 @@
 # Organisation billing
 
+## Current authority contract — public 6.4.0
+
+The clarified policy is implemented through separate authority branches. Only an
+ACTIVE organisation owner/admin (including its canonical owner with ACTIVE org
+membership) can read or manage the organisation payer. A team-only owner/admin
+can read their own selected ACTIVE team's recorded activity, captured-source
+usage and retained TEAM credit history. Another-team admin role grants no access
+to the selected team's records or to organisation money. The selected team still
+scopes ordinary product content. Existing product-specific spending safeguards,
+native scope registration and self-imposed run limits remain separate controls.
+
+The capabilities endpoint negotiates schema 2 only with
+`X-UOA-Billing-Authority-Protocol: 1.0.0`; absent that header, the strict schema 1
+DTO remains unchanged and returns false financial booleans for team-only roles.
+The new discriminant is `access: organisation_manager | team_reader | none`.
+Only the organisation-manager branch carries a financial scope. The team-reader
+branch carries the exact `team_scope` and canonical non-null request for
+`POST /billing/v1/team/overview`, using the registered lifecycle key and original
+selected-team actor/assurance. Unsupported authority versions fail 400
+`BILLING_AUTHORITY_PROTOCOL_UNSUPPORTED`; own-team authority refusals fail 403
+`BILLING_TEAM_ACCESS_REQUIRED`.
+
+Team sections are independently confirmed, pending reconciliation or unavailable.
+Recorded usage is verified against the signed Ledger paid cohort and immutable
+UOA liabilities, with original account/mode and explicit waiver evidence. Two
+accounts in the same mode are separate opaque sources. Unknown or contradictory
+bindings return pending without amounts. Retained credit rows are the exact
+TEAM scope and team, never a current organisation wallet or share of its funds.
+No team response includes organisation invoices, subscriptions, cards, consents,
+monetary actions or an amount due. The consumer must not sum a team bill.
+
+The locked credit-manager guard and an additional financial-intent INSERT guard
+enforce organisation-only money authority in PostgreSQL. The original intent
+guard still locks and checks app/service/actor epoch/org/team admission before
+that narrower financial check. Existing runtime telephone grant operations keep
+their distinct product authority. Recovery retains its captured source; no
+historical row is copied, rebound or adopted by this authority migration.
+
+The separate member Ask remains a nonfinancial selected-team request and queries
+current organisation financial managers only. It opens or reads no wallet.
+Deploy a consumer pinned to 6.4 before presenting the new own-team reader branch;
+old financial requests fail closed rather than returning shared data.
+
 This is the organisation financial scope introduced after PR143. It supersedes
 the team policy and optional responsibility roll-up described in
 [Team billing modes](team-billing-modes.md). Those records remain historical

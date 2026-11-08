@@ -44,10 +44,12 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('ORG-paid a
     for(const key of ['team','user'] as const){const row=await checkout(key,'owner');expect(row.customerId).toBe('org-customer');expect(row.accountId).toBe('addon-live');}
     expect(await db.teamMember.count({where:{userId:'owner'}})).toBe(0);
   });
-  it('admits a selected-team member who manages another active team, and refuses ordinary members',async()=>{
-    const row=await checkout('org','admin');expect(row.teamId).toBeNull();
+  it('refuses team-only managers and admits current organisation administration without team membership',async()=>{
+    await expect(checkout('org','admin')).rejects.toThrow('BILLING_MANAGER_REQUIRED');
     await expect(checkout('org','member')).rejects.toThrow('current exact authority');
     await expect(checkout('org','admin',null)).rejects.toThrow('current exact authority');
+    await db.orgMember.update({where:{orgId_userId:{orgId:'addon-org',userId:'admin'}},data:{role:'admin'}});
+    const row=await checkout('org','admin');expect(row.teamId).toBeNull();
     const nullOwner=await checkout('org-null','owner',null);expect(nullOwner.requestedTeamId).toBeNull();
   });
   it('keeps pending current ORG customer work visible with nullable finance admission',async()=>{

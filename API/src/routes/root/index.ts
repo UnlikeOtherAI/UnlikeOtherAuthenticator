@@ -1,4 +1,4 @@
-// Organisation settings, independent finances and retired team mutations are published by schema.billing-organisation, schema.billing-modes and /llm.
+// Org-manager-only finances and own-team read-only authority profiles are published by schema.billing-organisation, schema.billing-modes and /llm.
 // Directory webhook consumption and exact-team avatar reads are documented in /llm and schema.ts.
 import { lifecycleDocumentation } from './schema.lifecycle.js';
 import { readFileSync } from 'node:fs';

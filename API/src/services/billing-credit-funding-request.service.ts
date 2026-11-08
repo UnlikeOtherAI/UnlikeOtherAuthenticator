@@ -21,6 +21,7 @@ import { resolveBillingFundingViewer } from './billing-funding-viewer.service.js
 import { resolveBillingControlledBy } from './billing-org-responsibility.service.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingCreditAttentionCopy } from './billing-credit-attention-copy.catalog.js';
+import { activeAuthorityUserWhere } from './organisation-team-authority.service.js';
 
 
 /**
@@ -40,10 +41,8 @@ export async function resolveBillingFundingRequestRecipients(
   const org=await prisma.organisation.findFirst({where:{id:params.organisationId,lifecycleStatus:'ACTIVE'},select:{ownerId:true}});
   if(!org)return [];
   const memberships=await prisma.orgMember.findMany({where:{orgId:params.organisationId,status:MembershipStatus.ACTIVE,
-    userId:{not:params.requesterUserId},user:{lifecycleStatus:'ACTIVE'},OR:[
-      {role:{in:['owner','admin']}},...(org.ownerId?[{userId:org.ownerId}]:[]),
-      {user:{teamMembers:{some:{status:MembershipStatus.ACTIVE,teamRole:{in:['owner','admin']},
-        team:{orgId:params.organisationId,lifecycleStatus:'ACTIVE'}}}}}]},select:{userId:true}});
+    userId:{not:params.requesterUserId},user:activeAuthorityUserWhere(),OR:[
+      {role:{in:['owner','admin']}},...(org.ownerId?[{userId:org.ownerId}]:[])]},select:{userId:true}});
   return [...new Set(memberships.map(m=>m.userId))].sort();
 }
 
