@@ -193,11 +193,10 @@ export async function ensureOrganisationCreditAccount(
 /**
  * The single chokepoint every credit debit crosses.
  *
- * With an organisation billing responsibility active, every team's metered
- * spend lands on the ORGANISATION account; without one this is byte-identical
- * to `ensureTeamCreditAccount`. That is the whole of the money side of
- * `Docs/plans/2026-08-15-org-billing-override.md` §2: no caller anywhere in
- * Ledger, the worker, or a product changes.
+ * Every forward debit uses the organisation wallet in its selected account
+ * and mode. Retained responsibility rows and TEAM wallets remain historical
+ * recovery evidence; neither the selected team nor an optional roll-up chooses
+ * the current payer. No financial record is moved by this resolver.
  */
 export async function resolveCreditAccount(
   params: {
