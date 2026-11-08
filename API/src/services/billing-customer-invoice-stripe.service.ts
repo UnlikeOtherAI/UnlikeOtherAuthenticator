@@ -115,7 +115,7 @@ export function verifyStripeInvoiceFinancialSource(row: StripePaymentInvoiceSour
       addon.livemode===row.livemode&&addon.orgId===row.orgId&&addon.customer.accountId===row.accountId&&
       addon.customer.orgId===row.orgId&&addon.customer.teamId===row.teamId&&addon.customer.stripeCustomerId===row.stripeCustomerId:false;
   if (!bound ||row.addonSubscriptionId&&(!row.addonPeriodStartsAt||!row.addonPeriodEndsAt||row.addonPeriodEndsAt<=row.addonPeriodStartsAt||
-    row.lines.some(line=>line.billingMonth!==row.addonPeriodStartsAt!.toISOString().slice(0,7)))||
+    row.lines.some(line=>line.billingMonth!==row.addonPeriodStartsAt?.toISOString().slice(0,7)))||
     !/^[A-Z]{3}$/.test(row.currency) ||
     !row.stripeInvoiceId || !row.stripeCustomerId ||
     row.grossAmountMinor <= 0n || row.taxAmountMinor < 0n ||

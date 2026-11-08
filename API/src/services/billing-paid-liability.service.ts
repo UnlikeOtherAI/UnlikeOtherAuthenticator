@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { BillingTariffMode, Prisma } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
+import { assertCapturedPrepaidSource } from './billing-paid-prepaid-source.service.js';
 
 const DENOMINATOR = 10_000n * 10n ** 18n;
 const MICRO_FACTOR = 1_000_000_000n;
@@ -62,13 +63,7 @@ export async function recordPaidUsageLiability(
     throw new AppError('BAD_REQUEST',409,'BILLING_CAPTURED_ACCOUNT_RECONCILIATION_REQUIRED');
   }
   if(params.creditAccountId){
-    const wallet=await tx.billingCreditAccount.findUnique({where:{id:params.creditAccountId},select:{accountId:true}});
-    const source=await tx.billingPrepaidReservation.findUnique({where:{dispatchId:hold.dispatchId},
-      select:{creditAccountId:true,orgId:true,teamId:true,userId:true,serviceId:true}});
-    if(!wallet||source?.creditAccountId!==params.creditAccountId||source.orgId!==hold.orgId||source.teamId!==hold.teamId||
-      source.userId!==hold.userId||source.serviceId!==hold.serviceId||(hold.billingAccountId&&wallet.accountId!==hold.billingAccountId)) {
-      throw new AppError('BAD_REQUEST',409,'BILLING_CAPTURED_ACCOUNT_MISMATCH');
-    }
+    await assertCapturedPrepaidSource(tx,hold,params.creditAccountId,params.receiptId);
   }
   const ratingScopeKey = paidUsageRatingScopeKey({...hold,creditAccountId:params.creditAccountId});
   await tx.$queryRaw(Prisma.sql`SELECT pg_catalog.pg_advisory_xact_lock(

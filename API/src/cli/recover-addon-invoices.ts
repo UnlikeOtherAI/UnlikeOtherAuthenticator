@@ -13,8 +13,8 @@ import { stripeRuntimeForAccount } from '../services/billing-stripe-client.servi
 export async function runAddonInvoiceRecoveryCommand(args:string[],deps:{prisma?:PrismaClient;now?:()=>Date}={}){
   const values=new Map<string,string>();
   for(let index=0;index<args.length;index++){
-    const key=args[index]!;
-    if(!['--mode','--account','--organisation','--max-cycles','--dry-run','--apply'].includes(key)||values.has(key))throw Error('INVALID_ARGUMENTS');
+    const key=args[index];
+    if(!key||!['--mode','--account','--organisation','--max-cycles','--dry-run','--apply'].includes(key)||values.has(key))throw Error('INVALID_ARGUMENTS');
     if(key==='--dry-run'||key==='--apply')values.set(key,'true');
     else{const value=args[++index];if(!value||value.startsWith('--'))throw Error('INVALID_ARGUMENTS');values.set(key,value);}
   }

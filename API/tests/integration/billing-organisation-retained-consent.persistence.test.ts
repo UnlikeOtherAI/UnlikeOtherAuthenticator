@@ -15,7 +15,7 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('retained T
     // This existing fixture represents pre-cutover TEAM financial snapshots.
     // Its import bypasses triggers; every operation under test below uses the
     // actual production services with all current DB guards enabled.
-    await seed(db.prisma,stripeAccount.stripeAccountId);
+    await seed(db.prisma,stripeAccount.stripeAccountId,true);
     for(const mode of ['LIVE','SANDBOX']){
       vi.stubEnv(`STRIPE_${mode}_ACCOUNT_ID`,stripeAccount.stripeAccountId);
       vi.stubEnv(`STRIPE_${mode}_SECRET_KEY`,mode==='LIVE'?'rk_live_current':'rk_test_current');

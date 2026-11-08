@@ -22,13 +22,14 @@ export async function prepareAddonPaymentInvoice(invoice:Stripe.Invoice,account:
   const remote=await stripe.subscriptions.retrieve(subscriptionId);
   assertRecurringAddonSubscriptionBinding(local,remote,account);
   assertRecurringAddonMetadata(invoice.parent?.subscription_details?.metadata,local.checkout,account);
-  if(local.customer.orgId!==local.orgId||local.customer.accountId!==account.id||
-    stripeExternalId(invoice.customer)!==local.customer.stripeCustomerId||
+  const stripeCustomerId=local.customer.stripeCustomerId;
+  if(!stripeCustomerId||local.customer.orgId!==local.orgId||local.customer.accountId!==account.id||
+    stripeExternalId(invoice.customer)!==stripeCustomerId||
     !['subscription_create','subscription_cycle'].includes(invoice.billing_reason??''))
     throw new AppError('INTERNAL',409,'BILLING_ADDON_INVOICE_BINDING_UNPROVEN');
   assertRecurringAddonInvoiceTerms(invoice,local,remote,invoice.billing_reason as 'subscription_create'|'subscription_cycle');
-  const line=invoice.lines.data[0]!;
-  if(!Number.isSafeInteger(line.period.start)||!Number.isSafeInteger(line.period.end)||line.period.start<=0||line.period.end<=line.period.start||
+  const line=invoice.lines.data[0];
+  if(!line||!Number.isSafeInteger(line.period.start)||!Number.isSafeInteger(line.period.end)||line.period.start<=0||line.period.end<=line.period.start||
     invoice.automatic_tax?.enabled&&invoice.automatic_tax.status!=='complete')
     throw new AppError('INTERNAL',409,'BILLING_ADDON_INVOICE_PERIOD_TAX_UNPROVEN');
   if(invoice.amount_paid===0)return null;
@@ -38,7 +39,7 @@ export async function prepareAddonPaymentInvoice(invoice:Stripe.Invoice,account:
   if(duplicate)throw new AppError('INTERNAL',409,'STRIPE_SUBSCRIPTION_INVOICE_PREPAID_DUPLICATE');
   const facts={accountId:account.id,subscriptionId:null,addonSubscriptionId:local.id,livemode:account.livemode,
     addonPeriodStartsAt:new Date(line.period.start*1000),addonPeriodEndsAt:new Date(line.period.end*1000),
-    stripeInvoiceId:invoice.id,stripeCustomerId:local.customer.stripeCustomerId!,
+    stripeInvoiceId:invoice.id,stripeCustomerId,
     stripePaymentIntentIds:cash.payments.map(row=>row.payment_intent_id),paymentEvidence:cash.payments,
     orgId:local.orgId,teamId:local.customer.teamId,paidAt:cash.paidAt,currency:local.catalog.currency,
     grossAmountMinor:stripeInvoiceMinor(invoice.total),taxAmountMinor:0n,creditAmountMinor:0n,

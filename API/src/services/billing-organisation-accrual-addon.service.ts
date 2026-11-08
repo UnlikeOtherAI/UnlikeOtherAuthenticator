@@ -33,7 +33,8 @@ export async function readOrganisationAccruedAddons(input:{organisationId:string
     const end=row.status==='canceled'?new Date(Math.min(input.period.asOf.getTime(),row.currentPeriodEnd.getTime())):input.period.asOf;
     let previousEnd:Date|undefined;
     for(const invoice of invoices){
-      const proof=verifyStripeInvoiceFinancialSource(invoice),start=invoice.addonPeriodStartsAt!,finish=invoice.addonPeriodEndsAt!;
+      const proof=verifyStripeInvoiceFinancialSource(invoice),start=invoice.addonPeriodStartsAt,finish=invoice.addonPeriodEndsAt;
+      if(!start||!finish)hold();
       if(invoice.teamId!==null||proof.refunded!==0n||proof.disputed!==0n||start>covered||previousEnd&&start<previousEnd)hold();
       covered=finish;previousEnd=finish;currencies.add(invoice.currency);
       if(start<input.period.start)continue;
