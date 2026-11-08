@@ -1,5 +1,14 @@
 # Entity lifecycle review and rollout
 
+The 8 November 2026 user clarification supersedes the earlier last-team cascade:
+explicit TEAM deletion preserves the organisation. Before deploying this change,
+check the count of unfinished legacy TEAM jobs whose stored preview has
+`effectiveScope != TEAM`. The product delivery and executor refuse those old
+expanded scopes with `DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED`. Do not cancel,
+delete or edit a job to hide it; inspect its committed product acknowledgements
+and completed stages before a separately reviewed reconciliation. Completed
+historical erasure is not reversible and is never represented as restored.
+
 ## Decisions
 
 UOA remains the authority for human identities, organisations, teams, membership, and invitations. Products retain stable UOA references and their own content. Entity access state is separate from membership: disabling an organisation denies access through its teams without overwriting their independent state. Reactivating a parent does not reactivate an independently disabled child.
@@ -15,7 +24,7 @@ Two account deletion modes are exposed:
 
 Neither mode allows the old identity to authenticate or regain membership. Registering the same email creates a fresh identity. Ownership of a surviving organisation must be transferred before deleting its owner.
 
-Team deletion removes data in the selected team and includes accounts only when they have no dependency elsewhere. Organisation deletion covers its nested teams. Shared accounts and accounts with personal or protected dependencies survive. Deleting the last team includes its now-empty organisation in the preview; the executor must never silently widen a confirmed scope.
+Team deletion removes data in the selected team and includes accounts only when they have no dependency elsewhere. Organisation deletion covers its nested teams. Shared accounts and accounts with personal or protected dependencies survive. Deleting the last team preserves the now-empty organisation and its active memberships/owner/admin authority for Create team recovery. The executor never expands TEAM consent into organisation deletion; captured financial evidence and holds remain authoritative.
 
 Invoices, signed agreements, and other protected historical evidence remain under their existing restricted access and immutability rules. Operational grants and unsigned capabilities are not automatically treated as protected evidence. Live collection capabilities must be closed or transferred before confirmation. Completion states explicitly distinguish operational deletion from retained evidence.
 

@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient, type LifecycleScope, type IdentityDeletionMo
 import { createHash } from 'node:crypto';
 import { getEnv, getAdminAuthDomain } from '../config/env.js';
 import { lifecycleTarget } from './internal-admin-lifecycle.service.js';
+import { AppError } from '../utils/errors.js';
 
 type Counter = { count(args: { where: Record<string, unknown> }): Promise<number> };
 export async function activeBillingBlockers(tx: PrismaClient, scope: LifecycleScope, id: string) {
@@ -70,12 +71,20 @@ export type DeletionPreview = {
   blockers: string[]; confirmation: string; digest: string;
 };
 
+/** Old confirmed TEAM jobs may contain the former organisation expansion.
+ * Never send that broader destructive scope to a product or execute it. */
+export function assertTeamDeletionScope(preview:DeletionPreview):void {
+  if(preview.scope==='TEAM'&&(preview.effectiveScope!=='TEAM'||preview.effectiveTargetId!==preview.targetId)) {
+    throw new AppError('BAD_REQUEST',409,'DELETION_TEAM_SCOPE_RECONCILIATION_REQUIRED');
+  }
+}
+
 export async function orphanEligibility(tx: PrismaClient, userId: string, orgId: string | null, teamIds: string[], deleteOrg: boolean, committed = false) {
   const reasons: string[] = [];
   const identity = await tx.user.findUnique({ where: { id: userId }, select: { lifecycleStatus: true } });
   if (!identity || (identity.lifecycleStatus !== 'DELETING' || !committed) && ['DELETING', 'DELETED'].includes(identity.lifecycleStatus)) reasons.push('Account already has a terminal lifecycle');
   if (await tx.teamMember.count({ where: { userId, teamId: { notIn: teamIds } } })) reasons.push('Other team membership');
-  if (await tx.orgMember.count({ where: { userId, ...(orgId ? { orgId: { not: orgId } } : {}) } })) reasons.push('Other organisation membership');
+  if (await tx.orgMember.count({ where: { userId, ...(deleteOrg && orgId ? { orgId: { not: orgId } } : {}) } })) reasons.push('Retained organisation membership');
   if (await tx.organisation.count({ where: { ownerId: userId, ...(deleteOrg && orgId ? { id: { not: orgId } } : {}) } })) reasons.push('Organisation ownership');
   const nativeDomain = getEnv().MCP_OAUTH_DOMAIN;
   if (nativeDomain && await tx.domainRole.count({ where: { userId, domain: nativeDomain } })) reasons.push('Standalone native account');
@@ -92,16 +101,16 @@ export async function orphanEligibility(tx: PrismaClient, userId: string, orgId:
 
 export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleScope, id: string, mode: IdentityDeletionMode): Promise<DeletionPreview> {
   const row = await lifecycleTarget(tx, scope, id);
-  let effectiveScope = scope, effectiveTargetId = id;
+  const effectiveScope = scope, effectiveTargetId = id;
   let orgId: string | null = scope === 'ORGANISATION' ? id : null;
   let teamIds: string[] = [];
-  let deletesEmptyOrganisation = false;
+  const deletesEmptyOrganisation = false;
   if (scope === 'TEAM') {
     const team = await tx.team.findUniqueOrThrow({ where: { id } });
     orgId = team.orgId;
-    const others = await tx.team.count({ where: { orgId, id: { not: id }, lifecycleStatus: { not: 'DELETED' } } });
-    if (others === 0) { effectiveScope = 'ORGANISATION'; effectiveTargetId = orgId; deletesEmptyOrganisation = true; }
-    else teamIds = [id];
+    // TEAM consent never expands into organisation deletion, including the last team.
+    // Retained org membership/ownership is the authority for Create team recovery.
+    teamIds = [id];
   }
   if (effectiveScope === 'ORGANISATION') teamIds = (await tx.team.findMany({ where: { orgId: effectiveTargetId }, orderBy: { id: 'asc' } })).map(t => t.id);
   const teamCandidates = scope === 'USER' ? [] : (await tx.teamMember.findMany({ where: { teamId: { in: teamIds } }, select: { userId: true } })).map(m => m.userId);

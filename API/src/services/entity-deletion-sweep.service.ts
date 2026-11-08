@@ -1,7 +1,7 @@
 import { type PrismaClient, type IdentityDeletionMode } from '@prisma/client';
 import { AppError } from '../utils/errors.js';
 import type { DeletionPreview } from './entity-deletion-preview.service.js';
-import { orphanEligibility, retainedEvidence } from './entity-deletion-preview.service.js';
+import { assertTeamDeletionScope,orphanEligibility, retainedEvidence } from './entity-deletion-preview.service.js';
 import { lockRefreshSessionUser } from './refresh-session-lock.service.js';
 
 export { scrubIdentityJson } from './identity-audit-sweep.service.js';
@@ -79,6 +79,7 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
 }
 
 export async function sweepDeletion(tx: PrismaClient, preview: DeletionPreview, eraseAccounts = true): Promise<void> {
+  assertTeamDeletionScope(preview);
   if (preview.scope === 'USER') { if (eraseAccounts) await eraseOperationalIdentity(tx, preview.targetId, preview.mode); return; }
   const orgId = preview.organisationId;
   if (!orgId) throw new AppError('INTERNAL', 500, 'DELETION_SCOPE_MISSING');

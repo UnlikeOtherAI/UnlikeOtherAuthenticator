@@ -99,6 +99,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       config_verification: configVerificationEndpointDocumentation,
       endpoints: [...endpoints, jobComputeContinuationEndpoint],
       customer_invoices: 'Actual prepaid payment and monthly service charge invoices use the /billing/v1/invoices/* endpoints; their canonical JSON Schema and examples are at /schemas/billing-customer-invoices-v1.json.',
+      // Includes explicit TEAM-only deletion and preserved empty-org recovery authority.
       lifecycle: lifecycleDocumentation,
       tenant_addresses: 'Hostname and id-to-address reads use the server-owned product team policy. Recognized products resolve unique active organisation labels across founding domains; ordinary clients remain domain-scoped. Ambiguous labels have no address. Resolution never grants access.',
       organisation_address_admission: 'New and changed organisation labels are globally unique across founding domains, enforced atomically in UOA. Existing ambiguous labels stay blocked without changing their owners. Availability reveals occupancy only; it grants no access.',

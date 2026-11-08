@@ -5,7 +5,7 @@ import { Prisma, type LifecycleScope, type IdentityDeletionMode, type PrismaClie
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
-import { previewEntityDeletion, type DeletionPreview } from './entity-deletion-preview.service.js';
+import { assertTeamDeletionScope,previewEntityDeletion, type DeletionPreview } from './entity-deletion-preview.service.js';
 import { sweepDeletion, eraseOperationalIdentity } from './entity-deletion-sweep.service.js';
 import { lockProductTeamPolicyExclusive, lockProductTeamPolicyShared } from './product-team-policy-lock.service.js';
 import { verifyDomainAuthToken } from './domain-secret.service.js';
@@ -92,6 +92,7 @@ export async function executeEntityDeletion(id: string, actor: LifecycleActor) {
     const row = await client.entityDeletionJob.findUnique({ where: { id }, include: { participants: true } });
     if (!row) throw new AppError('NOT_FOUND', 404);
     if (row.status === 'COMPLETE') return row;
+    assertTeamDeletionScope(row.preview as unknown as DeletionPreview);
     if (row.participants.some(p => !p.acknowledgedAt)) throw new AppError('BAD_REQUEST', 409, 'DELETION_PRODUCTS_PENDING');
     if (row.leaseExpiresAt && row.leaseExpiresAt > new Date()) throw new AppError('BAD_REQUEST', 409, 'DELETION_ALREADY_RUNNING');
     return client.entityDeletionJob.update({ where: { id }, data: { leaseOwner, leaseExpiresAt: new Date(Date.now() + 120_000), status: 'READY', blockers: [] }, include: { participants: true } });
@@ -162,6 +163,7 @@ export async function productDeletionJobs(clientDomainId: string) {
   }, include: { job: true }, take: 100, orderBy: { id: 'asc' } });
   return rows.map(p => {
     const preview = p.job.preview as unknown as DeletionPreview;
+    assertTeamDeletionScope(preview);
     return { id: p.job.id, revision: p.job.revision, scope: p.job.scope, targetId: p.job.targetId,
       mode: p.job.mode, organisationId: preview.organisationId, teamIds: preview.teamIds,
       effectiveScope: preview.effectiveScope, effectiveTargetId: preview.effectiveTargetId,

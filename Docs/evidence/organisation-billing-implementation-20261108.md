@@ -27,6 +27,16 @@ were performed by this implementation thread.
 Logs are ignored under `.billing-mode-qa` pending the final durable evidence
 archive outside worktrees. The original PR143 archive remains unchanged.
 
+The revised real PostgreSQL lifecycle suite passes 23 tests. It executes actual
+TEAM deletion jobs with product acknowledgements, preserves the last team's
+organisation and active people, creates a replacement team through the supported
+team service, preserves a synthetic already-funded captured TEST wallet/customer
+byte-for-byte, and proves the inclusive financial month hold still refuses both
+before and after deletion. An old TEAM job expanded to organisation scope is
+refused before product delivery/execution and remains visible for reconciliation.
+Explicit organisation deletion and bounded resumable erasure checks still pass.
+This proves the service flow, not yet the rendered Admin or Nessie browser flow.
+
 ## Work still required before release
 
 Complete the organisation history branch, remaining accrual sources and their
