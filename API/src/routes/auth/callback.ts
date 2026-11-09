@@ -94,12 +94,12 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         request.method === 'POST' ? request.body : request.query,
       );
 
+      if (state && isPublicSocialState(state)) return handlePublicSocialCallback(request, reply, state, code, provider, error);
+
       const xContext = provider === 'x' ? readXSocialContextCookie(request) : null;
       if (provider === 'x') clearXSocialContextCookie(reply);
       const facebookProofCookie = provider === 'facebook' ? readFacebookProofCookie(request) : null;
       if (provider === 'facebook') clearFacebookProofCookie(reply);
-
-      if (state && isPublicSocialState(state)) return handlePublicSocialCallback(request, reply, state, code, provider, error);
 
       // Any provider error is a generic auth failure. Don't leak specifics.
       if (error) {

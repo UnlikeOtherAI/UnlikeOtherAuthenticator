@@ -93,6 +93,7 @@ describe.skipIf(!process.env.DATABASE_URL)('native social providers', () => {
       expect(response.statusCode, response.body).toBe(200);
       expect((await callback(provider, flow.state, flow.cookies)).statusCode).toBe(401);
       if (provider === 'x') {
+        expect(response.cookies.some((cookie) => cookie.name === 'uoa_x_social_context')).toBe(false);
         const call = mocks.profile.mock.calls.slice().reverse().find((args) => args[0] === 'x')!;
         expect(call[3]).toMatch(/^[A-Za-z0-9_-]{43}$/);
         expect(flow.url.searchParams.get('code_challenge_method')).toBe('S256');

@@ -4,7 +4,7 @@ import { AppError } from '../../utils/errors.js';
 import { getSocialProfileFromCode } from '../social/provider-profile.service.js';
 import { SocialProviderSchema, type SocialProviderKey } from '../social/provider.base.js';
 import { prepareFacebookProfile } from '../social/facebook-email-proof-callback.service.js';
-import { parseFacebookProofCode, readFacebookProofCookie } from '../social/facebook-email-proof.service.js';
+import { parseFacebookProofCode, readFacebookProofCookie, clearFacebookProofCookie } from '../social/facebook-email-proof.service.js';
 import { lockProductTeamPolicyShared } from '../product-team-policy-lock.service.js';
 import { lockAndAssertAuthenticationEpoch } from '../authentication-epoch.service.js';
 import { assertNotBannedAtLogin } from '../ban-policy.service.js';
@@ -25,6 +25,7 @@ export async function handlePublicSocialCallback(request: FastifyRequest, reply:
   code: string | undefined, callbackProvider: string, error?: string) {
   const signed = await readPublicFlow(request, state);
   const provider = SocialProviderSchema.parse(callbackProvider);
+  if (provider === 'facebook') clearFacebookProofCookie(reply);
   if (provider !== signed.provider || signed.userId) throw new AppError('UNAUTHORIZED', 401);
   const { config } = await resolvePublicContext(signed.context, provider);
   if (!getEnv().MCP_OAUTH_PUBLIC_PROFILE_ENABLED) throw new AppError('NOT_FOUND', 404);
