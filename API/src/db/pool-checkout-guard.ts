@@ -19,7 +19,8 @@ import { Prisma, type PrismaClient } from '@prisma/client';
  * of the global client (model delegates, `$queryRaw*`, `$executeRaw*`, `$transaction`)
  * while an ACTIVE transaction on the same pool is in the current async context.
  * Cross-pool use is not flagged. Callers must still avoid lock/pool cycles:
- * `/org/me` keeps its shared epoch and bootstrap reads on one admin transaction.
+ * `/org/me` keeps its shared epoch and bootstrap reads on one admin transaction, and
+ * `withTenantTx` leases its authority admin connection before taking the user epoch lock.
  * Everything else on the client (`$connect`, `$on`,
  * `$extends`, internals, symbols) passes through untouched.
  *

@@ -7,6 +7,9 @@ export type AdminConnectionLease = {
   release(): Promise<void>;
 };
 
+/** The tenant transaction's 5 s budget used to bound this checkout, so the lease keeps it. */
+const LEASE_MAX_WAIT_MS = 5_000;
+
 /**
  * Check out one admin-pool connection now and hold it until `release()`.
  *
@@ -21,7 +24,7 @@ export type AdminConnectionLease = {
  *
  * The lease is an interactive transaction that runs only the caller's plain reads, so it holds no
  * lock of its own; READ COMMITTED gives each read the latest committed state, exactly as the
- * global client did. Prisma's default `maxWait` and `timeout` bound the checkout and the hold.
+ * global client did. Prisma's default 5 s `timeout` bounds the hold.
  */
 export function leaseAdminConnection(adminDb: PrismaClient): Promise<AdminConnectionLease> {
   return new Promise((resolveLease, rejectLease) => {
@@ -38,7 +41,7 @@ export function leaseAdminConnection(adminDb: PrismaClient): Promise<AdminConnec
       leased = true;
       resolveLease({ db: tx as unknown as PrismaClient, release });
       await finished;
-    });
+    }, { maxWait: LEASE_MAX_WAIT_MS });
     settled.catch((error: unknown) => {
       if (!leased) rejectLease(error);
     });
