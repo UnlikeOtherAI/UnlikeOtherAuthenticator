@@ -3500,3 +3500,12 @@ Nessie may embed the complete Kelpie browser and share only its existing UOA ses
 The user's later answer supersedes the broader team-manager financial admission above: “Team only admins should only have read access to their teams data.” Only current ACTIVE organisation owners/admins may read/manage organisation money. Team-only owners/admins have read-only access to their own team's data, without organisation-wide balances, other-team data or financial mutations. A team attribution view is not a separate financial payer or an invented share of the organisation bill. Organisation billing and its LIVE/Sandbox setting still have one organisation scope. Ordinary selected-team members retain the separately authorised nonfinancial Ask for credits request.
 
 The user explicitly chose “Keep TEST history; start org wallets fresh.” Preserve retained TEST balances and records on their original bindings as history; new organisation wallets start at zero. This authorises no transfer, compatibility copy, deletion, waiver, new charge or future spending of retained TEST funds. Captured recovery and all account/mode separation remain mandatory. New or ambiguous LIVE exposure requires its own review.
+
+## 2026-11-09 Native social provider parity
+
+Registered native apps may enable every existing social provider: Google, Apple,
+Facebook, GitHub, LinkedIn and X, alongside password login. Server-owned app policy,
+provider/browser binding, verified email (Facebook mailbox proof), provider PKCE,
+TOTP, signatures and independent authentication evidence remain authoritative.
+No confidential website configuration or identity copy is introduced. See
+[Native social sign-in](Auth/native-social-providers.md) for the flow and operator setup.

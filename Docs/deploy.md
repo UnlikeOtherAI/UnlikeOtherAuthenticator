@@ -798,7 +798,8 @@ an existing identifier implicitly. Icon upload is a separate audited operation.
 
 For Kelpie, register `com.unlikeotherai.kelpie`, callbacks
 `com.unlikeotherai.kelpie://oauth/callback` and `http://127.0.0.1/oauth/callback`, scopes
-`openid profile email settings.read settings.write`, and `google` / `email_password`.
+`openid profile email settings.read settings.write`, and the configured methods: `google`, `apple`, `facebook`, `github`, `linkedin`, `x`,
+and `email_password`. Select only providers with working service credentials and callback registration.
 Numeric loopback registration permits the client's ephemeral port; every later
 redirect comparison is exact. Upload the existing Kelpie 256px app icon. Verify the
 hosted page and Google destination before releasing clients that send this app ID.

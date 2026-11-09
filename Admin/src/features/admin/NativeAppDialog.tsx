@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { FieldShell, TextField, TextAreaField } from '../../components/ui/FormFields';
-import { NativeAppFormSchema, type NativeApp, type NativeAppForm } from '../../schemas/native-app';
+import { NativeAppFormSchema, NATIVE_LOGIN_METHOD_LABELS, type NativeApp, type NativeAppForm } from '../../schemas/native-app';
 import { useSaveNativeApp } from './native-app-queries';
 
 const defaults: NativeAppForm = { identifier: '', name: '', enabled: true, redirect_uris: [],
@@ -30,11 +30,11 @@ export function NativeAppDialog({ app, close }: { app?: NativeApp; close: () => 
         <TextField {...register('identifier')} readOnly={Boolean(app)} placeholder="com.example.browser" required /></FieldShell>
       <FieldShell label="Return URLs" hint="One exact callback per line. Numeric loopback callbacks allow a varying port.">
         <TextAreaField rows={3} value={redirects} onChange={(e) => setRedirects(e.target.value)} required /></FieldShell>
-      <fieldset className="flex gap-5"><legend className="mb-2 text-sm font-medium">Login methods</legend>
-        <label><input type="checkbox" value="google" {...register('methods')} /> Google</label>
-        <label><input type="checkbox" value="email_password" {...register('methods')} /> Email and password</label>
+      <fieldset className="flex flex-wrap gap-5"><legend className="mb-2 text-sm font-medium">Login methods</legend>
+        {Object.entries(NATIVE_LOGIN_METHOD_LABELS).map(([method, label]) =>
+          <label key={method}><input type="checkbox" value={method} {...register('methods')} /> {label}</label>)}
       </fieldset>
-      <label className="block text-sm"><input type="checkbox" {...register('allow_registration')} /> Allow new accounts through Google</label>
+      <label className="block text-sm"><input type="checkbox" {...register('allow_registration')} /> Allow new accounts through social sign-in</label>
       <fieldset className="flex flex-wrap gap-3"><legend className="mb-2 text-sm font-medium">Account access</legend>
         {(['openid', 'profile', 'email', 'settings.read', 'settings.write', ...(kelpie ? ['kelpie.connect' as const] : [])] as const).map((scope) =>
           <label key={scope} className="text-sm"><input type="checkbox" value={scope} {...register('scopes')} /> {scope}</label>)}

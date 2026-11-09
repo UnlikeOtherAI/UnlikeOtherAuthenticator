@@ -29,7 +29,7 @@ export const NativeAppPolicySchema = z.object({
   enabled: z.boolean(),
   redirect_uris: z.array(z.string().max(2048).refine(validNativeRedirect)).min(1).max(10),
   scopes: z.array(z.enum(['openid', 'profile', 'email', 'settings.read', 'settings.write', 'kelpie.connect'])).min(1).max(6),
-  methods: z.array(z.enum(['email_password', 'google'])).min(1).max(2),
+  methods: z.array(z.enum(['email_password', 'google', 'apple', 'facebook', 'github', 'linkedin', 'x'])).min(1).max(7),
   allow_registration: z.boolean(),
   primary_color: color,
   background_color: color,

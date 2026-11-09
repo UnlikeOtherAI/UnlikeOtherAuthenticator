@@ -3,7 +3,7 @@ export const llmNativeAppsMarkdown = `
 
 Operators register a reverse-domain identifier in Admin → Apps. Store the app name,
 PNG/JPEG/WebP icon (256 KB maximum), colors, exact return URLs, account scope allowlist,
-Google/password methods, registration policy and enabled status there. These are
+Social/password methods (google, apple, facebook, github, linkedin, x, email_password), registration policy and enabled status there. These are
 independent of billing credentials and feature-flag apps. Only admin superusers may
 manage /internal/admin/native-apps. No hard-delete endpoint exists.
 
@@ -25,11 +25,16 @@ anywhere, password or second-factor change, app disabled or edited): clear it an
 Network errors, 429 and 5xx are transient: keep the stored token. On sign-out call
 POST /oauth/revoke {token, client_id} (always 200); it ends the user's other native sessions too.
 
-Google sign-in uses /oauth/social/google with the same validated public OAuth
-parameters and the existing provider callback. Enabled registration allows verified
-Google users to create accounts; native email registration/recovery is not advertised.
-Current epoch, bans, second-factor and signature requirements still apply. The one-use public
-Google completion is isolated from the signed-config website flow. App security edits
+Social sign-in uses /oauth/social/:provider (google, apple, facebook, github, linkedin, x)
+with the same validated public OAuth parameters and existing provider callbacks.
+Only methods selected in the app's stored policy are allowed. X retains provider S256 PKCE;
+Apple's cross-site POST uses a Secure SameSite=None initial cookie. Provider identity
+is bound to the one-use server flow. Facebook requires mailbox proof before a new subject
+is linked and reuses that verified subject later. Other providers require verified email.
+Enabled registration permits new verified social accounts; native email
+registration/recovery is not advertised. Current epoch, bans, second-factor and
+signature requirements still apply. Public social completion remains isolated
+from the signed-config website flow. App security edits
 invalidate existing registrations and UOA account tokens; name/color/icon edits do
 not. Offline resource servers enforce their own revocation and token expiry.
 

@@ -17,6 +17,8 @@ const COOKIE_NAME = 'uoa_facebook_email_proof';
 const COOKIE_PATH = '/auth';
 const PROOF_CODE_PREFIX = 'facebook-proof:';
 
+export type FacebookProofState = SocialState | { native_flow_id: string };
+
 type ProofPrisma = Pick<PrismaClient, 'facebookEmailProof'>;
 export type FacebookProofCookie = { id: string; nonce: string };
 
@@ -70,7 +72,7 @@ export function parseFacebookProofCode(code: string): string | null {
 
 export async function issueFacebookEmailProof(params: {
   profile: SocialProfile;
-  state: SocialState;
+  state: FacebookProofState;
   inviteToken: string | null;
   config: ClientConfig;
   prisma: ProofPrisma;
@@ -135,11 +137,12 @@ export async function verifyFacebookEmailProof(params: {
     });
     throw failed();
   }
-  const state = JSON.parse(proof.stateJson) as SocialState;
+  const state = JSON.parse(proof.stateJson) as FacebookProofState;
   const nonce = generateSocialStateNonce();
   const env = getEnv();
   const baseUrl = (env.PUBLIC_BASE_URL ?? `http://${env.HOST}:${env.PORT}`).replace(/\/+$/, '');
-  const stateJwt = await signSocialState({
+  // Native proof continues its existing browser-bound database flow, never a website JWT.
+  const stateJwt = 'native_flow_id' in state ? state.native_flow_id : await signSocialState({
     provider: 'facebook',
     configUrl: state.config_url,
     redirectUrl: state.redirect_url,

@@ -1,3 +1,4 @@
+import { NATIVE_LOGIN_METHOD_LABELS } from '../schemas/native-app';
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -24,7 +25,7 @@ export function NativeAppDetailPage() {
         <h2 className="font-semibold">Sign-in policy</h2>
         <dl className="space-y-3 text-sm">
           <div><dt className="text-gray-500">Status</dt><dd>{app.enabled ? 'Enabled' : 'Disabled'}</dd></div>
-          <div><dt className="text-gray-500">Login methods</dt><dd>{app.methods.map((method) => method === 'google' ? 'Google' : 'Email/password').join(', ')}</dd></div>
+          <div><dt className="text-gray-500">Login methods</dt><dd>{app.methods.map((method) => NATIVE_LOGIN_METHOD_LABELS[method]).join(', ')}</dd></div>
           <div><dt className="text-gray-500">Registration</dt><dd>{app.allow_registration ? 'Allowed' : 'Disabled'}</dd></div>
           <div><dt className="text-gray-500">Scopes</dt><dd className="break-words font-mono">{app.scopes.join(' ')}</dd></div>
           <div><dt className="text-gray-500">Revision</dt><dd>{app.revision}</dd></div>

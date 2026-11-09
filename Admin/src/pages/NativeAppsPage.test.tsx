@@ -53,3 +53,16 @@ describe('native app navigation and preserved controls', () => {
     expect(mocks.refetch).toHaveBeenCalled();
   });
 });
+
+it('saves each social provider without changing callbacks, scopes or branding', async () => {
+  mount('/apps/native-1');
+  await userEvent.click(screen.getByRole('button', { name: 'Edit app' }));
+  for (const name of ['Apple', 'Facebook', 'GitHub', 'LinkedIn', 'X'])
+    await userEvent.click(screen.getByRole('checkbox', { name, exact: true }));
+  await userEvent.click(screen.getByRole('button', { name: 'Save app' }));
+  await waitFor(() => expect(mocks.save).toHaveBeenCalledWith({ id: app.id, file: undefined,
+    form: { identifier: app.identifier, name: app.name, enabled: app.enabled,
+      redirect_uris: app.redirect_uris, scopes: app.scopes, allow_registration: app.allow_registration,
+      primary_color: app.primary_color, background_color: app.background_color, text_color: app.text_color,
+      methods: expect.arrayContaining(['google', 'email_password', 'apple', 'facebook', 'github', 'linkedin', 'x']) } }));
+});

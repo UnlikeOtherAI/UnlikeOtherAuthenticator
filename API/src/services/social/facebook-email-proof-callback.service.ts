@@ -6,7 +6,7 @@ import { buildUserIdentity } from '../user-scope.service.js';
 import { recordAuthIdentity } from '../auth-identity.service.js';
 import { AppError } from '../../utils/errors.js';
 import type { SocialProfile } from './provider.base.js';
-import type { SocialState } from './social-state.service.js';
+import type { FacebookProofState } from './facebook-email-proof.service.js';
 import {
   consumeFacebookEmailProof,
   issueFacebookEmailProof,
@@ -21,7 +21,7 @@ export async function prepareFacebookProfile(params: {
   proofId: string | null;
   proofCookie: FacebookProofCookie | null;
   stateJwt: string;
-  state: SocialState;
+  state: FacebookProofState;
   inviteToken: string | null;
   config: ClientConfig;
   prisma: FacebookPrisma;

@@ -13,7 +13,7 @@ import { ThemeProvider } from '../theme/ThemeProvider.js';
 // `useNoUnrequestedFocus` drops focus the user did not ask for at runtime; this test
 // covers the other half — no view in the login screen may ship an autofocus attribute.
 const TEST_CONFIG = {
-  enabled_auth_methods: ['email_password', 'google', 'apple'],
+  enabled_auth_methods: ['email_password', 'google', 'apple', 'facebook', 'github', 'linkedin', 'x'],
   ui_theme: {
     colors: {
       bg: '#f8fafc',
@@ -101,4 +101,14 @@ it('existing account linking offers personal proof without registration or socia
   expect(html).toContain('Loading');
   expect(html).not.toContain('type="password"');
   expect(html).not.toContain('/auth/social/google');
+});
+
+it('shows configured native social providers and keeps their public callback context', () => {
+  const html = renderLogin('?client_id=native-client&redirect_uri=com.example.app%3A%2F%2Fcallback&state=original&code_challenge=challenge&code_challenge_method=S256');
+  for (const provider of ['google', 'apple', 'facebook', 'github', 'linkedin', 'x']) {
+    expect(html).toContain(`/oauth/social/${provider}?`);
+  }
+  expect(html).toContain('client_id=native-client');
+  expect(html).toContain('state=original');
+  expect(html).not.toContain('/auth/social/');
 });
