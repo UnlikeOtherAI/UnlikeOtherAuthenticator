@@ -116,26 +116,56 @@ describe('tenant-context plugin', () => {
     );
   });
 
-  it('withTenantTx delegates to runWithTenantContext with the request context', async () => {
+  // The admin connection for the authority reads is checked out before the tenant transaction takes
+  // the user epoch lock and returned before the handler runs (row-level-security.md §10.16).
+  function leasingAdminClient(events: string[], leaseTx: object) {
+    return {
+      $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>, _options?: unknown) => {
+        events.push('lease:open');
+        try {
+          return await fn(leaseTx);
+        } finally {
+          events.push('lease:closed');
+        }
+      }),
+    };
+  }
+
+  async function tenantRequest(events: string[], leaseTx: object) {
     const tenantClient = { id: 'tenant' };
     getPrismaMock.mockReturnValue(tenantClient);
-    getAdminPrismaMock.mockReturnValue({});
-    runWithContextMock.mockImplementation(async (_opts, handler) => handler({ tx: true }));
+    getAdminPrismaMock.mockReturnValue(leasingAdminClient(events, leaseTx));
+    runWithContextMock.mockImplementation(async (_opts, handler) => {
+      events.push('tenant:open');
+      return handler({ tx: true });
+    });
 
     const harness = makeApp();
     await harness.register();
-
     const request = makeRequest({
       tenantContext: { domain: 'app.example.com', orgId: 'org-1', userId: 'user-1' },
     } as never);
     const hook = harness.hook;
     if (!hook) throw new Error('onRequest hook not registered');
     await hook(request);
+    return { request, tenantClient };
+  }
 
-    const result = await request.withTenantTx(async (tx) => tx);
+  it('withTenantTx reads authority on an admin connection leased before the tenant transaction', async () => {
+    const events: string[] = [];
+    const leaseTx = { id: 'admin-lease' };
+    effectAuthorityMock.mockImplementation(async () => { events.push('authority'); });
+    const { request, tenantClient } = await tenantRequest(events, leaseTx);
+
+    const result = await request.withTenantTx(async (tx) => {
+      events.push('handler');
+      return tx;
+    });
+
     expect(result).toEqual({ tx: true });
+    expect(events).toEqual(['lease:open', 'tenant:open', 'authority', 'lease:closed', 'handler']);
     expect(effectAuthorityMock).toHaveBeenCalledWith(request, request.tenantContext,
-      { tx: true }, request.adminDb, undefined);
+      { tx: true }, leaseTx, undefined);
     expect(runWithContextMock).toHaveBeenCalledWith(
       {
         prisma: tenantClient,
@@ -143,6 +173,18 @@ describe('tenant-context plugin', () => {
       },
       expect.any(Function),
     );
+  });
+
+  it('withTenantTx returns the leased admin connection when authority is refused', async () => {
+    const events: string[] = [];
+    effectAuthorityMock.mockRejectedValue(new Error('denied'));
+    const { request } = await tenantRequest(events, { id: 'admin-lease' });
+
+    await expect(request.withTenantTx(async () => {
+      events.push('handler');
+      return null;
+    })).rejects.toThrow('denied');
+    expect(events).toEqual(['lease:open', 'tenant:open', 'lease:closed']);
   });
 });
 

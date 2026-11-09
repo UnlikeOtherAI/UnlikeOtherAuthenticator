@@ -4,6 +4,7 @@ import fp from 'fastify-plugin';
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
+import { leaseAdminConnection } from '../db/admin-connection-lease.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { assertTenantEffectAuthority } from '../services/tenant-effect-authority.service.js';
 import {
@@ -66,10 +67,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!getEnv().DATABASE_URL) {
         return handler({} as Prisma.TransactionClient);
       }
-      return runWithContext({ context, prisma: getPrisma() }, async (tx) => {
-        await assertTenantEffectAuthority(request, context, tx, request.adminDb, options);
-        return handler(tx);
-      });
+      // Check out the admin connection for the authority reads before the tenant transaction
+      // holds the user epoch lock, and return it before the handler runs: a lock holder that
+      // waits for the admin pool can cycle with admin writers waiting for that lock (§10.16).
+      const authority = await leaseAdminConnection(request.adminDb);
+      try {
+        return await runWithContext({ context, prisma: getPrisma() }, async (tx) => {
+          await assertTenantEffectAuthority(request, context, tx, authority.db, options);
+          await authority.release();
+          return handler(tx);
+        });
+      } finally {
+        await authority.release();
+      }
     };
   });
 };
