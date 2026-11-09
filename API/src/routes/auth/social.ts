@@ -3,12 +3,8 @@ import { z } from 'zod';
 
 import { getAuthServiceIdentifier, getEnv, requireEnv } from '../../config/env.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
-import { buildAppleAuthorizationUrl } from '../../services/social/apple.service.js';
-import { buildFacebookAuthorizationUrl } from '../../services/social/facebook.service.js';
-import { buildGitHubAuthorizationUrl } from '../../services/social/github.service.js';
-import { buildGoogleAuthorizationUrl } from '../../services/social/google.service.js';
-import { buildLinkedInAuthorizationUrl } from '../../services/social/linkedin.service.js';
-import { buildXAuthorizationUrl, generateXCodeVerifier } from '../../services/social/x.service.js';
+import { generateXCodeVerifier } from '../../services/social/x.service.js';
+import { buildSocialAuthorizationUrl } from '../../services/social/provider-authorization.service.js';
 import { assertSocialProviderAllowed } from '../../services/social/index.js';
 import { signSocialState } from '../../services/social/social-state.service.js';
 import {
@@ -155,121 +151,11 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
         return state;
       };
 
-      if (provider === 'google') {
-        if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-          // Misconfiguration; keep response generic.
-          throw new AppError('INTERNAL', 500, 'GOOGLE_ENV_MISSING');
-        }
-
-        const redirectUri = `${baseUrl}/auth/callback/google`;
-        const state = await signStateForProvider('google');
-
-        const url = buildGoogleAuthorizationUrl({
-          clientId: env.GOOGLE_CLIENT_ID,
-          redirectUri,
-          state,
-          selectAccount: prompt === 'select_account',
-        });
-        redirectNoStore(reply, url);
-        return;
-      }
-
-      if (provider === 'facebook') {
-        if (!env.FACEBOOK_CLIENT_ID || !env.FACEBOOK_CLIENT_SECRET) {
-          // Misconfiguration; keep response generic.
-          throw new AppError('INTERNAL', 500, 'FACEBOOK_ENV_MISSING');
-        }
-
-        const redirectUri = `${baseUrl}/auth/callback/facebook`;
-        const state = await signStateForProvider('facebook');
-
-        const url = buildFacebookAuthorizationUrl({
-          clientId: env.FACEBOOK_CLIENT_ID,
-          redirectUri,
-          state,
-        });
-        redirectNoStore(reply, url);
-        return;
-      }
-
-      if (provider === 'github') {
-        if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
-          // Misconfiguration; keep response generic.
-          throw new AppError('INTERNAL', 500, 'GITHUB_ENV_MISSING');
-        }
-
-        const redirectUri = `${baseUrl}/auth/callback/github`;
-        const state = await signStateForProvider('github');
-
-        const url = buildGitHubAuthorizationUrl({
-          clientId: env.GITHUB_CLIENT_ID,
-          redirectUri,
-          state,
-        });
-        redirectNoStore(reply, url);
-        return;
-      }
-
-      if (provider === 'apple') {
-        if (
-          !env.APPLE_CLIENT_ID ||
-          !env.APPLE_TEAM_ID ||
-          !env.APPLE_KEY_ID ||
-          !env.APPLE_PRIVATE_KEY
-        ) {
-          // Misconfiguration; keep response generic.
-          throw new AppError('INTERNAL', 500, 'APPLE_ENV_MISSING');
-        }
-
-        const redirectUri = `${baseUrl}/auth/callback/apple`;
-        const state = await signStateForProvider('apple');
-
-        const url = buildAppleAuthorizationUrl({
-          clientId: env.APPLE_CLIENT_ID,
-          redirectUri,
-          state,
-        });
-        redirectNoStore(reply, url);
-        return;
-      }
-
-      if (provider === 'linkedin') {
-        if (!env.LINKEDIN_CLIENT_ID || !env.LINKEDIN_CLIENT_SECRET) {
-          // Misconfiguration; keep response generic.
-          throw new AppError('INTERNAL', 500, 'LINKEDIN_ENV_MISSING');
-        }
-
-        const redirectUri = `${baseUrl}/auth/callback/linkedin`;
-        const state = await signStateForProvider('linkedin');
-
-        const url = buildLinkedInAuthorizationUrl({
-          clientId: env.LINKEDIN_CLIENT_ID,
-          redirectUri,
-          state,
-        });
-        redirectNoStore(reply, url);
-        return;
-      }
-
-      if (provider === 'x') {
-        if (!env.X_CLIENT_ID || !env.X_CLIENT_SECRET) {
-          throw new AppError('INTERNAL', 500, 'X_ENV_MISSING');
-        }
-        const redirectUri = `${baseUrl}/auth/callback/x`;
-        const stateJwt = await signStateForProvider('x');
-        const codeVerifier = generateXCodeVerifier();
-        setXSocialContextCookie(reply, { state: nonce, stateJwt, codeVerifier });
-        redirectNoStore(reply, buildXAuthorizationUrl({
-          clientId: env.X_CLIENT_ID,
-          redirectUri,
-          state: nonce,
-          codeVerifier,
-        }));
-        return;
-      }
-
-      // Defensive: schema restricts this; keep generic.
-      throw new AppError('BAD_REQUEST', 400);
+      const stateJwt = await signStateForProvider(provider);
+      const codeVerifier = provider === 'x' ? generateXCodeVerifier() : undefined;
+      if (codeVerifier) setXSocialContextCookie(reply, { state: nonce, stateJwt, codeVerifier });
+      redirectNoStore(reply, buildSocialAuthorizationUrl({ provider, baseUrl,
+        state: provider === 'x' ? nonce : stateJwt, codeVerifier, selectAccount: prompt === 'select_account' }));
     },
   );
 }

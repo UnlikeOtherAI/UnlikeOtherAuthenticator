@@ -8,7 +8,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { DataTable, Td } from '../components/ui/Table';
 import { useNativeApps } from '../features/admin/native-app-queries';
 import { NativeAppDialog } from '../features/admin/NativeAppDialog';
-import type { NativeApp } from '../schemas/native-app';
+import { NATIVE_LOGIN_METHOD_LABELS, type NativeApp } from '../schemas/native-app';
 
 export function NativeAppsPage() {
   const { recordState } = useDirectoryNavigation('/apps');
@@ -26,7 +26,7 @@ export function NativeAppsPage() {
       <DataTable headers={['App', 'Identifier', 'Login methods', 'Status']}>
         {apps.map((app) => <tr key={app.id}>
           <Td><span className="flex items-center gap-3">{app.icon_url ? <img src={app.icon_url} className="h-8 w-8 object-contain" alt="" /> : null}<Link className="font-medium text-indigo-600 hover:underline" state={recordState} to={`/apps/${encodeURIComponent(app.id)}`}>{app.name}</Link></span></Td>
-          <Td>{app.identifier}</Td><Td>{app.methods.map((m) => m === 'google' ? 'Google' : 'Email/password').join(', ')}</Td>
+          <Td>{app.identifier}</Td><Td>{app.methods.map((m) => NATIVE_LOGIN_METHOD_LABELS[m]).join(', ')}</Td>
           <Td>{app.enabled ? 'Enabled' : 'Disabled'}</Td>
         </tr>)}
       </DataTable>}

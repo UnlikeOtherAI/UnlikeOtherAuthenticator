@@ -110,9 +110,7 @@ export function SocialButtons(props?: { showDivider?: boolean }): React.JSX.Elem
   const { t } = useTranslation();
   const showDivider = props?.showDivider ?? true;
 
-  const providers = readEnabledSocialProviders(popup.config).filter(
-    (provider) => !popup.clientId || provider === 'google',
-  );
+  const providers = readEnabledSocialProviders(popup.config);
   if (providers.length === 0) return null;
 
   return (

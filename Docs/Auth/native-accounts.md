@@ -60,8 +60,10 @@ responses and account data; a write already accepted by UOA may complete for tha
 
 Operators can register native sign-in profiles in **Admin → Apps**. Pass their public
 reverse-domain identifier as `app_id` when registering. The server checks the stored
-callbacks/scopes and supplies the saved icon, colors and login methods. Google supports
-existing accounts and, when allowed by the app policy, new verified accounts. Native
+callbacks/scopes and supplies the saved icon, colors and login methods. Google, Apple,
+Facebook, GitHub, LinkedIn and X support existing accounts and, when allowed by app policy,
+new verified accounts. Facebook requires mailbox proof before a new subject is linked.
+X retains provider S256 PKCE; Apple callbacks retain cross-site POST cookie support. Native
 email registration and password recovery are not advertised. TOTP and required enrollment
 remain enforced. The social callback uses a separate one-use server flow and per-login browser
 cookie; completion never enters the confidential website code flow.
@@ -74,7 +76,7 @@ servers may accept already-issued resource tokens until their expiry. See
 [the native app design](../plans/native-app-sign-in.md) for the authority boundaries.
 
 Native hosted login places enabled social methods above password fields so the
-Google button remains visible in short default-browser windows. Website login
+social buttons remain visible in short default-browser windows. Website login
 retains its existing order. Both methods display the registered app and access.
 
 ## Native refresh tokens

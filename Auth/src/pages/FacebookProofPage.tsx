@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 import { Button } from '../components/ui/Button.js';
 import { CodeInput } from '../components/ui/CodeInput.js';
@@ -9,7 +9,10 @@ import { useTranslation } from '../i18n/use-translation.js';
 export function FacebookProofPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
-  const { redirectTo, setView } = usePopup();
+  const { redirectTo, setView, nativeFlowId } = usePopup();
+  useEffect(() => {
+    if (nativeFlowId) window.history.replaceState(null, '', `/oauth/social/complete?flow_id=${encodeURIComponent(nativeFlowId)}`);
+  }, [nativeFlowId]);
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(false);

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { isPublicSocialState } from '../../services/oauth/social-ticket.service.js';
 import { getEnv } from '../../config/env.js';
 import {
   facebookProofCode,
@@ -22,7 +23,7 @@ export function registerFacebookEmailProofRoute(app: FastifyInstance): void {
       code,
       prisma: request.adminDb,
     });
-    setSocialStateCookie(reply, proof.nonce, 'facebook');
+    if (!isPublicSocialState(proof.stateJwt)) setSocialStateCookie(reply, proof.nonce, 'facebook');
     if (proof.inviteToken) setSocialInviteCookie(reply, proof.inviteToken, 'facebook');
     const env = getEnv();
     const baseUrl = (env.PUBLIC_BASE_URL ?? `http://${env.HOST}:${env.PORT}`).replace(/\/+$/, '');

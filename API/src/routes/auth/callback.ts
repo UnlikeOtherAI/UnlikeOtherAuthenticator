@@ -48,7 +48,7 @@ import { lockAndAssertAuthenticationEpoch } from '../../services/authentication-
 import { lockRefreshSessionUserDomain } from '../../services/refresh-session-lock.service.js';
 import { socialCallbackRateLimiter } from './rate-limit-keys.js';
 import { isPublicSocialState } from '../../services/oauth/social-ticket.service.js';
-import { handlePublicGoogleCallback } from '../../services/oauth/social-login.service.js';
+import { handlePublicSocialCallback } from '../../services/oauth/social-login.service.js';
 import { rememberCompletedSocialProvider } from '../../services/social/social-browser-preference.service.js';
 import { bindFacebookIdentity, prepareFacebookProfile } from '../../services/social/facebook-email-proof-callback.service.js';
 import { clearFacebookProofCookie, parseFacebookProofCode, readFacebookProofCookie } from '../../services/social/facebook-email-proof.service.js';
@@ -94,12 +94,12 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         request.method === 'POST' ? request.body : request.query,
       );
 
+      if (state && isPublicSocialState(state)) return handlePublicSocialCallback(request, reply, state, code, provider, error);
+
       const xContext = provider === 'x' ? readXSocialContextCookie(request) : null;
       if (provider === 'x') clearXSocialContextCookie(reply);
       const facebookProofCookie = provider === 'facebook' ? readFacebookProofCookie(request) : null;
       if (provider === 'facebook') clearFacebookProofCookie(reply);
-
-      if (state && isPublicSocialState(state)) return handlePublicGoogleCallback(request, reply, state, code, provider, error);
 
       // Any provider error is a generic auth failure. Don't leak specifics.
       if (error) {

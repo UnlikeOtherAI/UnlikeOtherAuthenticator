@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 import { AppError } from '../../utils/errors.js';
 
-export type SocialProviderKey = 'google' | 'apple' | 'facebook' | 'github' | 'linkedin' | 'x';
+export const SocialProviderSchema = z.enum(['google', 'apple', 'facebook', 'github', 'linkedin', 'x']);
+export type SocialProviderKey = z.infer<typeof SocialProviderSchema>;
 
 export type SocialProfile = {
   provider: SocialProviderKey;

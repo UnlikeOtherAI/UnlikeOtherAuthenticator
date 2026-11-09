@@ -94,3 +94,15 @@ describe('Facebook email proof', () => {
     await expect(consumeFacebookEmailProof({ id, prisma })).rejects.toThrow();
   });
 });
+
+it('binds native mailbox proof to its existing flow without minting website state', async () => {
+  const { row, prisma } = proofStore();
+  const flow = 'native_' + 'n'.repeat(32);
+  row.stateJson = JSON.stringify({ native_flow_id: flow });
+  const completed = await verifyFacebookEmailProof({ cookie: { id, nonce }, code: '123456', prisma });
+  expect(completed.stateJwt).toBe(flow);
+  await expect(loadVerifiedFacebookProof({ id, stateJwt: 'native_' + 'x'.repeat(32),
+    cookie: { id, nonce }, prisma })).rejects.toThrow();
+  expect(await loadVerifiedFacebookProof({ id, stateJwt: flow, cookie: { id, nonce }, prisma }))
+    .toMatchObject({ provider: 'facebook', providerSubject: 'facebook-123', emailVerified: true });
+});
