@@ -58,7 +58,7 @@ it('saves each social provider without changing callbacks, scopes or branding', 
   mount('/apps/native-1');
   await userEvent.click(screen.getByRole('button', { name: 'Edit app' }));
   for (const name of ['Apple', 'Facebook', 'GitHub', 'LinkedIn', 'X'])
-    await userEvent.click(screen.getByRole('checkbox', { name, exact: true }));
+    await userEvent.click(screen.getByRole('checkbox', { name }));
   await userEvent.click(screen.getByRole('button', { name: 'Save app' }));
   await waitFor(() => expect(mocks.save).toHaveBeenCalledWith({ id: app.id, file: undefined,
     form: { identifier: app.identifier, name: app.name, enabled: app.enabled,
