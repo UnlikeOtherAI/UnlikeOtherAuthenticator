@@ -67,7 +67,7 @@ describe.skipIf(!process.env.DATABASE_URL)('native social providers', () => {
     return { response, url, state: url.searchParams.get('state')!, cookies: cookies(response) };
   }
   const callback = (provider: SocialProviderKey, state: string, jar: Record<string, string>, code = 'provider-code') =>
-    app.inject({ method: provider === 'apple' ? 'POST' : 'GET', url: provider === 'apple' ? '/auth/callback/apple' :
+    app.inject({ remoteAddress: `203.0.113.${providers.indexOf(provider) + 1}`, method: provider === 'apple' ? 'POST' : 'GET', url: provider === 'apple' ? '/auth/callback/apple' :
       `/auth/callback/${provider}?${new URLSearchParams({ state, code })}`,
       ...(provider === 'apple' ? { payload: { state, code } } : {}), cookies: jar });
   const complete = (state: string, jar: Record<string, string>) => app.inject({ method: 'POST',
