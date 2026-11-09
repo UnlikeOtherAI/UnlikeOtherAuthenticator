@@ -22,6 +22,7 @@ const gates = vi.hoisted(() => ({
   beforePlatformRead: undefined as undefined | (() => Promise<void>),
   beforeExchangeEpoch: undefined as undefined | (() => void),
   beforeAuthority: undefined as undefined | (() => Promise<void>),
+  afterTenantUserLock: undefined as undefined | (() => Promise<void>),
   jwks: { keys: [] as unknown[] },
 }));
 
@@ -44,6 +45,18 @@ vi.mock('../../src/services/authentication-epoch.service.js', async (importOrigi
     async (...args: Parameters<typeof actual.lockAndAssertAuthenticationEpoch>) => {
       gates.beforeExchangeEpoch?.();
       return actual.lockAndAssertAuthenticationEpoch(...args);
+    } };
+});
+// Pauses a tenant read after its exclusive user epoch lock and before its authority reads. Writers
+// take the same lock through the module's own lockRefreshSessionUserDomain, which this never wraps.
+vi.mock('../../src/services/refresh-session-lock.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/refresh-session-lock.service.js')>();
+  return { ...actual, lockRefreshSessionUser:
+    async (...args: Parameters<typeof actual.lockRefreshSessionUser>) => {
+      await actual.lockRefreshSessionUser(...args);
+      const gate = gates.afterTenantUserLock;
+      gates.afterTenantUserLock = undefined;
+      await gate?.();
     } };
 });
 vi.mock('../../src/services/tenant-effect-authority.service.js', async (importOriginal) => {
@@ -176,6 +189,7 @@ describe('/org/me and confidential exchange with production pool limits', () => 
     gates.beforePlatformRead = undefined;
     gates.beforeExchangeEpoch = undefined;
     gates.beforeAuthority = undefined;
+    gates.afterTenantUserLock = undefined;
     if (app) await app.close();
     await disconnectPrisma();
     resetAccessTokenKeyCache();
@@ -200,6 +214,23 @@ describe('/org/me and confidential exchange with production pool limits', () => 
       url: `/org/me?domain=${DOMAIN}&config_url=${encodeURIComponent(CONFIG_URL)}`,
       headers: { authorization: `Bearer ${domainHash}`, 'x-uoa-subject-assertion': credential },
     });
+  }
+
+  function readTeam(credential: string) {
+    return app.inject({ method: 'GET', url: `/org/organisations/${orgId}/teams/${teamId}`
+      + `?domain=${DOMAIN}&config_url=${encodeURIComponent(CONFIG_URL)}`,
+      headers: { authorization: `Bearer ${domainHash}`, 'x-uoa-subject-assertion': credential },
+    });
+  }
+
+  /** Admin backends inside a transaction, other than this suite's own fixture connection. */
+  async function adminTransactions(): Promise<number> {
+    const rows = await db.prisma.$queryRaw<{ count: number }[]>(Prisma.sql`
+      SELECT count(*)::int AS count FROM pg_stat_activity
+       WHERE usename = 'uoa_admin' AND datname = current_database() AND xact_start IS NOT NULL
+         AND pid <> pg_backend_pid()
+    `);
+    return rows[0]?.count ?? 0;
   }
 
   function exchange(credential: string) {
@@ -242,6 +273,7 @@ describe('/org/me and confidential exchange with production pool limits', () => 
     expect(read.json().org.org_id).toBe(orgId);
     // GET reads do not consume the assertion jti; the same live proof remains readable.
     expect((await readOrgMe(readProof)).statusCode).toBe(200);
+    expect((await readTeam(readProof)).statusCode, JSON.stringify(failures)).toBe(200);
     const tokenProof = await assertion(`${ISSUER}/auth/token`);
     expect((await exchange(tokenProof)).statusCode, JSON.stringify(failures)).toBe(200);
     expect((await exchange(tokenProof)).statusCode).toBe(401);
@@ -374,6 +406,50 @@ describe('/org/me and confidential exchange with production pool limits', () => 
     } finally {
       releaseRead.resolve();
       gates.beforePlatformRead = undefined;
+      gates.beforeExchangeEpoch = undefined;
+      await Promise.allSettled([read, ...writers]);
+    }
+  });
+  it('completes a tenant read holding the exclusive user epoch while two same-user exchanges contend', async () => {
+    const releaseRead = deferred();
+    let readEntered = false;
+    let exchangeCount = 0;
+    gates.afterTenantUserLock = async () => {
+      readEntered = true;
+      await releaseRead.promise;
+    };
+    gates.beforeExchangeEpoch = () => {
+      exchangeCount += 1;
+    };
+    failures.length = 0;
+    const readProof = await assertion(ORG_SUBJECT_ASSERTION_AUDIENCE);
+    const tokenProofs = await Promise.all([assertion(`${ISSUER}/auth/token`), assertion(`${ISSUER}/auth/token`)]);
+    const read = readTeam(readProof);
+    const writers: ReturnType<typeof exchange>[] = [];
+    try {
+      await vi.waitFor(() => expect(readEntered).toBe(true), { timeout: 2_000, interval: 10 });
+      // The app transaction now holds the exclusive user epoch. An admin connection it leased
+      // beforehand is the only admin slot it may occupy; the writers get whatever remains.
+      const leased = await adminTransactions();
+      expect([0, 1]).toContain(leased);
+      const availableAdminSlots = 2 - leased;
+      writers.push(...tokenProofs.map(exchange));
+      await vi.waitFor(() => expect(exchangeCount).toBe(availableAdminSlots), { timeout: 2_000, interval: 10 });
+      let contended: Awaited<ReturnType<typeof userLockOccupancy>> | undefined;
+      await vi.waitFor(async () => {
+        const observed = await userLockOccupancy();
+        expect(observed.waitingWriters).toBe(availableAdminSlots);
+        contended = observed;
+      }, { timeout: 1_500, interval: 10 });
+      releaseRead.resolve();
+      const [readResult, ...writerResults] = await Promise.all([read, ...writers]);
+      const diagnostic = JSON.stringify({ leased, contended, failures });
+      expect(readResult.statusCode, diagnostic).toBe(200);
+      expect(writerResults.map((response) => response.statusCode), diagnostic).toEqual([200, 200]);
+      expect(readResult.json().id).toBe(teamId);
+    } finally {
+      releaseRead.resolve();
+      gates.afterTenantUserLock = undefined;
       gates.beforeExchangeEpoch = undefined;
       await Promise.allSettled([read, ...writers]);
     }
