@@ -173,6 +173,8 @@ export async function postBinary<TReq>(path: string, body: TReq): Promise<ApiBin
 export type AuthFlowQuery = {
   configUrl: string;
   managementOrgId?: string | null;
+  machineRequestId?: string | null;
+  machineManagement?: boolean;
   redirectUrl?: string | null;
   codeChallenge?: string | null;
   codeChallengeMethod?: 'S256' | null;
@@ -192,6 +194,8 @@ function buildAuthFlowQuery(params: AuthFlowQuery): Record<string, QueryValue> {
   }
   if (params.requestAccess) query.request_access = true;
   if (params.state) query.state = params.state;
+  if (params.machineRequestId) query.machine_request_id = params.machineRequestId;
+  if (params.machineManagement) query.machine_management = 'true';
   if (params.managementOrgId) query.management_org_id = params.managementOrgId;
   return query;
 }

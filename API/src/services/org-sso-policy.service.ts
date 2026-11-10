@@ -25,7 +25,7 @@ export async function enterpriseReadiness(clientDomain: string, db = getAdminPri
 
 /** The direct lookup invokes this seam too: callers cannot bypass policy via a lower-level helper. */
 export async function assertOrgAccessPolicy(
-  binding: { userId: string; domain: string; orgId: string; assuranceId?: string; authenticationEvidenceId?: string },
+  binding: { userId: string; domain: string; orgId: string; assuranceId?: string; authenticationEvidenceId?: string; allowConsumedEvidence?: boolean },
   db: AssuranceDb & Pick<PrismaClient, 'organisationEmailDomain'> = getAdminPrisma(),
 ): Promise<void> {
   let evidence: Awaited<ReturnType<typeof requireAuthenticationEvidence>> | undefined;
@@ -33,7 +33,7 @@ export async function assertOrgAccessPolicy(
     const user = await db.user.findUnique({ where: { id: binding.userId }, select: { tokenVersion: true } });
     if (!user) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
     evidence = await requireAuthenticationEvidence({ id: binding.authenticationEvidenceId,
-      userId: binding.userId, credentialEpoch: user.tokenVersion, clientDomain: binding.domain }, db as PrismaClient);
+      userId: binding.userId, credentialEpoch: user.tokenVersion, clientDomain: binding.domain, allowConsumed: binding.allowConsumedEvidence }, db as PrismaClient);
     if (evidence.purpose !== 'authorize' || (evidence.provenance !== 'independent' && evidence.orgId !== binding.orgId)) {
       throw new AppError('FORBIDDEN', 403, 'SSO_TEAM_REAUTH_REQUIRED');
     }

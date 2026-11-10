@@ -178,7 +178,7 @@ export function registerSignatureSessionRoutes(app: FastifyInstance): void {
       noStore(reply);
       return {
         ok: true,
-        complete: outcome.status === 'granted',
+        complete: outcome.status === 'granted' || outcome.status === 'machine',
         signatures_required: outcome.status === 'signing_required' ? true : undefined,
         redirect_to: outcome.redirectTo,
       };

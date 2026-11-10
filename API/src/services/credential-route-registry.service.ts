@@ -70,7 +70,7 @@ export async function authorizeCredentialSurface(surface: CredentialSurface, inp
   if (rule.authority === 'org' && !input.orgId) denied();
   if (input.orgId && rule.authority !== 'global') await assertOrgAccessPolicy({ userId: input.userId,
     domain: input.clientDomain, orgId: input.orgId, assuranceId: input.assuranceId ?? (input.assuranceReference ? source?.id : undefined),
-    authenticationEvidenceId: input.authenticationEvidenceId }, db);
+    authenticationEvidenceId: input.authenticationEvidenceId, allowConsumedEvidence: input.allowConsumedEvidence }, db);
   return source;
 }
 

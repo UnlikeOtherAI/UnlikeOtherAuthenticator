@@ -1,5 +1,6 @@
 // Org-manager-only finances and own-team read-only authority profiles are published by schema.billing-organisation, schema.billing-modes and /llm.
 // Directory webhook consumption and exact-team avatar reads are documented in /llm and schema.ts.
+import { machineCapabilities } from '../../services/machine-contract.js';
 import { lifecycleDocumentation } from './schema.lifecycle.js';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -57,6 +58,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       description:
         'Centralized OAuth and authentication service used by multiple products, including one-time first-hop assertions, audience-bound chained confidential exchange, and paged organisation membership rosters.',
       version,
+      machine_enrollment: machineCapabilities,
       repository: 'https://github.com/UnlikeOtherAI/UnlikeOtherAuthenticator',
       home: '/',
       docs: '/llm',

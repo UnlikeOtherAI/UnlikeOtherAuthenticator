@@ -1,3 +1,4 @@
+import { UserMachinesPanel } from '../features/admin/UserMachinesPanel';
 import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
 import { DeepTestNessieInferenceAccess } from '../features/admin/DeepTestNessieInferenceAccess';
 import { AccountExpiryPanel } from '../features/admin/AccountExpiryPanel';
@@ -90,6 +91,7 @@ export function UserDetailPage() {
       </div>
       <SegmentedTabs value={tab} onChange={setTab} options={[{ label: 'Memberships', value: 'memberships' }, { label: 'Profile', value: 'profile' }, { label: 'Security', value: 'security' }, { label: 'Activity', value: 'activity' }]} />
       {tab === 'security' ? <div className="mb-5"><EntityLifecyclePanel scope="USER" id={user.id} /></div> : null}
+      {tab === 'security' ? <UserMachinesPanel userId={user.id} personLabel={user.name ?? user.email ?? 'this person'} /> : null}
       {tab === 'security' ? <AccountExpiryPanel user={user} /> : null}
       {tab === 'security' ? <DeepTestNessieInferenceAccess user={user} /> : null}
       {tab === 'security' ? <Card className="p-5">

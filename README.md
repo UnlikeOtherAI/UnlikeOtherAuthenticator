@@ -28,6 +28,7 @@ Unlike Other Authenticator is a stateless, API-first authentication service that
 - **Multiple auth methods**: Email/password, Google, Apple, Facebook, GitHub, LinkedIn
 - **Configurable branding**: Per-client UI theming, logos, colors, and language support
 - **Optional 2FA**: TOTP-based two-factor authentication
+- **Computer approvals**: Explicit, team-scoped device consent and independent revocation, with rotating credentials and bounded live authority checks ([v1 contract](Docs/Auth/machine-enrollment.md))
 - **Secure configuration**: Tamper-proof JWT-based config delivery
 - **Zero admin UI**: Client onboarding through signed configuration only
 

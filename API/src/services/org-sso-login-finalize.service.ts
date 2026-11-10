@@ -19,9 +19,13 @@ export async function finalizeEnterpriseAdmission(admitted: { user: User; eviden
       codeChallenge: context.code_challenge, codeChallengeMethod: 'S256' as const,
       authenticationEvidenceId: admitted.evidence.id, authMethod: 'sso', rememberMe: false, requestAccess: false };
     const choices = await buildSessionChoices(common, { prisma: tx, crossProductPrisma: tx, policyPrisma: tx });
-    const selected = resolveAutoSelectedTeam(choices);
+    const selected = context.machine_request_id || context.machine_management ? null : resolveAutoSelectedTeam(choices);
     const target = new URL('/auth', getPublicBaseUrl());
     target.searchParams.set('config_url', context.config_url); target.searchParams.set('redirect_url', context.redirect_url);
+    target.searchParams.set('state', context.state);
+    if (context.team_hint) target.searchParams.set('team_hint', context.team_hint);
+    if (context.machine_request_id) target.searchParams.set('machine_request_id', context.machine_request_id);
+    if (context.machine_management) target.searchParams.set('machine_management', context.machine_management);
     if (!selected) {
       const loginToken = await signLoginSession({ ...common, sharedSecret: requireEnv('SHARED_SECRET').SHARED_SECRET,
         audience: LOGIN_SESSION_AUDIENCE });

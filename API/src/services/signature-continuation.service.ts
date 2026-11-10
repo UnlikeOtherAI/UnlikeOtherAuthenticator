@@ -1,3 +1,4 @@
+import { finishMachineAuthentication } from './machine-browser.service.js';
 import { finalizeAuthenticationEvidence } from './authentication-evidence.service.js';
 import { authorizeCredentialSurface } from './credential-route-registry.service.js';
 import { buildMcpClientConfig } from './oauth/config.service.js';
@@ -38,6 +39,7 @@ export type SignatureContinuationDeps = SigningContinuationCapabilityDeps & {
 };
 
 export type SignatureGateOutcome =
+  | { status: 'machine'; redirectTo: string }
   | { status: 'granted'; code: string; redirectTo: string; completedAuthMethod?: string }
   | {
       status: 'signing_required';
@@ -47,6 +49,7 @@ export type SignatureGateOutcome =
     };
 
 type ConfigGateInput = {
+  machineIntentId?: string;
   userId: string;
   domain: string;
   configUrl: string;
@@ -173,6 +176,7 @@ async function createContinuation(
       userId: params.userId,
       domain: normalizeDomain(params.domain),
       authProfile: profile,
+      machineIntentId: configInput?.machineIntentId,
       configUrl: configInput?.configUrl ?? null,
       redirectUrl: params.redirectUrl,
       // One column holds the relying party's opaque state for both profiles.
@@ -232,6 +236,7 @@ export async function finalizeConfigAuthorizationWithSignatures(
       { prisma: tx },
     );
     if (policy.complete) {
+      if (input.machineIntentId) return finishMachineAuthentication({ ...input, id: input.machineIntentId }, tx);
       const issued = await (deps?.issueConfigCode ?? issueAuthorizationCode)(
         {
           ...input,
@@ -393,6 +398,10 @@ export async function completeSigningContinuation(
 
     if (continuation.authProfile === 'CONFIG_JWT') {
       if (!continuation.configUrl) return rejectContinuation();
+      if (continuation.machineIntentId) return finishMachineAuthentication({ id: continuation.machineIntentId,
+        userId: continuation.userId, domain: continuation.domain, credentialEpoch: continuation.tokenVersion ?? rejectContinuation(),
+        authenticationEvidenceId: continuation.authenticationEvidenceId ?? undefined, orgId: continuation.orgId ?? undefined,
+        teamId: continuation.teamId ?? undefined, twoFaCompleted: continuation.twoFaCompleted }, tx);
       const issued = await (deps?.issueConfigCode ?? issueAuthorizationCode)(
         {
           userId: continuation.userId,

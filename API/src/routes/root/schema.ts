@@ -1,3 +1,4 @@
+import { machineEndpoints } from './schema.machine.js';
 import { embeddedKelpieEndpoints } from './schema.embedded-kelpie.js';
 import { billingModeEndpoints } from './schema.billing-modes.js';
 import { organisationBillingEndpoints } from './schema.billing-organisation.js';
@@ -44,6 +45,7 @@ const orgContractEndpoints: EndpointSchema[] = withOrgContract([
 ]);
 
 export const endpoints: EndpointSchema[] = [
+  ...machineEndpoints,
   ...organisationBillingEndpoints,
   ...billingModeEndpoints,
   { method: 'GET', path: '/org/organisations/:orgId/teams/:teamId/people/:userId/avatar',

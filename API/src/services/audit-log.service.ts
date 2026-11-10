@@ -3,6 +3,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 
 export type AdminAuditAction =
+  | 'machine.revoked'
   | 'user.created'
   | 'user.account_expiry_updated'
   | 'user.account_renewal_approved'

@@ -130,6 +130,8 @@ export function SocialButtons(props?: { showDivider?: boolean }): React.JSX.Elem
             popup.inviteToken,
             popup.selectAccount,
             popup.managementOrgId ?? null,
+            popup.machineRequestId ?? null,
+            popup.machineManagement === true,
             popup.teamHint,
           );
 
@@ -165,11 +167,15 @@ function buildSocialUrl(
   inviteToken: string | null,
   selectAccount: boolean,
   managementOrgId: string | null,
+  machineRequestId: string | null,
+  machineManagement: boolean,
   teamHint: string | null,
 ): string {
   // Auth UI runs inside the authenticator popup, so use relative URLs.
   const params = new URLSearchParams();
   params.set('config_url', configUrl);
+  if (machineRequestId) params.set('machine_request_id', machineRequestId);
+  if (machineManagement) params.set('machine_management', 'true');
   if (managementOrgId) params.set('management_org_id', managementOrgId);
   if (redirectUrl) {
     params.set('redirect_url', redirectUrl);

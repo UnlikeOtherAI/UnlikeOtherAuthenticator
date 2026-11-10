@@ -17,6 +17,7 @@ const TwoFaSetupSchema = z.object({
   config_url: z.string().min(1),
   domain: z.string().min(1),
   management_intent_id: z.string().min(1).max(100).optional(),
+  machine_intent_id: z.uuid().optional(),
   authentication_evidence_id: z.string().min(1).max(100).optional(),
   auth_method: z.string().min(1).optional(),
   redirect_url: z.string().min(1).optional(),
@@ -40,6 +41,7 @@ export type TwoFaSetupToken = {
   configUrl: string;
   domain: string;
   managementIntentId?: string;
+  machineIntentId?: string;
   authenticationEvidenceId?: string;
   authMethod?: string;
   redirectUrl?: string;
@@ -63,6 +65,7 @@ export async function signTwoFaSetupToken(params: {
   configUrl: string;
   domain: string;
   managementIntentId?: string;
+  machineIntentId?: string;
   authenticationEvidenceId?: string;
   authMethod?: string;
   redirectUrl?: string;
@@ -92,6 +95,7 @@ export async function signTwoFaSetupToken(params: {
       authentication_evidence_id: params.authenticationEvidenceId,
       assurance_version: params.authenticationEvidenceId ? 1 : undefined,
       management_intent_id: params.managementIntentId,
+      machine_intent_id: params.machineIntentId,
       redirect_url: params.redirectUrl,
       state: params.state,
       remember_me: params.rememberMe ?? false,
@@ -151,6 +155,7 @@ export async function verifyTwoFaSetupToken(params: {
     requestAccess: parsed.request_access ?? false,
   };
   if (parsed.management_intent_id) token.managementIntentId = parsed.management_intent_id;
+  if (parsed.machine_intent_id) token.machineIntentId = parsed.machine_intent_id;
   if (parsed.authentication_evidence_id) token.authenticationEvidenceId = parsed.authentication_evidence_id;
   if (parsed.auth_method) token.authMethod = parsed.auth_method;
   if (parsed.redirect_url) token.redirectUrl = parsed.redirect_url;

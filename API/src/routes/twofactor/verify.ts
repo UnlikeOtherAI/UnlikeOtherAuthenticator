@@ -46,7 +46,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
       // Personal management authentication is required by UOA itself. Only a
       // verified purpose-bound challenge can bypass the product's ordinary gate;
       // finalization still checks the live management intent and owner evidence.
-      if (!config['2fa_enabled'] && !challenge.managementIntentId) {
+      if (!config['2fa_enabled'] && !challenge.managementIntentId && !challenge.machineIntentId) {
         throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
       }
 
@@ -96,6 +96,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
             authMethod: lockedChallenge.authMethod,
             authenticationEvidenceId: lockedChallenge.authenticationEvidenceId,
             managementIntentId: lockedChallenge.managementIntentId,
+            machineIntentId: lockedChallenge.machineIntentId,
             twoFaCompleted: true,
             codeChallenge: lockedChallenge.codeChallenge,
             codeChallengeMethod: lockedChallenge.codeChallengeMethod,
@@ -112,6 +113,7 @@ export function registerTwoFactorVerifyRoute(app: FastifyInstance): void {
           authMethod: lockedChallenge.authMethod,
             authenticationEvidenceId: lockedChallenge.authenticationEvidenceId,
             managementIntentId: lockedChallenge.managementIntentId,
+            machineIntentId: lockedChallenge.machineIntentId,
         };
       });
 

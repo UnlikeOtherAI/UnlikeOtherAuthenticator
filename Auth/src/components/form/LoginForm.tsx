@@ -68,6 +68,8 @@ export function LoginForm(): React.JSX.Element {
     codeChallenge,
     codeChallengeMethod,
     managementOrgId,
+    machineRequestId,
+    machineManagement,
     redirectTo,
     setView,
     startTwoFactorVerify,
@@ -82,7 +84,7 @@ export function LoginForm(): React.JSX.Element {
     setLoginToken,
     setSessionChoices,
   } = usePopup();
-  const registrationAllowed = !clientId && !managementOrgId && isRegistrationAllowed(config);
+  const registrationAllowed = !clientId && !managementOrgId && !machineRequestId && !machineManagement && isRegistrationAllowed(config);
   const emailCodeEnabled = isEmailCodeEnabled(config);
   const { rememberMeEnabled, rememberMeDefault } = readSessionConfig(config);
 
@@ -118,6 +120,8 @@ export function LoginForm(): React.JSX.Element {
       if (resource) query.resource = resource;
       if (scope) query.scope = scope;
     } else {
+      if (machineRequestId) query.machine_request_id = machineRequestId;
+      if (machineManagement) query.machine_management = 'true';
       if (managementOrgId) query.management_org_id = managementOrgId;
       if (requestAccess) query.request_access = true;
       // The config profile carries the relying party's `state` too; UOA binds it
@@ -179,6 +183,8 @@ export function LoginForm(): React.JSX.Element {
       codeChallengeMethod,
       requestAccess,
       managementOrgId,
+    machineRequestId,
+    machineManagement,
     });
     setSendingCode(false);
     setPendingEmail(email);

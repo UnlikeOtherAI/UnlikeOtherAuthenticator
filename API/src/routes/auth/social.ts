@@ -30,6 +30,8 @@ const ParamsSchema = z.object({
 const QuerySchema = z
   .object({
     config_url: z.string().min(1).max(2048),
+    machine_request_id: z.uuid().optional(),
+    machine_management: z.literal('true').optional(),
     management_org_id: z.string().min(1).max(100).optional(),
     redirect_url: z.string().min(1).max(2048).optional(),
     redirect_uri: z.string().min(1).max(2048).optional(),
@@ -78,6 +80,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
         redirect_url,
         redirect_uri,
         management_org_id,
+        machine_request_id,
+        machine_management,
         code_challenge,
         code_challenge_method,
         request_access,
@@ -130,6 +134,8 @@ export function registerAuthSocialRoute(app: FastifyInstance): void {
         const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
         const state = await signSocialState({
           managementOrgId: management_org_id,
+          machineRequestId: machine_request_id,
+          machineManagement: machine_management === 'true',
           provider: providerKey,
           configUrl: requestConfigUrl,
           redirectUrl,

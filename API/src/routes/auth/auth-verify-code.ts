@@ -30,6 +30,8 @@ const BodySchema = z
 const QuerySchema = z
   .object({
     config_url: z.string().min(1).max(2048),
+    machine_request_id: z.uuid().optional(),
+    machine_management: z.literal('true').optional(),
     management_org_id: z.string().min(1).max(100).optional(),
     redirect_url: z.string().min(1).max(2048).optional(),
     code_challenge: z.string().min(1).max(256).optional(),
@@ -57,7 +59,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { email, code, remember_me } = BodySchema.parse(request.body);
-      const { redirect_url, code_challenge, code_challenge_method, request_access, state, management_org_id } =
+      const { redirect_url, code_challenge, code_challenge_method, request_access, state, machine_request_id, machine_management, management_org_id } =
         QuerySchema.parse(request.query);
       const pkce = parseRequiredPkceChallenge({
         codeChallenge: code_challenge,
@@ -81,7 +83,7 @@ export function registerAuthVerifyCodeRoute(app: FastifyInstance): void {
         { prisma: request.adminDb },
       );
 
-      if (management_org_id || config.login_flow?.team_selection === 'auto') {
+      if (machine_request_id || machine_management || management_org_id || config.login_flow?.team_selection === 'auto') {
         const chooser = await runWithRequestAdminTransaction(request, async (prisma) => {
           await lockProductTeamPolicyShared(prisma);
           await lockAndAssertAuthenticationEpoch(

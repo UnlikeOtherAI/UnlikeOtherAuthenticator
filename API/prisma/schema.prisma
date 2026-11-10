@@ -1101,6 +1101,7 @@ model AgreementVersion {
 }
 
 model SigningContinuation {
+  machineIntentId String? @map("machine_intent_id") @db.Uuid
   id                  String               @id @default(cuid())
   tokenHash           String               @unique @map("token_hash")
   userId              String               @map("user_id")
@@ -5761,6 +5762,12 @@ model OrgRevocationEvent {
 }
 
 model OrgRevocationConsumer {
+  machineCapabilityVersion Int @default(0) @map("machine_capability_version")
+  machineCursor String? @map("machine_cursor")
+  machineReadyChallengeHash String? @map("machine_ready_challenge_hash")
+  machineReadyExpiresAt DateTime? @map("machine_ready_expires_at")
+  machineNextAttemptAt DateTime @default(now()) @map("machine_next_attempt_at")
+  machineFailureCount Int @default(0) @map("machine_failure_count")
   capabilityVersion Int @default(0) @map("capability_version")
   clientDomain String @id @map("client_domain")
   destination String
@@ -6148,4 +6155,148 @@ model DirectoryWebhookEvent {
   nextAttemptAt DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz
 
   @@map("directory_webhook_events")
+}
+
+/// One product connection's immutable original machine grant and current fence.
+model MachineEnrollment {
+  id String @id @default(uuid()) @db.Uuid
+  clientDomain String @map("client_domain")
+  subject String
+  audience String
+  orgId String @map("org_id")
+  teamId String @map("team_id")
+  purpose String
+  bindingId String @map("binding_id")
+  deviceName String @map("device_name")
+  originalAuthorizationId String @map("original_authorization_id") @db.Uuid
+  currentAuthorizationId String @map("current_authorization_id") @db.Uuid
+  credentialGeneration Int @default(1) @map("credential_generation")
+  sourceVersion BigInt @default(1) @map("source_version")
+  status String @default("allowed")
+  reason String @default("active")
+  lastActiveAt DateTime @default(now()) @map("last_active_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  authorizations MachineAuthorization[]
+  credentials MachineCredential[]
+  @@unique([clientDomain, bindingId])
+  @@index([subject, orgId, teamId])
+  @@map("machine_enrollments")
+}
+
+/// Append-only HUMAN consent event, independent of an ordinary refresh family.
+model MachineAuthorization {
+  consentHash String @map("consent_hash")
+  observedAt DateTime @map("observed_at") @db.Timestamptz
+  authenticatedAt DateTime? @map("authenticated_at") @db.Timestamptz
+  personalFactorAt DateTime? @map("personal_factor_at") @db.Timestamptz
+  id String @id @default(uuid()) @db.Uuid
+  enrollmentId String @map("enrollment_id") @db.Uuid
+  predecessorId String? @unique @map("predecessor_id") @db.Uuid
+  requestId String @unique @map("request_id") @db.Uuid
+  publicKey Json @map("public_key")
+  keyThumbprint String @map("key_thumbprint")
+  credentialEpoch Int @map("credential_epoch")
+  authenticationEvidenceId String @map("authentication_evidence_id")
+  legacyAssuranceId String? @map("legacy_assurance_id")
+  provenance String
+  methods String[]
+  personalFactorCompleted Boolean @map("personal_factor_completed")
+  connectionId String? @map("connection_id")
+  connectionRevision Int? @map("connection_revision")
+  connectionGeneration Int? @map("connection_generation")
+  externalIdentityId String? @map("external_identity_id")
+  policyGeneration Int @map("policy_generation")
+  consentedAt DateTime @default(now()) @map("consented_at") @db.Timestamptz
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  enrollment MachineEnrollment @relation(fields:[enrollmentId],references:[id],onDelete:Restrict)
+  @@map("machine_authorizations")
+}
+
+model MachineCredential {
+  id String @id @default(uuid()) @db.Uuid
+  enrollmentId String @map("enrollment_id") @db.Uuid
+  authorizationId String @map("authorization_id") @db.Uuid
+  generation Int
+  tokenHash String @unique @map("token_hash")
+  operationId String @unique @map("operation_id") @db.Uuid
+  predecessorId String? @unique @map("predecessor_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  enrollment MachineEnrollment @relation(fields:[enrollmentId],references:[id],onDelete:Restrict)
+  @@unique([enrollmentId,generation])
+  @@map("machine_credentials")
+}
+
+model MachineAuthorizationRequest {
+  configFingerprint String @map("config_fingerprint")
+  id String @id @db.Uuid
+  clientDomain String @map("client_domain")
+  configUrl String @map("config_url")
+  requestHash String @map("request_hash")
+  binding Json
+  publicKey Json @map("public_key")
+  keyThumbprint String @map("key_thumbprint")
+  deviceName String @map("device_name")
+  enrollmentId String? @map("enrollment_id") @db.Uuid
+  legacyAssuranceId String? @map("legacy_assurance_id")
+  challenge String
+  proofHash String? @map("proof_hash")
+  consentedAt DateTime? @map("consented_at") @db.Timestamptz
+  deniedAt DateTime? @map("denied_at") @db.Timestamptz
+  resultEnrollmentId String? @map("result_enrollment_id") @db.Uuid
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  @@map("machine_authorization_requests")
+}
+
+model MachineChallenge {
+  id String @id @default(uuid()) @db.Uuid
+  clientDomain String @map("client_domain")
+  enrollmentId String @map("enrollment_id") @db.Uuid
+  operationId String @map("operation_id") @db.Uuid
+  operation String
+  requestHash String @map("request_hash")
+  transcript String
+  proofHash String? @map("proof_hash")
+  result Json?
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz
+  @@unique([clientDomain,operationId])
+  @@map("machine_challenges")
+}
+
+/// Immutable source version. Transaction-id ordering avoids skipping an uncommitted event.
+model MachineAuthorityEvent {
+  id String @id @default(uuid()) @db.Uuid
+  sequence BigInt @unique @default(autoincrement())
+  transactionId BigInt @default(dbgenerated("txid_current()")) @map("transaction_id")
+  clientDomain String @map("client_domain")
+  enrollmentId String @map("enrollment_id") @db.Uuid
+  authorizationId String @map("authorization_id") @db.Uuid
+  credentialGeneration Int @map("credential_generation")
+  sourceVersion BigInt @map("source_version")
+  status String
+  reason String
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz
+  @@unique([enrollmentId,sourceVersion])
+  @@index([clientDomain,transactionId,sequence])
+  @@map("machine_authority_events")
+}
+
+model MachineBrowserSession {
+  id String @id @default(uuid()) @db.Uuid
+  subject String
+  clientDomain String @map("client_domain")
+  configUrl String @map("config_url")
+  configFingerprint String @map("config_fingerprint")
+  orgId String @map("org_id")
+  teamId String @map("team_id")
+  requestId String? @map("request_id") @db.Uuid
+  evidenceId String @map("evidence_id")
+  credentialEpoch Int @map("credential_epoch")
+  browserHash String @map("browser_hash")
+  authenticatedAt DateTime? @map("authenticated_at") @db.Timestamptz
+  finalizedAt DateTime? @map("finalized_at") @db.Timestamptz
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  @@map("machine_browser_sessions")
 }

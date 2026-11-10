@@ -27,6 +27,7 @@ import { AppError } from '../utils/errors.js';
 // (`/`, `/api`, `/llm`, `/.well-known`, `/health`), the Auth/Admin windows and what
 // they fetch while signing in (`/i18n/get`, `/teams/:teamId/avatar`).
 const PRODUCT_API_PREFIXES = [
+  '/machine/',
   '/org/',
   '/domain/',
   '/settings/',

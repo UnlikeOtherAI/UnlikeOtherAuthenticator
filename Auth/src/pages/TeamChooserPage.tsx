@@ -1,3 +1,4 @@
+import { MachineAuthorizationChoice } from '../components/team/MachineAuthorizationChoice.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CreateFirstTeamForm } from '../components/team/CreateFirstTeamForm.js';
@@ -44,6 +45,8 @@ export function TeamChooserPage(): React.JSX.Element {
     requestAccess,
     teamHint,
     managementOrgId,
+    machineRequestId,
+    machineManagement,
     setView,
     setLoginToken,
     setSessionChoices,
@@ -62,8 +65,8 @@ export function TeamChooserPage(): React.JSX.Element {
   const [hydrateAttempt, setHydrateAttempt] = useState(0);
 
   const query = useMemo<AuthFlowQuery>(
-    () => ({ configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, managementOrgId }),
-    [configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, managementOrgId],
+    () => ({ configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, managementOrgId, machineRequestId, machineManagement }),
+    [configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, managementOrgId, machineRequestId, machineManagement],
   );
 
   const handleOutcome = useCallback(
@@ -126,7 +129,7 @@ export function TeamChooserPage(): React.JSX.Element {
   // §11.4): a `team_hint` deep-link/switch preselect rides the SAME auto-select code path — it
   // only ever matches a team already present in this user's own chooser payload.
   useEffect(() => {
-    if (managementOrgId || !loginToken || !teamChoices || autoSkipStarted.current) return;
+    if (managementOrgId || machineRequestId || machineManagement || !loginToken || !teamChoices || autoSkipStarted.current) return;
     const skipTeam = pickAutoSkipTeam(teamChoices) ?? pickHintTeam(teamChoices, teamHint);
     if (!skipTeam) return;
 
@@ -140,7 +143,7 @@ export function TeamChooserPage(): React.JSX.Element {
       const applied = handleOutcome(outcome);
       if (!applied) setAutoSkipFailed(true);
     })();
-  }, [loginToken, teamChoices, teamHint, managementOrgId, query, handleOutcome]);
+  }, [loginToken, teamChoices, teamHint, managementOrgId, machineRequestId, machineManagement, query, handleOutcome]);
 
   if (!loginToken || !teamChoices) {
     if (hydrateFailed) {
@@ -161,7 +164,7 @@ export function TeamChooserPage(): React.JSX.Element {
     return <div />;
   }
 
-  const skipTeam = managementOrgId ? null : pickAutoSkipTeam(teamChoices) ?? pickHintTeam(teamChoices, teamHint);
+  const skipTeam = managementOrgId || machineRequestId || machineManagement ? null : pickAutoSkipTeam(teamChoices) ?? pickHintTeam(teamChoices, teamHint);
   if (skipTeam && !autoSkipFailed) {
     return (
       <div>
@@ -169,6 +172,8 @@ export function TeamChooserPage(): React.JSX.Element {
       </div>
     );
   }
+
+  if (machineRequestId || machineManagement) return <MachineAuthorizationChoice choices={teamChoices} loginToken={loginToken} onOutcome={handleOutcome} />;
 
   if (managementOrgId) {
     return <OrganisationManagementChoices choices={teamChoices} loginToken={loginToken}

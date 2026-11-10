@@ -106,8 +106,26 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
           BILLING_FUNDING_DATABASE_TESTS: 'true'
 
+      # Machine race barriers deliberately hold the canonical global policy
+      # reader and an exact user lock. A policy writer from another schema can
+      # queue ahead of the blocked HTTP reader, so keep these suites isolated.
+      - name: Run machine authority integration tests (Postgres)
+        run: >-
+          pnpm --filter @uoa/api exec vitest run
+          tests/integration/machine-human-consent.test.ts
+          tests/integration/machine-agreement-consent.test.ts
+          tests/integration/machine-rotation-recovery.test.ts
+          tests/integration/machine-policy-fences.test.ts
+          tests/integration/machine-admin-revocation.test.ts
+          tests/integration/machine-authority-races.test.ts
+          tests/integration/machine-events-delivery.test.ts
+          --maxWorkers=1 --fileParallelism=false
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          BILLING_FUNDING_DATABASE_TESTS: 'true'
+
       - name: Run remaining API integration tests (Postgres)
-        run: pnpm --filter @uoa/api exec vitest run tests/integration --exclude 'tests/integration/org-me-pool-contention.test.ts'
+        run: pnpm --filter @uoa/api exec vitest run tests/integration --exclude 'tests/integration/org-me-pool-contention.test.ts' --exclude 'tests/integration/machine-*.test.ts'
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
           BILLING_FUNDING_DATABASE_TESTS: 'true'

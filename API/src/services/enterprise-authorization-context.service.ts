@@ -14,18 +14,21 @@ import { parseRequiredPkceChallenge } from '../utils/pkce.js';
 export const EnterpriseAuthorization = z.object({ config_url: z.string().url().max(2048),
   config_fingerprint: z.string().length(64), client_domain: z.string().min(1), redirect_url: z.string().url().max(2048),
   state: z.string().min(1).max(2048), code_challenge: z.string().length(43), code_challenge_method: z.literal('S256'),
+  machine_request_id: z.uuid().optional(), machine_management: z.literal('true').optional(),
   team_hint: z.string().min(1).max(256).optional(), policy_generation: z.number().int().positive() }).strict();
 export type EnterpriseAuthorizationContext = z.infer<typeof EnterpriseAuthorization>;
 
 export function enterpriseAuthorizationContext(config: ClientConfig, configUrl: string, raw: unknown, generation: number) {
   const query = z.object({ redirect_url: z.string().url().optional(), state: z.string().min(1).max(2048),
     code_challenge: z.string().length(43), code_challenge_method: z.literal('S256'),
+    machine_request_id: z.uuid().optional(), machine_management: z.literal('true').optional(),
     team_hint: z.string().min(1).max(256).optional() }).passthrough().parse(raw);
   const pkce = parseRequiredPkceChallenge({ codeChallenge: query.code_challenge, codeChallengeMethod: query.code_challenge_method });
   return EnterpriseAuthorization.parse({ config_url: configUrl, config_fingerprint: fingerprintClientConfig(config),
     client_domain: config.domain, redirect_url: selectRedirectUrl({ allowedRedirectUrls: config.redirect_urls,
       requestedRedirectUrl: query.redirect_url }), state: query.state, code_challenge: pkce.codeChallenge,
-    code_challenge_method: pkce.codeChallengeMethod, team_hint: query.team_hint, policy_generation: generation });
+    code_challenge_method: pkce.codeChallengeMethod, team_hint: query.team_hint, policy_generation: generation,
+    machine_request_id: query.machine_request_id, machine_management: query.machine_management });
 }
 
 /** Callback re-reads signature, registered key/domain, redirect policy and config semantics. */

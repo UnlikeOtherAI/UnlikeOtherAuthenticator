@@ -27,6 +27,8 @@ export function CodeEntryPage(): React.JSX.Element {
     codeChallenge,
     codeChallengeMethod,
     managementOrgId,
+    machineRequestId,
+    machineManagement,
     requestAccess,
     setView,
     setLoginToken,
@@ -44,8 +46,8 @@ export function CodeEntryPage(): React.JSX.Element {
   const [resent, setResent] = useState(false);
 
   const query = useMemo<AuthFlowQuery>(
-    () => ({ configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, managementOrgId }),
-    [configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, managementOrgId],
+    () => ({ configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, managementOrgId, machineRequestId, machineManagement }),
+    [configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, managementOrgId, machineRequestId, machineManagement],
   );
 
   // Not reachable directly (no email pending yet) — bounce back to login.

@@ -20,6 +20,7 @@ const TwoFaChallengeSchema = z.object({
   state: z.string().min(1).max(2048).optional(),
   domain: z.string().min(1),
   management_intent_id: z.string().min(1).max(100).optional(),
+  machine_intent_id: z.uuid().optional(),
   authentication_evidence_id: z.string().min(1).max(100).optional(),
   auth_method: z.string().min(1),
   remember_me: z.boolean().optional(),
@@ -40,6 +41,7 @@ export type TwoFaChallenge = {
   state?: string;
   domain: string;
   managementIntentId?: string;
+  machineIntentId?: string;
   authenticationEvidenceId?: string;
   authMethod: string;
   rememberMe: boolean;
@@ -68,6 +70,7 @@ export async function signTwoFaChallenge(params: {
   state?: string;
   domain: string;
   managementIntentId?: string;
+  machineIntentId?: string;
   authenticationEvidenceId?: string;
   authMethod: string;
   rememberMe?: boolean;
@@ -96,6 +99,7 @@ export async function signTwoFaChallenge(params: {
       authentication_evidence_id: params.authenticationEvidenceId,
       assurance_version: params.authenticationEvidenceId ? 1 : undefined,
       management_intent_id: params.managementIntentId,
+      machine_intent_id: params.machineIntentId,
       remember_me: params.rememberMe ?? false,
       request_access: params.requestAccess ?? false,
       code_challenge: params.codeChallenge,
@@ -153,6 +157,7 @@ export async function verifyTwoFaChallenge(params: {
     authMethod: parsed.auth_method,
     authenticationEvidenceId: parsed.authentication_evidence_id,
     managementIntentId: parsed.management_intent_id,
+    machineIntentId: parsed.machine_intent_id,
     rememberMe: parsed.remember_me ?? false,
     requestAccess: parsed.request_access ?? false,
   };

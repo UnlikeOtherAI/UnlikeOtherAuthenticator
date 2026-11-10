@@ -55,6 +55,10 @@ export async function retainedEvidence(tx: PrismaClient, scope: LifecycleScope, 
     }
   }
   const counts = queries.length ? await tx.$queryRaw<{ model: string; count: number }[]>(Prisma.join(queries, ' UNION ALL ')) : [];
+  const machines = await tx.machineEnrollment.count({ where: scope === 'USER' ? { subject: id } :
+    scope === 'TEAM' ? { teamId: id } : { orgId: id } });
+  if (machines) evidence.push({ model: 'MachineEnrollment', count: machines, scope, targetId: id,
+    reason: 'Restricted immutable device consent and revocation history; connection authority ends with lifecycle removal.' });
   for (const { model, count } of counts) {
     if (count) evidence.push({ model, count, scope, targetId: id, reason: model.startsWith('Billing')
       ? 'Restricted commercial history; active collection must be settled separately.'
@@ -98,7 +102,7 @@ export async function orphanEligibility(tx: PrismaClient, userId: string, orgId:
   if (await tx.domainRole.count({ where: { userId, ...(scopeDomain ? { domain: { not: scopeDomain } } : {}) } })) reasons.push('Other product identity association');
   if (await tx.refreshToken.count({ where: { userId, OR: [{ orgId: null }, { orgId: { not: orgId ?? '' } }] } })) reasons.push('Standalone or other product session history');
   if (await tx.loginLog.count({ where: { userId, ...(scopeDomain ? { domain: { not: scopeDomain } } : {}) } })) reasons.push('Other product authentication history');
-  if ((await retainedEvidence(tx, 'USER', userId)).length) reasons.push('Protected billing or signing dependencies');
+  if ((await retainedEvidence(tx, 'USER', userId)).length) reasons.push('Protected billing, signing or device-consent dependencies');
   return { id: userId, eligible: reasons.length === 0, reasons };
 }
 
@@ -155,6 +159,9 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
     }
   }
   domainSet.delete(getAdminAuthDomain());
+  const machineDomains = await tx.machineEnrollment.findMany({ where: scope === 'USER' ? { subject: id } :
+    effectiveScope === 'TEAM' ? { teamId: id } : { orgId: orgId ?? '' }, distinct: ['clientDomain'], select: { clientDomain: true } });
+  for (const machine of machineDomains) domainSet.add(machine.clientDomain);
   const nativeDomain = getEnv().MCP_OAUTH_DOMAIN;
   if (nativeDomain) domainSet.delete(nativeDomain);
   const participants: DeletionPreview['participants'] = [];

@@ -28,7 +28,8 @@ export async function registerRevocationConsumer(input: { client_domain: string;
   const encryptedSecret = await sealEnterpriseSecret(secret, `revocations:${input.client_domain}:${input.key_id}`);
   const data = { destination: input.destination, keyId: input.key_id, encryptedSecret, enabled: false, capabilityVersion: 0,
     readyChallengeHash: hashAssuranceReference(challenge), readyChallengeExpiresAt: new Date(Date.now() + 3600000),
-    acknowledgedAt: null, failureCount: 0 };
+    acknowledgedAt: null, failureCount: 0, machineCapabilityVersion: 0, machineCursor: null,
+    machineReadyChallengeHash: null, machineReadyExpiresAt: null };
   await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`revocation-consumer:${input.client_domain}`}, 0))`;
     await tx.orgRevocationConsumer.upsert({ where: { clientDomain: input.client_domain },
