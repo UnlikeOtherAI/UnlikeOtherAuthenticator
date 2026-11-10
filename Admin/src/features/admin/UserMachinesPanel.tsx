@@ -46,7 +46,7 @@ export function UserMachinesPanel({ userId, personLabel }: { userId: string; per
       <h3 className="text-sm font-medium text-gray-900">Current and stopped approvals</h3>
       <div className="divide-y divide-gray-100">{rows(current, false)}</div>
     </section> : null}
-    {current.length ? <section className="mt-4 border-t border-gray-100 pt-4">
+    {!query.isError && (current.length || query.data?.truncated) ? <section className="mt-4 border-t border-gray-100 pt-4">
       <h3 className="mb-3 text-sm font-medium text-gray-900">All computer approvals for {personLabel}</h3>
       <Button variant="danger" disabled={mutation.isPending} onClick={() => confirm(`Revoke all computer approvals for ${personLabel}?`,
         `This revokes ${personLabel}’s computer approvals across every product and team. Other people’s approvals and browser sessions are separate. ${stopText}`,

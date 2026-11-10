@@ -31,7 +31,7 @@ export function MachineApprovalList(props: { page: MachinePage; busy: boolean; h
     {current.length ? <section className="flex flex-col gap-4" aria-label={t('currentApprovals')}>
       <h2 className="font-semibold">{t('currentApprovals')}</h2>{rows(current, false)}
     </section> : null}
-    {current.length ? <section className="flex flex-col gap-3 border-t border-[var(--uoa-color-border)] pt-4">
+    {current.length || props.page.truncated ? <section className="flex flex-col gap-3 border-t border-[var(--uoa-color-border)] pt-4">
       <h2 className="font-semibold">{t('bulkLabel', { team: props.page.team_name, product: props.page.client_domain })}</h2>
       <Button variant="secondary" disabled={props.busy} onClick={() => props.onRevoke('all')}>{t('revokeAll')}</Button>
     </section> : null}

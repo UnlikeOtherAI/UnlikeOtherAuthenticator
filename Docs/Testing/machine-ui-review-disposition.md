@@ -35,3 +35,10 @@ existing English interface. Existing controls and layout are reused; no unrelate
 screen, native application or consuming product is changed. Final manual checks
 must cover fresh sign-in, retry controls, exact and bulk revoke, accurate labels,
 visible Admin desktop/phone panels, and the agreement-to-consent boundary.
+
+The PR review also identified a truncated-history case: 100 recent ended records
+can hide an older live approval. Both owner and Admin keep bulk retirement
+available whenever the inventory is truncated, even when no current approval is
+visible. The owner action retains its exact product/team scope; Admin retains
+the person's scope across products and teams. Focused component regressions and
+real-PG browser actions cover this case without claiming a complete inventory.
