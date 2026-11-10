@@ -102,9 +102,11 @@ describe.skipIf(!process.env.DATABASE_URL)('first-party admin debug login durabl
     expect(recipientRow.familyId).not.toBe(sourceRow.familyId);
     const unused = (await request('debug-login/issue', {}, a)).json<{ token: string }>();
     expect((await request('logout', {}, a)).statusCode).toBe(200);
+    expect((await db.prisma.user.findUniqueOrThrow({ where: { id: a.user.id } })).tokenVersion).toBe(a.user.tokenVersion);
     expect((await request('debug-login/redeem', { token: unused.token })).statusCode).toBe(401);
     expect((await db.prisma.refreshToken.findUniqueOrThrow({ where: { id: recipientRow.id } })).revokedAt).toBeNull();
     expect((await request('logout', {}, { ...a, cookie: cookieHeader.split(';')[0], pair: { ...a.pair, accessToken: recipient.access_token } })).statusCode).toBe(200);
+    expect((await db.prisma.user.findUniqueOrThrow({ where: { id: a.user.id } })).tokenVersion).toBe(a.user.tokenVersion);
     expect((await request('debug-login/issue', {}, b)).statusCode).toBe(200);
   });
   it('refuses wrong source cookie, wrong config/origin, customer bearer, current demotion and expiry', async () => {

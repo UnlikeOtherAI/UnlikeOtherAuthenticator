@@ -1,4 +1,5 @@
 import { registerEmbeddedKelpieRoutes } from './oauth/embedded-kelpie.js';
+import { registerMachineRoutes } from './machine.js';
 import type { FastifyInstance } from 'fastify';
 
 import { buildPublicErrorBody } from '../utils/error-response.js';
@@ -30,6 +31,7 @@ import { registerScimRoutes } from './scim.js';
 import { registerAdminEnterpriseRevocationRoutes } from './internal/admin/enterprise-revocations.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  registerMachineRoutes(app);
   registerRootRoute(app);
   registerSignatureRoutes(app);
   registerConfigJwksRoute(app);

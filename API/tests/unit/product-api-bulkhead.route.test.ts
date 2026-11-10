@@ -122,6 +122,7 @@ describe('product API bulkhead (Fastify)', () => {
 
     expectBusy(await app.inject({ method: 'GET', url: '/org/fast' }));
     expectBusy(await app.inject({ method: 'GET', url: '/settings/me' }));
+    expectBusy(await app.inject({ method: 'GET', url: '/machine/v1/capabilities' }));
 
     for (const path of NEVER_LIMITED) {
       const response = await app.inject({ method: 'GET', url: path });

@@ -10,6 +10,7 @@ import {
 import { configFetchRateLimiter } from './rate-limit-keys.js';
 import { recordAuthFunnelStep } from '../../services/auth-funnel.service.js';
 import { startEnterpriseLogin } from '../../services/org-sso-entry.service.js';
+import { machineEnterpriseConnection } from '../../services/machine-enterprise-entry.service.js';
 import { z } from 'zod';
 import { consumeSocialPreference, preferredSocialRedirect, TEAM_HINT_PATTERN }
   from '../../services/social/social-browser-preference.service.js';
@@ -74,9 +75,12 @@ export function registerAuthEntrypointRoute(app: FastifyInstance): void {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
 
-      const query = z.object({ sso_intent: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional() }).passthrough().parse(request.query);
-      if (query.sso_intent) {
-        const started = await startEnterpriseLogin({ relyingIntent: query.sso_intent, config: request.config,
+      const query = z.object({ sso_intent: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional(),
+        machine_request_id: z.uuid().optional() }).passthrough().parse(request.query);
+      const machineConnection = query.machine_request_id && isFlowStartQuery(query) ?
+        await machineEnterpriseConnection(query.machine_request_id, request.config, request.configUrl) : undefined;
+      if (query.sso_intent || machineConnection) {
+        const started = await startEnterpriseLogin({ relyingIntent: query.sso_intent, connectionId: machineConnection, config: request.config,
           configUrl: request.configUrl, query: request.query });
         reply.setCookie(`uoa_sso_${started.flowId}`, started.browser, { path: '/sso', httpOnly: true,
           secure: started.cookieSecure, sameSite: started.cookieSecure ? 'none' : 'lax', expires: started.expiresAt });

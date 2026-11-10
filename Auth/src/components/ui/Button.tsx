@@ -4,7 +4,7 @@ import { useTheme } from '../../hooks/use-theme.js';
 
 export function Button(
   props: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-    variant?: 'primary' | 'secondary';
+    variant?: 'primary' | 'secondary' | 'danger';
   },
 ): React.JSX.Element {
   const { classNames } = useTheme();
@@ -12,7 +12,8 @@ export function Button(
 
   const themed =
     variant === 'secondary' ? classNames.buttonSecondary : classNames.buttonPrimary;
-  const merged = className ? `${themed} ${className}` : themed;
+  const danger = variant === 'danger' ? ' !border-[var(--uoa-color-danger)] !bg-[var(--uoa-color-danger)] !text-[var(--uoa-color-danger-text)]' : '';
+  const merged = className ? `${themed}${danger} ${className}` : `${themed}${danger}`;
 
   return <button {...rest} className={merged} />;
 }

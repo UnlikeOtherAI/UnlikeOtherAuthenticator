@@ -4,6 +4,18 @@
 // enumeration oracle. Add a code here only when a caller must branch on it and
 // the code reveals nothing the caller is not already entitled to know.
 export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
+  'MACHINE_AUTHORITY_UNAVAILABLE',
+  'MACHINE_REQUEST_CONFLICT',
+  'MACHINE_REQUEST_EXPIRED',
+  'MACHINE_CHALLENGE_EXPIRED',
+  'MACHINE_OPERATION_SUPERSEDED',
+  'MACHINE_RECOVERY_REQUIRED',
+  'MACHINE_RECOVERY_PENDING',
+  'MACHINE_NEW_GRANT_REQUIRED',
+  'MACHINE_CURSOR_EXPIRED',
+  'MACHINE_CONSUMER_REQUIRED',
+  'MACHINE_PRODUCT_UNAVAILABLE',
+  'MACHINE_LINEAGE_INVALID',
   // Authenticated billing display bindings require a new deliberate action, never a new login.
   'BILLING_CONTEXT_REQUIRED',
   'BILLING_CONTEXT_STALE',

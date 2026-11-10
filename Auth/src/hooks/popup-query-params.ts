@@ -58,6 +58,8 @@ export type PopupQueryParams = {
   teamHint: string | null;
   /** Exact organisation management intent. It grants no authority. */
   managementOrgId?: string | null;
+  machineRequestId?: string | null;
+  machineManagement?: boolean;
   enterpriseLinkIntent?: string | null;
   /**
    * `prompt=select_account` from the relying party: the person is adding another account, so the
@@ -169,6 +171,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     handoffTarget: handoffTarget && handoffTarget.trim() ? handoffTarget : null,
     loginToken: loginToken && loginToken.trim() ? loginToken : null,
     teamHint: teamHint && teamHint.trim() ? teamHint : null,
+    machineRequestId: /^[0-9a-f-]{36}$/.test(params.get('machine_request_id') ?? '') ? params.get('machine_request_id') : null,
+    machineManagement: params.get('machine_management') === 'true',
     managementOrgId: managementOrgId && managementOrgId.trim() && managementOrgId.length <= 100 ? managementOrgId : null,
     enterpriseLinkIntent: params.get('flow') === 'enterprise_link' && (params.get('enterprise_link_intent')?.length ?? 0) <= 100 ? params.get('enterprise_link_intent') : null,
     selectAccount,

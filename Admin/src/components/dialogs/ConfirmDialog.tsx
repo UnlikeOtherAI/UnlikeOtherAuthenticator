@@ -29,7 +29,7 @@ export function ConfirmDialog() {
       setConfirmationText('');
       closeConfirmation();
     } catch {
-      setError('The change could not be completed. Try again.');
+      setError(confirmation?.failureMessage ?? 'The change could not be completed. Try again.');
     } finally {
       setIsPending(false);
     }

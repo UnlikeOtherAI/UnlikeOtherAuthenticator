@@ -1032,3 +1032,20 @@ The archive authority, receipt recovery, provider reconciliation and database ho
 ### Embedded Kelpie
 
 `routes/oauth/embedded-kelpie.ts` registers the original-proof host grant and explicit embedded account/gateway routes. `services/oauth/embedded-kelpie.service.ts` owns derived authority. `routes/oauth/browser-account.ts` shares profile/conditional settings handlers with standalone accounts; `routes/oauth/settings-events.ts` shares stream capacity and delivery. Contracts live in `schema.embedded-kelpie.ts` and `llm-embedded-kelpie.ts`. See [host sessions](embedded-kelpie.md).
+
+
+### Machine authorization
+
+`routes/machine.ts` owns the closed domain-authenticated v1 protocol.
+`routes/auth/machines.ts` finishes canonical human factors/agreements into a
+separate HttpOnly/CSRF consent home. `routes/internal/admin/machines.ts` reuses
+current operator authorization/auditing. Thin routes delegate to `machine-*`
+services; discovery/public schemas share `machine-contract.ts`. No synthetic
+human assurance or unrelated later-login substitution is allowed.
+
+Immutable consent, rotating credentials and source events stay separate from
+browser transport. Source-transaction triggers fence epochs, policy and scope
+loss. Transaction-ID prefix ordering prevents skipped late commits. The existing
+revocation consumer carries opt-in HMAC push; pull checkpoint/reconciliation and
+absolute admission deadlines remain authoritative. See
+[Machine enrollment v1](machine-enrollment.md).

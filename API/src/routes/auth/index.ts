@@ -1,3 +1,4 @@
+import { registerMachineBrowserRoutes } from './machines.js';
 import { registerLifecycleStatusRoutes } from './lifecycle-status.js';
 import type { FastifyInstance } from 'fastify';
 import { registerSessionBrokerRoutes } from './session-broker.js';
@@ -32,6 +33,7 @@ import { registerAuthCallbackRoute } from './callback.js';
 import { registerFacebookEmailProofRoute } from './facebook-email-proof.js';
 
 export function registerAuthRoutes(app: FastifyInstance): void {
+  registerMachineBrowserRoutes(app);
   registerPendingRegistrationRoutes(app);
   registerRegistrationWebSocket(app);
   registerLifecycleStatusRoutes(app);

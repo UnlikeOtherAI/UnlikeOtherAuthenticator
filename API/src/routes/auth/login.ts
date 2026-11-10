@@ -35,6 +35,8 @@ const LoginBodySchema = z
 const LoginQuerySchema = z
   .object({
     config_url: z.string().min(1).max(2048),
+    machine_request_id: z.uuid().optional(),
+    machine_management: z.literal('true').optional(),
     management_org_id: z.string().min(1).max(100).optional(),
     enterprise_link_intent: z.string().min(1).max(100).optional(),
     redirect_url: z.string().min(1).max(2048).optional(),
@@ -55,7 +57,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
     },
     async (request, reply) => {
       const { email, password, remember_me } = LoginBodySchema.parse(request.body);
-      const { redirect_url, code_challenge, code_challenge_method, request_access, state, management_org_id, enterprise_link_intent } =
+      const { redirect_url, code_challenge, code_challenge_method, request_access, state, machine_request_id, machine_management, management_org_id, enterprise_link_intent } =
         LoginQuerySchema.parse(request.query);
       const pkce = parseRequiredPkceChallenge({
         codeChallenge: code_challenge,
@@ -101,7 +103,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
         const requestAccess = parseRequestAccessFlag(request_access);
 
         let selectedTeam: AutoSelectedTeam | null = null;
-        if (management_org_id || enterprise_link_intent || config.login_flow?.team_selection === 'auto') {
+        if (machine_request_id || machine_management || management_org_id || enterprise_link_intent || config.login_flow?.team_selection === 'auto') {
           const choices = await buildSessionChoices(
             { userId, config },
             {
@@ -111,7 +113,7 @@ export function registerAuthLoginRoute(app: FastifyInstance): void {
             },
           );
           selectedTeam = resolveAutoSelectedTeam(choices);
-          if (management_org_id || enterprise_link_intent || shouldPresentTeamChooser(choices, selectedTeam)) {
+          if (machine_request_id || machine_management || management_org_id || enterprise_link_intent || shouldPresentTeamChooser(choices, selectedTeam)) {
             const { SHARED_SECRET } = requireEnv('SHARED_SECRET');
             const loginToken = await signLoginSession({
               userId,

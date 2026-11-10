@@ -1,0 +1,22 @@
+{
+  "notice": "Fictional expired interoperability bytes only. No server record, signature, human consent, native custody or authority. Public key is RFC 8032 test vector 1; no private key is included.",
+  "request": {
+    "subject": "fictional-person",
+    "audience": "https://api.product.example.test",
+    "organization_id": "fictional-studio",
+    "team_id": "fictional-design",
+    "purpose": "computer_connection",
+    "binding_id": "fictional-authorization-binding-1",
+    "request_id": "00000000-0000-4000-8000-000000000001",
+    "device_name": "Fictional studio computer",
+    "public_key": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+    }
+  },
+  "canonical_request": "{\"operation\":\"authorize\",\"request\":{\"audience\":\"https://api.product.example.test\",\"binding_id\":\"fictional-authorization-binding-1\",\"device_name\":\"Fictional studio computer\",\"organization_id\":\"fictional-studio\",\"public_key\":{\"crv\":\"Ed25519\",\"kty\":\"OKP\",\"x\":\"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo\"},\"purpose\":\"computer_connection\",\"request_id\":\"00000000-0000-4000-8000-000000000001\",\"subject\":\"fictional-person\",\"team_id\":\"fictional-design\"}}",
+  "request_hash": "069484ebe990cd61bc68a7c22bce1c5e18bafc337a6679f229e3137d9322c8cf",
+  "transcript": "UOA-MACHINE-POP-V1\n{\"version\":1,\"issuer\":\"https://authentication.example.test\",\"client_domain\":\"api.product.example.test\",\"operation\":\"authorize\",\"request_id\":\"00000000-0000-4000-8000-000000000001\",\"request_hash\":\"069484ebe990cd61bc68a7c22bce1c5e18bafc337a6679f229e3137d9322c8cf\",\"challenge_id\":\"00000000-0000-4000-8000-000000000001\",\"nonce\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"expires_at\":\"2026-11-10T12:05:00.000Z\"}",
+  "transcript_sha256": "50d132a29a8e43eb4e105ae08d7e0add8bb6222b9758ab8bffa627188a7c3aed"
+}

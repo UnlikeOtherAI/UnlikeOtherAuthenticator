@@ -33,6 +33,8 @@ import { preloadBillingAssertionSigningKey } from './services/billing-ledger-col
 import { sweepExpiredClaims } from './services/integration-claim.service.js';
 import { pruneExpiredSecurityData } from './services/retention-pruning.service.js';
 import { setAppLogger } from './utils/app-logger.js';
+import { startMachineEventDelivery } from './services/machine-delivery.service.js';
+import { pruneMachineBrowsers } from './services/machine-retention.service.js';
 import { startEnterpriseRevocationDelivery } from './services/org-sso-delivery.service.js';
 import { pruneEnterpriseRevocations } from './services/org-sso-revocation.service.js';
 import { startEnterpriseMaintenance } from './services/enterprise-maintenance.service.js';
@@ -265,6 +267,7 @@ export async function createApp(): Promise<FastifyInstance> {
       const runPrune = async (): Promise<void> => {
         try {
           await pruneExpiredSecurityData();
+          await pruneMachineBrowsers();
         } catch (err) {
           app.log.error({ err }, 'failed to prune expired security data');
         }
@@ -280,6 +283,8 @@ export async function createApp(): Promise<FastifyInstance> {
 
       void runPrune();
       void runClaimSweep();
+      const machineDelivery = startMachineEventDelivery(app.log);
+      app.addHook('onClose', async () => machineDelivery.stop());
       const enterpriseDelivery = startEnterpriseRevocationDelivery(app.log);
       app.addHook('onClose', async () => enterpriseDelivery.stop());
       const enterpriseMaintenance = startEnterpriseMaintenance(app.log);

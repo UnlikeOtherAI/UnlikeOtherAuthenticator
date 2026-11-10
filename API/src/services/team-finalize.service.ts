@@ -54,6 +54,7 @@ export async function finalizeWithTwoFaPolicy(
     primaryJustVerified?: boolean;
     verifiedPrimaryEvent?: VerifiedAuthenticationEvent;
     managementIntentId?: string;
+    machineIntentId?: string;
     authenticationEvidenceId?: string;
   authMethod: string;
     codeChallenge?: string;
@@ -127,7 +128,7 @@ export async function finalizeWithTwoFaPolicy(
     clientDomain: params.config.domain }, deps?.prisma ?? getAdminPrisma()) : null;
   const personalFactorCompleted = evidence?.provenance === 'sso' && Boolean(evidence.mfaCompletedAt &&
     evidence.mfaCompletedAt.getTime() + 600000 > Date.now());
-  if ((twoFaPolicy !== 'OFF' || params.managementIntentId) && twoFaEnabled && !personalFactorCompleted) {
+  if ((twoFaPolicy !== 'OFF' || params.managementIntentId || params.machineIntentId) && twoFaEnabled && !personalFactorCompleted) {
     const twofa_token = await signTwoFaChallenge({
       userId: params.userId,
       credentialEpoch: params.credentialEpoch,
@@ -138,6 +139,7 @@ export async function finalizeWithTwoFaPolicy(
       authMethod: params.authMethod,
       authenticationEvidenceId: params.authenticationEvidenceId,
       managementIntentId: params.managementIntentId,
+      machineIntentId: params.machineIntentId,
       rememberMe: params.rememberMe,
       requestAccess: params.requestAccess,
       codeChallenge: params.codeChallenge,
@@ -163,6 +165,7 @@ export async function finalizeWithTwoFaPolicy(
           authMethod: params.authMethod,
       authenticationEvidenceId: params.authenticationEvidenceId,
       managementIntentId: params.managementIntentId,
+      machineIntentId: params.machineIntentId,
           redirectUrl: params.redirectUrl,
           state: params.state,
           rememberMe: params.rememberMe,
@@ -190,6 +193,7 @@ export async function finalizeWithTwoFaPolicy(
       authMethod: params.authMethod,
       authenticationEvidenceId: params.authenticationEvidenceId,
       managementIntentId: params.managementIntentId,
+      machineIntentId: params.machineIntentId,
       twoFaCompleted: personalFactorCompleted,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,

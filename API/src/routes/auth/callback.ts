@@ -302,7 +302,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         let autoSelectedTeam: AutoSelectedTeam | null = acceptedInvite
           ? { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId }
           : null;
-        if (!acceptedInvite && (socialState.management_org_id || config.login_flow?.team_selection === 'auto')) {
+        if (!acceptedInvite && (socialState.machine_request_id || socialState.machine_management || socialState.management_org_id || config.login_flow?.team_selection === 'auto')) {
           const choices = await buildSessionChoices(
             { userId, config },
             {
@@ -312,7 +312,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
             },
           );
           autoSelectedTeam = resolveAutoSelectedTeam(choices);
-          if (shouldPresentTeamChooser(choices, autoSelectedTeam)) {
+          if (socialState.machine_request_id || socialState.machine_management || shouldPresentTeamChooser(choices, autoSelectedTeam)) {
             const loginToken = await signLoginSession({
               userId,
               credentialEpoch,
@@ -448,6 +448,8 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         if (socialState.team_hint) u.searchParams.set('team_hint', socialState.team_hint);
         u.searchParams.set('flow', socialState.management_org_id ? 'organisation_management' : 'team_chooser');
         if (socialState.management_org_id) u.searchParams.set('management_org_id', socialState.management_org_id);
+        if (socialState.machine_request_id) u.searchParams.set('machine_request_id', socialState.machine_request_id);
+        if (socialState.machine_management) u.searchParams.set('machine_management', 'true');
         if (socialState.request_access === true) {
           u.searchParams.set('request_access', 'true');
         }

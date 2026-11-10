@@ -1,4 +1,5 @@
 import { useAccessStatusEnabled } from '../utils/access-status.js';
+import { useMachineTranslation } from '../i18n/machines.js';
 import { AccessStatusForm } from '../components/form/AccessStatusForm.js';
 import React, {useState} from 'react';
 import { NativeAppConsent } from '../components/form/NativeAppConsent.js';
@@ -19,7 +20,8 @@ export function LoginPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
   const accessT = useAccessTranslation();
-  const { config, notice, managementOrgId, enterpriseLinkIntent, setView } = usePopup();
+  const { config, notice, managementOrgId, enterpriseLinkIntent, machineRequestId, machineManagement, setView } = usePopup();
+  const machineT = useMachineTranslation();
   const accessStatusEnabled = useAccessStatusEnabled();
   const showEmailPassword = isEmailPasswordEnabled(config);
   const [personalFactor,setPersonalFactor]=useState(false);
@@ -32,6 +34,7 @@ export function LoginPage(): React.JSX.Element {
   return (
     <div>
       <h1 className={`text-balance ${classNames.title}`}>{managementOrgId ? accessT('managementTitle') : t('auth.login.title')}</h1>
+      {machineRequestId || machineManagement ? <p className="mt-2 text-sm text-[var(--uoa-color-muted)]">{machineT('signIn')}</p> : null}
       {managementOrgId ? <p className="mt-2 text-sm text-[var(--uoa-color-muted)]">
         {accessT('managementHint')}
       </p> : null}

@@ -3509,3 +3509,35 @@ provider/browser binding, verified email (Facebook mailbox proof), provider PKCE
 TOTP, signatures and independent authentication evidence remain authoritative.
 No confidential website configuration or identity copy is introduced. See
 [Native social sign-in](Auth/native-social-providers.md) for the flow and operator setup.
+
+
+## Protected machine authorization (10 November 2026 user-approved contract)
+
+UOA owns a separately revocable machine enrollment for one named protected
+Ed25519 key, exact person, product/client audience, organisation/team and
+`computer_connection` purpose. Fresh canonical human authentication, current
+scope, factors/agreements and an explicit protected consent POST are mandatory.
+GET, login and an old held human assurance never create machine authority.
+Original grant/consent stay immutable; reauthorization appends a linked human
+event. Atomic credential rotation and recovery after ambiguous replies preserve
+one committed successor without minting replacement authority.
+
+Ordinary family-only browser logout/renewal are independent. Every global
+`tokenVersion` increment, device/revoke-all action, account/product disable,
+membership removal and enterprise policy/source fence still stops the exact
+affected enrollment. Re-add, re-enable, reconnect and restart never revive it.
+The owner home and Admin user Security panel provide deliberate revocation.
+
+New admission/disclosure expires within 30 seconds and respects durable local
+fences, exact current scope and pull repair at most 15 seconds apart. Outages,
+conflicts or incomplete reconciliation hold new work. Previously accepted effects
+retain their receipts and existing stop/uncertainty settlement; no instant
+cancellation or blind replay authority is promised. Output exposure rechecks scope.
+
+`binding_id` is an authorization binding, separate from stable Computer,
+connection/Executor and host/resource IDs. Terminal retirement needs a new grant
+and binding, fresh human/key proof and lawful additive adoption preserving refs
+and history. Physical installation continuity, original connection dual proof
+and one physical capacity pool remain Nessie/native responsibilities. No
+production enrollment, silent grandfathering or renewal of unrelated human
+grants is included. See [Machine enrollment v1](Auth/machine-enrollment.md).

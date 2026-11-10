@@ -33,6 +33,7 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
     await tx.historicalIdentityReference.createMany({ data: [...domains].map(domain => ({ userId, domain })), skipDuplicates: true });
   } else await tx.historicalIdentityReference.deleteMany({ where: { userId } });
   await tx.authorizationCode.deleteMany({ where: { userId } });
+  await tx.machineBrowserSession.deleteMany({ where: { subject: userId } });
   await tx.verificationToken.deleteMany({ where: { OR: [{ userId }, ...(user.userKey ? [{ userKey: user.userKey }] : [])] } });
   await tx.refreshToken.deleteMany({ where: { userId } });
   await tx.nativeOAuthFlow.deleteMany({ where: { userId } });

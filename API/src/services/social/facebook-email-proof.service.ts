@@ -148,6 +148,8 @@ export async function verifyFacebookEmailProof(params: {
     redirectUrl: state.redirect_url,
     state: state.state,
     managementOrgId: state.management_org_id,
+    machineRequestId: state.machine_request_id,
+    machineManagement: state.machine_management,
     requestAccess: state.request_access,
     teamInvite: state.team_invite === true,
     codeChallenge: state.code_challenge,

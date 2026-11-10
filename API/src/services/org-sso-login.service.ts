@@ -56,6 +56,9 @@ export async function finishEnterpriseLogin(connectionId: string, flowId: string
       target.searchParams.set('redirect_url', context.redirect_url); target.searchParams.set('state', context.state);
       target.searchParams.set('code_challenge', context.code_challenge); target.searchParams.set('code_challenge_method', 'S256');
       target.searchParams.set('flow', 'enterprise_link'); target.searchParams.set('enterprise_link_intent', link.id);
+      if (context.team_hint) target.searchParams.set('team_hint', context.team_hint);
+      if (context.machine_request_id) target.searchParams.set('machine_request_id', context.machine_request_id);
+      if (context.machine_management) target.searchParams.set('machine_management', context.machine_management);
       return { destination: target.toString(), retainBrowser: false, linkIntentId: link.id, linkExpiresAt: link.expiresAt };
     }
     return finalizeEnterpriseAdmission(admitted, config, context, tx, ip);

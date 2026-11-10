@@ -63,6 +63,7 @@ export async function finalizeAuthenticatedUser(
     rememberMe: boolean;
     requestAccess: boolean;
     managementIntentId?: string;
+    machineIntentId?: string;
     authenticationEvidenceId?: string;
   authMethod: string;
     twoFaCompleted: boolean;
@@ -77,6 +78,7 @@ export async function finalizeAuthenticatedUser(
   deps?: FinalizeDeps,
 ): Promise<
   | { status: 'management'; redirectTo: string }
+  | { status: 'machine'; redirectTo: string }
   | { status: 'granted'; redirectTo: string; code: string }
   | { status: 'signing_required'; redirectTo: string; signingToken: string }
   | { status: 'requested'; redirectTo: string }
@@ -194,11 +196,14 @@ export async function finalizeAuthenticatedUser(
       teamId: params.teamId,
       authMethod: params.authMethod,
       authenticationEvidenceId: params.authenticationEvidenceId,
+      machineIntentId: params.machineIntentId,
       twoFaCompleted: params.twoFaCompleted,
       credentialEpoch: params.credentialEpoch,
     },
     signatureDeps,
   );
+
+  if (gate.status === 'machine') return gate;
 
   if (gate.status === 'signing_required') {
     return {

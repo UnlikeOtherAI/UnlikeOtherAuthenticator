@@ -22,6 +22,7 @@ export type TwoFactorSetupResult = {
 
 type FinalizeContext = {
   managementIntentId?: string;
+  machineIntentId?: string;
     authenticationEvidenceId?: string;
   authMethod: string;
   redirectUrl: string;
@@ -120,6 +121,7 @@ export async function startTwoFactorSetup(
     authMethod: params.finalize?.authMethod,
     authenticationEvidenceId: params.finalize?.authenticationEvidenceId,
     managementIntentId: params.finalize?.managementIntentId,
+    machineIntentId: params.finalize?.machineIntentId,
     redirectUrl: params.finalize?.redirectUrl,
     state: params.finalize?.state,
     rememberMe: params.finalize?.rememberMe,

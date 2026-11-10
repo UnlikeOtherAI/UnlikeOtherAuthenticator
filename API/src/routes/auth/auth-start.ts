@@ -20,6 +20,8 @@ const StartBodySchema = z
 const StartQuerySchema = z
   .object({
     config_url: z.string().min(1).max(2048),
+    machine_request_id: z.uuid().optional(),
+    machine_management: z.literal('true').optional(),
     redirect_url: z.string().min(1).max(2048).optional(),
     code_challenge: z.string().min(1).max(256).optional(),
     code_challenge_method: z.string().min(1).max(32).optional(),

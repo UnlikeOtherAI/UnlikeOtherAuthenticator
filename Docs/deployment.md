@@ -329,3 +329,32 @@ its full report and inspect the exact Ledger provider receipts.
 ### Embedded Kelpie consumer rollout
 
 Deploy UOA's original-proof host grant before Nessie's backend and native consumers. No migration, public native registration or new credential is required; existing source-domain, gateway-resource and original-proof custody must be live. The public native profile remains separately gated. See [embedded host sessions](Auth/embedded-kelpie.md); API coverage does not prove an installed native flow.
+
+
+### Machine enrollment v1 rollout
+
+Ship additive migrations `20261110120000_machine_enrollment_authority`,
+`20261110121000_machine_authority_fences` and
+`20261110122000_preserve_config_signing_state` with API/Auth/Admin through the normal
+Cloud Run `deploy-main.yml` workflow. No new cloud resource, production seed or
+manual DB repair is required. Existing human/native family/assurance contracts
+stay intact. No native application source or build input changes in this release.
+The third migration aligns the existing config-JWT signing constraint with
+canonical opaque-state persistence. It retains public/confidential profile
+separation and confines machine intents to config-JWT continuations. It does not
+rewrite original states or edit the released July migration.
+
+Before consumer activation, verify merged source, resolved image digest, serving
+revision/traffic, health, exact compiled public `/api` capability
+`machine_enrollment_v1` version 1 and `/schemas/machine-enrollment-v1.json`.
+Planning pins, build success and image publication are separate evidence.
+Nessie must ship its protected native installation agreement and exact consumer
+fences before deliberate real human enrollment/adoption. Never enroll a
+production machine as a deployment health probe.
+
+Push reuses an existing enabled operator-provisioned revocation consumer and
+dedicated encrypted HMAC key, with explicit machine readiness after complete
+checkpoint/reconciliation. It adds no global lock or dedicated DB listener.
+Pull remains required every 15 seconds; decisions expire within 30 seconds,
+including delivery outages. Expired push cursors require readiness repair, never
+authority fallback. See [the exact contract](Auth/machine-enrollment.md).
