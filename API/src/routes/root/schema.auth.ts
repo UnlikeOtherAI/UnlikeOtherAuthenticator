@@ -335,8 +335,17 @@ export const authEndpoints: EndpointSchema[] = [
   {
     method: 'POST',
     path: '/auth/reset-password/request',
-    description: 'Initiate password reset (no enumeration)',
+    description:
+      'Initiate password reset (no enumeration). The optional sign-in context is copied into the emailed link so the sign-in shown after the reset can finish; an invalid value is dropped and never changes the response.',
     auth: 'config_url query param',
+    query: {
+      config_url: 'string (required)',
+      redirect_url: 'string (optional) — kept only when it is one of config.redirect_urls',
+      code_challenge: 'string (optional) — 43-char PKCE S256 challenge of the sign-in that asked for the reset',
+      code_challenge_method: '"S256" when code_challenge is sent',
+      request_access: 'string (optional) — preserves access-request intent',
+      state: 'string (optional, ≤2048) — opaque relying-party value, echoed on the final redirect',
+    },
     body: { email: 'string (required)' },
     response: { message: '"We sent instructions to your email" (always)' },
   },

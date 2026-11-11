@@ -122,6 +122,53 @@ describe('requestPasswordReset', () => {
     );
   });
 
+  it('carries the sign-in context into the emailed link', async () => {
+    const prisma: PrismaStub = {
+      user: {
+        findUnique: vi
+          .fn<PrismaStub['user']['findUnique']>()
+          .mockResolvedValue({ lifecycleStatus: 'ACTIVE', id: 'u1', tokenVersion: 7 }),
+      },
+      verificationToken: {
+        create: vi.fn<PrismaStub['verificationToken']['create']>().mockResolvedValue({ id: 't1' }),
+      },
+    };
+    const sendPasswordResetEmail = vi.fn<(params: { to: string; link: string }) => Promise<void>>(
+      async () => undefined,
+    );
+    const challenge = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
+
+    await requestPasswordReset(
+      {
+        email: 'existing@example.com',
+        config: baseConfig(),
+        configUrl: 'https://client.example.com/auth-config',
+        continuation: {
+          redirectUrl: 'https://client.example.com/oauth/callback',
+          pkce: { codeChallenge: challenge, codeChallengeMethod: 'S256' },
+          requestAccess: true,
+          state: 'rp-state',
+        },
+      },
+      {
+        env: testEnv(),
+        prisma: prisma as unknown as never,
+        sharedSecret: 'pepper',
+        generateEmailToken: () => 'token123',
+        hashEmailToken: () => 'hash123',
+        sendPasswordResetEmail,
+      },
+    );
+
+    const link = new URL(sendPasswordResetEmail.mock.calls[0]![0].link);
+    expect(link.searchParams.get('token')).toBe('token123');
+    expect(link.searchParams.get('redirect_url')).toBe('https://client.example.com/oauth/callback');
+    expect(link.searchParams.get('code_challenge')).toBe(challenge);
+    expect(link.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(link.searchParams.get('request_access')).toBe('true');
+    expect(link.searchParams.get('state')).toBe('rp-state');
+  });
+
   it('does nothing for non-existent users (no enumeration) but burns timing budget', async () => {
     const findUnique = vi.fn<PrismaStub['user']['findUnique']>().mockResolvedValue(null);
     const createToken = vi.fn<PrismaStub['verificationToken']['create']>();
