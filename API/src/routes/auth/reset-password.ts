@@ -6,6 +6,7 @@ import {
   requestPasswordReset,
   resetPasswordWithToken,
 } from '../../services/auth-reset-password.service.js';
+import { readPasswordResetContinuation } from '../../services/password-reset-continuation.service.js';
 import { AppError } from '../../utils/errors.js';
 import { resetRequestRateLimiter, tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
@@ -42,6 +43,9 @@ export function registerAuthResetPasswordRoutes(app: FastifyInstance): void {
               email,
               config: request.config,
               configUrl: request.configUrl,
+              // The emailed link must reopen sign-in with the same PKCE challenge and
+              // return address, or the sign-in that follows the reset can never finish.
+              continuation: readPasswordResetContinuation(request.query, request.config),
             },
             { prisma: request.adminDb },
           );

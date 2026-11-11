@@ -9,8 +9,18 @@ export const authEmailEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/auth/email/reset-password',
-    description: 'Email link landing — renders set-password UI',
-    query: { token: 'string (required)', config_url: 'string (required)' },
+    description:
+      'Email link landing — renders set-password UI, then the sign-in form with the sign-in context the reset was requested from. A stale link renders that sign-in form directly.',
+    query: {
+      token: 'string (required)',
+      config_url: 'string (required)',
+      redirect_url: 'string (optional) — dropped unless it is one of config.redirect_urls',
+      code_challenge:
+        'string (optional) — 43-char PKCE S256 challenge carried to the sign-in form; required there to finish signing in',
+      code_challenge_method: '"S256" when code_challenge is sent',
+      request_access: 'string (optional) — preserves access-request intent',
+      state: 'string (optional, ≤2048) — opaque relying-party value, echoed on the final redirect',
+    },
   },
   {
     method: 'GET',

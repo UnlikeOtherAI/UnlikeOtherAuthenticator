@@ -13,6 +13,10 @@ import { AppError } from '../utils/errors.js';
 import { generateEmailToken, hashEmailToken } from '../utils/verification-token.js';
 import { extractEmailTheme } from './email-theme.service.js';
 import { sendPasswordResetEmail } from './email.service.js';
+import {
+  appendPasswordResetContinuation,
+  type PasswordResetContinuation,
+} from './password-reset-continuation.service.js';
 import { hashPassword } from './password.service.js';
 import { revokeAllRefreshTokensForUser } from './refresh-token-revocation.service.js';
 import { buildUserIdentity } from './user-scope.service.js';
@@ -54,11 +58,13 @@ function buildPasswordResetLink(params: {
   baseUrl: string;
   token: string;
   configUrl: string;
+  continuation?: PasswordResetContinuation;
 }): string {
   const baseUrl = normalizeBaseUrl(params.baseUrl);
   const url = new URL(`${baseUrl}/auth/email/reset-password`);
   url.searchParams.set('token', params.token);
   url.searchParams.set('config_url', params.configUrl);
+  appendPasswordResetContinuation(url.searchParams, params.continuation);
   return url.toString();
 }
 
@@ -115,7 +121,12 @@ async function consumeAccountFlowTimingBudget(): Promise<void> {
 }
 
 export async function requestPasswordReset(
-  params: { email: string; config: ClientConfig; configUrl: string },
+  params: {
+    email: string;
+    config: ClientConfig;
+    configUrl: string;
+    continuation?: PasswordResetContinuation;
+  },
   deps?: ResetPasswordDeps,
 ): Promise<void> {
   const env = deps?.env ?? getEnv();
@@ -171,7 +182,12 @@ export async function requestPasswordReset(
     : `http://${env.HOST}:${env.PORT}`;
 
   const theme = extractEmailTheme(params.config);
-  const link = buildPasswordResetLink({ baseUrl, token, configUrl: params.configUrl });
+  const link = buildPasswordResetLink({
+    baseUrl,
+    token,
+    configUrl: params.configUrl,
+    continuation: params.continuation,
+  });
   await (deps?.sendPasswordResetEmail ?? sendPasswordResetEmail)({ to: email, link, theme });
 }
 

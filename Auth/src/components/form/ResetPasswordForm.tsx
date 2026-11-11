@@ -10,7 +10,8 @@ type ResetRequest = { email: string };
 
 export function ResetPasswordForm(): React.JSX.Element {
   const { t } = useTranslation();
-  const { configUrl } = usePopup();
+  const { configUrl, redirectUrl, codeChallenge, codeChallengeMethod, requestAccess, state } =
+    usePopup();
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -19,11 +20,20 @@ export function ResetPasswordForm(): React.JSX.Element {
     e.preventDefault();
     setLoading(true);
 
+    // The emailed link reopens sign-in with this context, so the sign-in after the reset
+    // carries the relying party's PKCE challenge, return address and state.
+    const query: Record<string, string | boolean | null> = { config_url: configUrl };
+    if (redirectUrl) query.redirect_url = redirectUrl;
+    if (codeChallenge && codeChallengeMethod) {
+      query.code_challenge = codeChallenge;
+      query.code_challenge_method = codeChallengeMethod;
+    }
+    if (requestAccess) query.request_access = true;
+    if (state) query.state = state;
+
     // Always render the same confirmation regardless of result — avoids
     // account-existence enumeration via timing or message differences.
-    await postJson<ResetRequest, unknown>('/auth/reset-password/request', { email }, {
-      config_url: configUrl,
-    });
+    await postJson<ResetRequest, unknown>('/auth/reset-password/request', { email }, query);
     setLoading(false);
     setSubmitted(true);
   }

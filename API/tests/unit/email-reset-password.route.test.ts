@@ -154,6 +154,87 @@ describe('GET /auth/email/reset-password', () => {
     await app.close();
   });
 
+  it('keeps the PKCE challenge and state for the sign-in that follows a valid reset', async () => {
+    validatePasswordResetTokenMock.mockResolvedValue(undefined);
+    const challenge = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url:
+        `${RESET_URL.replace('stale-token', 'live-token')}` +
+        `&code_challenge=${challenge}&code_challenge_method=S256&state=rp-state&request_access=true`,
+      headers: { accept: 'text/html' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const requestUrl = renderAuthEntrypointHtmlMock.mock.calls[0]![0].requestUrl as string;
+    const params = new URL(requestUrl, 'https://auth.example.com').searchParams;
+    expect(params.get('code_challenge')).toBe(challenge);
+    expect(params.get('code_challenge_method')).toBe('S256');
+    expect(params.get('redirect_url')).toBe('https://client.example.com/oauth/callback');
+    expect(params.get('state')).toBe('rp-state');
+    expect(params.get('request_access')).toBe('true');
+    expect(params.get('email_token')).toBe('live-token');
+    expect(params.get('email_token_type')).toBe('PASSWORD_RESET');
+
+    await app.close();
+  });
+
+  it('keeps the PKCE challenge on the login shown for a stale link', async () => {
+    validatePasswordResetTokenMock.mockRejectedValue(
+      new AppError('BAD_REQUEST', 400, 'TOKEN_ALREADY_USED'),
+    );
+    const challenge = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    await app.inject({
+      method: 'GET',
+      url: `${RESET_URL}&code_challenge=${challenge}&code_challenge_method=S256`,
+      headers: { accept: 'text/html' },
+    });
+
+    const requestUrl = renderAuthEntrypointHtmlMock.mock.calls[0]![0].requestUrl as string;
+    const params = new URL(requestUrl, 'https://auth.example.com').searchParams;
+    expect(params.get('code_challenge')).toBe(challenge);
+    expect(params.get('email_token')).toBeNull();
+
+    await app.close();
+  });
+
+  it('drops a redirect outside the allow-list and a malformed or non-S256 challenge', async () => {
+    validatePasswordResetTokenMock.mockResolvedValue(undefined);
+
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url:
+        '/auth/email/reset-password?config_url=https%3A%2F%2Fclient.example.com%2Fauth-config' +
+        '&redirect_url=https%3A%2F%2Fevil.example.net%2Fcallback&token=live-token' +
+        '&code_challenge=plain-verifier-value&code_challenge_method=plain',
+      headers: { accept: 'text/html' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const requestUrl = renderAuthEntrypointHtmlMock.mock.calls[0]![0].requestUrl as string;
+    const params = new URL(requestUrl, 'https://auth.example.com').searchParams;
+    expect(params.get('redirect_url')).toBeNull();
+    expect(params.get('code_challenge')).toBeNull();
+    expect(params.get('code_challenge_method')).toBeNull();
+    expect(params.get('email_token')).toBe('live-token');
+
+    await app.close();
+  });
+
   it('does not swallow non-token failures (e.g. infrastructure errors)', async () => {
     validatePasswordResetTokenMock.mockRejectedValue(
       new AppError('INTERNAL', 500, 'DATABASE_DISABLED'),

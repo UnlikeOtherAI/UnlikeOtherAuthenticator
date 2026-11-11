@@ -474,6 +474,11 @@ re-reads under the user-global and user/domain transaction locks, then atomicall
 and increments the user's token version. Password reset, password binding, and all 2FA reset/disable
 paths atomically revoke every refresh token and increment the same version.
 
+A hosted password reset keeps the sign-in it started from: the emailed link carries the original
+\`code_challenge\`, allow-listed \`redirect_url\` and \`state\`, and the sign-in form shown after the
+new password is saved uses them. Keep the PKCE verifier until that sign-in returns, which may be in
+a new tab opened from the email.
+
 Domain admin APIs (\`/domain/users\`, \`/domain/logs\`, etc.) and team-invite / access-request review APIs use the same \`Authorization: Bearer <client_hash>\` mechanism. The old global shared-secret bearer is NOT accepted for any customer-facing endpoint.
 
 ${llmTeamsInvitationsMarkdown}

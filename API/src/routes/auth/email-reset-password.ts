@@ -4,7 +4,12 @@ import { z } from 'zod';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { validatePasswordResetToken } from '../../services/auth-reset-password.service.js';
 import { renderAuthEntrypointHtml, sendAuthHtml } from '../../services/auth-ui.service.js';
-import { selectRedirectUrl } from '../../services/authorization-code.service.js';
+import {
+  appendPasswordResetContinuation,
+  passwordResetContinuationQuery,
+  readPasswordResetContinuation,
+  type PasswordResetContinuation,
+} from '../../services/password-reset-continuation.service.js';
 import { AppError, isAppError } from '../../utils/errors.js';
 import { tokenConsumeRateLimiter } from './rate-limit-keys.js';
 
@@ -12,7 +17,7 @@ const QuerySchema = z
   .object({
     config_url: z.string().min(1).max(2048),
     token: z.string().min(1).max(4096),
-    redirect_url: z.string().min(1).max(2048).optional(),
+    ...passwordResetContinuationQuery,
   })
   .strict();
 
@@ -27,10 +32,20 @@ function isEmailLinkTokenError(err: unknown): boolean {
   ].includes(err.message);
 }
 
-function buildLoginAuthUrl(configUrl: string, redirectUrl: string | undefined): string {
+// The sign-in form shown after a reset (or for a stale link) posts to `/auth/login`, which
+// requires the PKCE challenge, so the continuation rides every `/auth` URL built here.
+function buildAuthUrl(
+  configUrl: string,
+  continuation: PasswordResetContinuation,
+  emailToken?: string,
+): string {
   const params = new URLSearchParams();
   params.set('config_url', configUrl);
-  if (redirectUrl) params.set('redirect_url', redirectUrl);
+  appendPasswordResetContinuation(params, continuation);
+  if (emailToken) {
+    params.set('email_token', emailToken);
+    params.set('email_token_type', 'PASSWORD_RESET');
+  }
   return `/auth?${params.toString()}`;
 }
 
@@ -43,11 +58,15 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
       preHandler: [tokenConsumeRateLimiter, configVerifier],
     },
     async (request, reply) => {
-      const { token, redirect_url } = QuerySchema.parse(request.query);
+      const { token } = QuerySchema.parse(request.query);
 
       if (!request.config || !request.configUrl) {
         throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       }
+
+      // Re-checked here rather than trusted from the email: a redirect outside
+      // config.redirect_urls or a malformed challenge is dropped.
+      const continuation = readPasswordResetContinuation(request.query, request.config);
 
       try {
         await validatePasswordResetToken(
@@ -71,7 +90,7 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
         const html = await renderAuthEntrypointHtml({
           config: request.config,
           configUrl: request.configUrl,
-          requestUrl: buildLoginAuthUrl(request.configUrl, redirect_url),
+          requestUrl: buildAuthUrl(request.configUrl, continuation),
           cspNonce: reply.cspNonce?.script,
         });
         sendAuthHtml(reply, html);
@@ -79,23 +98,10 @@ export function registerAuthEmailResetPasswordRoute(app: FastifyInstance): void 
       }
 
       // Token is valid — render the Auth UI with the token context.
-      const redirectUrl = redirect_url
-        ? selectRedirectUrl({
-            allowedRedirectUrls: request.config.redirect_urls,
-            requestedRedirectUrl: redirect_url,
-          })
-        : undefined;
-
-      const params = new URLSearchParams();
-      params.set('config_url', request.configUrl);
-      if (redirectUrl) params.set('redirect_url', redirectUrl);
-      params.set('email_token', token);
-      params.set('email_token_type', 'PASSWORD_RESET');
-
       const html = await renderAuthEntrypointHtml({
         config: request.config,
         configUrl: request.configUrl,
-        requestUrl: `/auth?${params.toString()}`,
+        requestUrl: buildAuthUrl(request.configUrl, continuation, token),
         cspNonce: reply.cspNonce?.script,
       });
       sendAuthHtml(reply, html);

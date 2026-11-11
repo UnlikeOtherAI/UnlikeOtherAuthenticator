@@ -3230,9 +3230,33 @@ paths:
       operationId: requestPasswordReset
       description: |
         Sends a password reset email. Always returns 200 to avoid enumeration.
+        The optional sign-in context is copied into the emailed link so the
+        sign-in shown after the reset can finish; invalid values are dropped.
         Rate limited: 10/min per IP, 3/hour per email.
       parameters:
         - $ref: '#/components/parameters/configUrl'
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+            enum: [S256]
+        - name: request_access
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+            maxLength: 2048
       requestBody:
         required: true
         content:
@@ -3577,7 +3601,10 @@ paths:
       operationId: handlePasswordResetEmail
       description: |
         Handles click-through from a password-reset email. Renders the
-        set-new-password form. Rate limited: 10/min per IP.
+        set-new-password form, then the sign-in form with the sign-in context
+        the reset was requested from (a stale link renders that sign-in form
+        directly). A redirect_url outside config.redirect_urls or a malformed
+        PKCE challenge is dropped. Rate limited: 10/min per IP.
       parameters:
         - $ref: '#/components/parameters/configUrl'
         - name: token
@@ -3589,6 +3616,24 @@ paths:
           in: query
           schema:
             type: string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+            enum: [S256]
+        - name: request_access
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+            maxLength: 2048
       responses:
         '200':
           description: HTML set-password form.
