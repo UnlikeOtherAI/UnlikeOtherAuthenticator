@@ -101,6 +101,7 @@ export type PopupContextValue = PopupQueryParams & {
   view: AuthView;
   /** Navigate between auth views. */
   setView: (view: AuthView) => void;
+  setAcceptedInvite: (target: { orgId: string; teamId: string } | null) => void;
   pendingRegistration: PendingRegistration | null;
   beginRegistration: (value: PendingRegistration | null) => void;
   setRegistrationProof: (token: string, type: string) => void;
@@ -196,6 +197,7 @@ export function PopupProvider(props: {
   });
 
   const parsed = useMemo(() => parsePopupQueryParams(search), [search]);
+  const [acceptedInvite, setAcceptedInvite] = useState(() => parsed.acceptedInvite ?? null);
   const storageKey = registrationStorageKey(props.configUrl, search);
   const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null);
   const [registrationProof, setRegistrationProofState] = useState<{ token: string; type: string } | null>(null);
@@ -314,6 +316,8 @@ export function PopupProvider(props: {
       inviteEmail: parsed.inviteEmail,
       inviteName: parsed.inviteName,
       inviteAccepted: parsed.inviteAccepted,
+      acceptedInvite,
+      setAcceptedInvite,
       clientId: parsed.clientId,
       nativeSocialComplete: parsed.nativeSocialComplete,
       nativeFlowId: parsed.nativeFlowId,
@@ -372,6 +376,7 @@ export function PopupProvider(props: {
     parsed.inviteEmail,
     parsed.inviteName,
     parsed.inviteAccepted,
+    acceptedInvite,
     parsed.clientId,
     parsed.nativeSocialComplete,
     parsed.nativeFlowId,

@@ -143,7 +143,8 @@ export function registerAuthVerifyEmailRoute(app: FastifyInstance): void {
         if (!acceptedInvite) {
           throw new AppError('BAD_REQUEST', 400, 'INVALID_TOKEN');
         }
-        reply.status(200).send({ ok: true, invite_accepted: true });
+        reply.status(200).send({ ok: true, invite_accepted: true,
+          accepted_invite: { orgId: acceptedInvite.orgId, teamId: acceptedInvite.teamId } });
         return;
       }
 

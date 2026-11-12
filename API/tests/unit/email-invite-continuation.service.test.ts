@@ -70,7 +70,8 @@ describe('resolveEmailInviteContinuation', () => {
       verifyEmailToken,
     });
 
-    expect(result).toEqual({ kind: 'accepted', teamName: 'Hugo', organisationName: 'Hugo_org' });
+    expect(result).toEqual({ kind: 'accepted', teamName: 'Hugo', organisationName: 'Hugo_org',
+      orgId: 'org-1', teamId: 'team-1' });
     expect(verifyEmailToken).toHaveBeenCalledTimes(1);
   });
 

@@ -35,13 +35,22 @@ export function escapeInvitePageHtml(value: string): string {
 export function resolveInviteContinueUrl(
   config: ClientConfig,
   requestedRedirectUrl: string | undefined,
+  acceptedInvite?: { orgId: string; teamId: string },
 ): string | undefined {
   if (!requestedRedirectUrl?.trim()) return undefined;
   try {
-    return selectRedirectUrl({
+    const allowed = selectRedirectUrl({
       allowedRedirectUrls: config.redirect_urls,
       requestedRedirectUrl,
     });
+    const url = new URL(allowed);
+    if (acceptedInvite && config.login_flow?.invitation_return_target === true
+      && (url.protocol === 'https:' || url.protocol === 'http:')) {
+      url.searchParams.set('uoa_invite_org', acceptedInvite.orgId);
+      url.searchParams.set('uoa_invite_team', acceptedInvite.teamId);
+      return url.href;
+    }
+    return allowed;
   } catch (err) {
     if (isAppError(err)) return undefined;
     throw err;

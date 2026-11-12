@@ -10,12 +10,12 @@ import { Input } from '../ui/Input.js';
 import { PasswordInput } from '../ui/PasswordInput.js';
 
 type VerifyInviteRequest = { token: string; password: string; name?: string };
-type VerifyInviteResponse = { invite_accepted?: boolean };
+type VerifyInviteResponse = { invite_accepted?: boolean; accepted_invite?: { orgId: string; teamId: string } };
 
 /** Password creation for a mail-bound invitation. The token—not this UI field—is the authority. */
 export function InviteRegistrationForm(): React.JSX.Element {
   const { t } = useTranslation();
-  const { configUrl, inviteName, inviteToken, setView } = usePopup();
+  const { configUrl, inviteName, inviteToken, setView, setAcceptedInvite } = usePopup();
   // Seeded with the name the inviter typed, and still editable: the invitee knows their own name.
   const [name, setName] = useState(inviteName?.trim() ?? '');
   const [password, setPassword] = useState('');
@@ -48,6 +48,7 @@ export function InviteRegistrationForm(): React.JSX.Element {
       setError(t('form.invite.error'));
       return;
     }
+    setAcceptedInvite(result.data.accepted_invite ?? null);
     setView('invite-accepted');
   }
 

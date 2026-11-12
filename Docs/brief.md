@@ -3541,3 +3541,12 @@ and history. Physical installation continuity, original connection dual proof
 and one physical capacity pool remain Nessie/native responsibilities. No
 production enrollment, silent grandfathering or renewal of unrelated human
 grants is included. See [Machine enrollment v1](Auth/machine-enrollment.md).
+
+## Invitation destination continuity (12 November 2026)
+
+The accepted team remains the product destination after mail-bound invitation
+acceptance. Products opt in with signed `login_flow.invitation_return_target`;
+UOA adds public organisation/team references only to an exactly allowlisted
+browser continuation. These references are not credentials. The product keeps
+its PKCE, current membership and exact-team authorization checks. See
+[Invitation return](Auth/invitation-return.md).

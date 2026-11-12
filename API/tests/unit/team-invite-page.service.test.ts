@@ -69,6 +69,20 @@ describe('renderInviteUnavailableHtml', () => {
 });
 
 describe('resolveInviteContinueUrl', () => {
+  it('carries the accepted team only for an opted-in, exactly allowed browser destination', () => {
+    const target = { orgId: 'new-org', teamId: 'invited-team' };
+    const optedIn = config({ login_flow: { email_code_enabled: true, team_selection: 'auto',
+      invitation_return_target: true } });
+    expect(resolveInviteContinueUrl(optedIn, ALLOWED, target))
+      .toBe(`${ALLOWED}?uoa_invite_org=new-org&uoa_invite_team=invited-team`);
+    expect(resolveInviteContinueUrl(config(), ALLOWED, target)).toBe(ALLOWED);
+    expect(resolveInviteContinueUrl(optedIn, ALLOWED)).toBe(ALLOWED);
+    expect(resolveInviteContinueUrl(optedIn, `${ALLOWED}?next=evil`, target)).toBeUndefined();
+    expect(resolveInviteContinueUrl(optedIn, 'https://evil.test/login', target)).toBeUndefined();
+    expect(resolveInviteContinueUrl({ ...optedIn, redirect_urls: ['nessie://auth/callback'] },
+      'nessie://auth/callback', target)).toBe('nessie://auth/callback');
+  });
+
   it('returns an allow-listed redirect URL unchanged', () => {
     expect(resolveInviteContinueUrl(config(), ALLOWED)).toBe(ALLOWED);
   });

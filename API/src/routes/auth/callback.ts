@@ -296,7 +296,7 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         // request. No PKCE challenge means there is no client-held verifier to bind an auth code
         // to, so complete the invite without issuing a browser-visible authorization result.
         if (acceptedInvite && !socialState.code_challenge) {
-          return { kind: 'invite_accepted' as const, userId };
+          return { kind: 'invite_accepted' as const, userId, acceptedInvite };
         }
 
         let autoSelectedTeam: AutoSelectedTeam | null = acceptedInvite
@@ -414,6 +414,9 @@ export function registerAuthCallbackRoute(app: FastifyInstance): void {
         const u = new URL(`${baseUrl}/auth`);
         u.searchParams.set('config_url', configUrl);
         u.searchParams.set('flow', 'invite_accepted');
+        u.searchParams.set('redirect_url', redirectUrl);
+        u.searchParams.set('uoa_invite_org', outcome.acceptedInvite.orgId);
+        u.searchParams.set('uoa_invite_team', outcome.acceptedInvite.teamId);
         redirectNoStore(reply, u.toString());
         return;
       }

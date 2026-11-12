@@ -112,6 +112,18 @@ can be retried; \`session-choices\` and invite decline validate but do not consu
 
 ### Direct email invitations
 
+Products that support exact-team entry set signed config
+\`login_flow.invitation_return_target: true\`. After successful mail-bound
+acceptance, the Continue button appends \`uoa_invite_org\` and
+\`uoa_invite_team\` to the exactly allowlisted HTTP(S) redirect URL. These are
+public navigation references, not credentials or evidence of membership. The
+product must retain this destination through its own PKCE sign-in, suppress
+old-team restoration, and check current access before entering the team.
+Unlisted redirects are still refused; native schemes and non-opted-in products
+retain their existing links. Password acceptance returns
+\`accepted_invite: {orgId, teamId}\` beside \`invite_accepted\`; social and
+existing-account acceptance carry the same consumed invitation's references.
+
 A personal team-invitation link is an account and membership flow, not a relying-party OAuth
 initiation. A new password invite opens account creation with the invited email prefilled and
 read-only. The server consumes the invitation capability itself, so a modified browser field cannot

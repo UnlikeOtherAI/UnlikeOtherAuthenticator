@@ -210,7 +210,8 @@ describe('POST /auth/verify-email — team chooser wiring (gap-fix B Task 1, des
     await app.close();
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true, invite_accepted: true });
+    expect(res.json()).toEqual({ ok: true, invite_accepted: true,
+      accepted_invite: { orgId: 'org-1', teamId: 'team-1' } });
     expect(finalizeAuthenticatedUserMock).not.toHaveBeenCalled();
     expect(buildSessionChoicesMock).not.toHaveBeenCalled();
   });
