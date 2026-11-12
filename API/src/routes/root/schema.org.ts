@@ -8,7 +8,7 @@ export const orgEndpoints: EndpointSchema[] = [
     method: 'GET', path: '/org/creation-contract',
     description: 'Discover creation recovery version and the authenticated domain registration. Persist registrationId with the original operation; send it as X-UOA-Creation-Registration on keyed creation and status requests. A different registration returns 409 CREATION_REGISTRATION_CHANGED before any creation or absence result.',
     auth: 'domain hash bearer plus verified config and optional current user credential',
-    response: { capability: 'org_creation_recovery_v1', version: 1, registrationId: 'stable domain registration ID' },
+    response: { capability: 'org_creation_recovery_v1', version: '1', registrationId: 'stable domain registration ID' },
   },
   ...['/org/organisations/creation-status', '/org/organisations/:orgId/teams/creation-status'].map(path => ({
     method: 'GET', path,
