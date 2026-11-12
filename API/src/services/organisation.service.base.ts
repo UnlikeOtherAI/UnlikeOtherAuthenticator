@@ -439,6 +439,9 @@ export async function auditOrg(
       deps,
     );
   } catch (err) {
+    // An injected transaction has not committed. Its audit failure must roll
+    // back the mutation and any creation receipt together.
+    if (deps?.prisma) throw err;
     // The mutation has already committed, so throwing here would report failure
     // for work that actually happened — worse than a missing audit row. But a
     // silent `catch {}` also makes "no audit row" indistinguishable from "no

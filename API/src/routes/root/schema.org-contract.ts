@@ -46,6 +46,7 @@ const ORG_CONTRACT_NOTE =
   'GET /org/organisations is BACKEND-ONLY: it lists a whole domain and has no user mode, so it ' +
   'refuses either present user credential with 401 ACCESS_TOKEN_NOT_ALLOWED (valid or blank ' +
   'alike) — omit the header, and use GET /org/me for a user\'s own teams. ' +
+  'Creation POSTs accept optional Idempotency-Key (16–200 ASCII letters/digits/._:-). When /api advertises org_creation_recovery version 1, persist a random key before sending. A matching retry returns the same IDs with current authorized fields; changed effective inputs return 409 CREATION_KEY_CONFLICT. The receipt and entity/default team/memberships/audit commit atomically. GET the matching creation-status route with that header to recover after a lost response. Only CREATION_OPERATION_NOT_FOUND permits repeating POST with the original key/body. Receipts never expire or reopen after deletion. Ordinary creation rate limits still apply; status reads do not spend the create budget. ' +
   IDENTITY_AVATAR_URL_NOTE;
 
 export function withOrgContract(list: EndpointSchema[]): EndpointSchema[] {

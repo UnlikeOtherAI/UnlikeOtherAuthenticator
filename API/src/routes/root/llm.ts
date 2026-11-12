@@ -1,4 +1,5 @@
 import { embeddedKelpieMarkdown } from './llm-embedded-kelpie.js';
+import { llmCreationRecoveryMarkdown } from './llm-creation-recovery.js';
 import { llmBillingModesMarkdown } from './llm-billing-modes.js';
 import { llmOrganisationBillingMarkdown } from './llm-billing-organisation.js';
 // Includes negotiated authority v2 and the separate own-team read-only overview.
@@ -34,6 +35,7 @@ function renderLlmMarkdown(): string {
   // source assertions and reusable, audience-bound chained access tokens. llmRostersMarkdown
   // owns the exact-team invitation management and role-write contracts.
   return `${embeddedKelpieMarkdown}
+${llmCreationRecoveryMarkdown}
 ${llmTelephoneMarkdown}
 ## Admin-created expiring users
 POST /internal/admin/users accepts email, password, optional name and optional future ISO accountExpiresAt under the admin superuser bearer. It creates one global UOA identity, hashes the password, writes a password-free audit entry and returns a user summary without credentials. Once expiry passes, UOA refuses sign-in, token verification and refresh. Relying products must continue checking UOA to observe expiry in their own sessions.

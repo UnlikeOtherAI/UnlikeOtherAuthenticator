@@ -55,3 +55,6 @@ profile-free tickets and live domain-authenticated revocation checks follow
 never widen silently; app scope edits require fresh registration and consent.
 
 Embedded Kelpie uses the host product's original independent UOA proof and distinct short-lived token classes; follow [host sessions](Docs/Auth/embedded-kelpie.md). It never impersonates the standalone native registration or copies refresh credentials.
+
+Organisation/team creation retries use permanent scoped receipts and current
+resource authority; follow [creation recovery](Docs/Auth/organisation-creation-recovery.md).

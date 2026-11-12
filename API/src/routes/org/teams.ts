@@ -22,6 +22,8 @@ import {
   updateTeam,
 } from '../../services/team.service.js';
 import { AppError } from '../../utils/errors.js';
+import { parseCreationKey, readCreatedResource, runOrgCreation } from '../../services/org-creation-operation.service.js';
+import { creationScope } from './creation-operations.js';
 import {
   AddTeamMemberBodySchema,
   ChangeTeamMemberRoleBodySchema,
@@ -110,10 +112,12 @@ export function registerTeamRoutes(app: FastifyInstance): void {
 
       const orgId = getOrgIdFromParams(request.params);
       const body = TeamBodySchema.parse(request.body ?? {});
+      const key = parseCreationKey(request.headers['idempotency-key']);
 
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
-      const team = await request.withTenantTx((tx) =>
-        createTeam(
+      const team = await request.withTenantTx((tx) => {
+        const prisma = asPrismaClient(tx);
+        const create = () => createTeam(
           {
             orgId,
             domain,
@@ -124,11 +128,18 @@ export function registerTeamRoutes(app: FastifyInstance): void {
             joinCreator: body.join_creator ?? false,
             config,
           },
-          { prisma: asPrismaClient(tx) },
-        ),
-      );
+          { prisma, ...(key ? { auditPrisma: prisma } : {}) },
+        );
+        if (!key) return create();
+        const scope = creationScope(request, 'team');
+        return runOrgCreation(prisma, { scope, key,
+          request: [body.name, body.slug?.toLowerCase() ?? null, body.description?.trim() || null,
+            scope.actorUserId !== null && (body.join_creator ?? false)] },
+        create, result => ({ resultOrgId: result.orgId, resultTeamId: result.id }), async ids =>
+          (await readCreatedResource(prisma, scope, ids, config)).team);
+      });
 
-      reply.status(200).send(team);
+      reply.header('Cache-Control', 'private, no-store').status(200).send(team);
     },
   );
 

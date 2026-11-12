@@ -233,7 +233,7 @@ export async function createTeam(
       slug: createdTeam.slug,
       joinPolicy: createdTeam.joinPolicy,
     },
-  });
+  }, { prisma: deps?.auditPrisma });
 
   return createdTeam;
 }

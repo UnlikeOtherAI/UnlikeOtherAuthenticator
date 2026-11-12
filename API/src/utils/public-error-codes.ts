@@ -4,6 +4,13 @@
 // enumeration oracle. Add a code here only when a caller must branch on it and
 // the code reveals nothing the caller is not already entitled to know.
 export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
+  // Authenticated operation recovery must distinguish an absent receipt from a
+  // retired/inaccessible result. Neither response grants creation authority.
+  'CREATION_KEY_INVALID',
+  'CREATION_KEY_REQUIRED',
+  'CREATION_KEY_CONFLICT',
+  'CREATION_OPERATION_NOT_FOUND',
+  'CREATION_RESULT_UNAVAILABLE',
   'MACHINE_AUTHORITY_UNAVAILABLE',
   'MACHINE_REQUEST_CONFLICT',
   'MACHINE_REQUEST_EXPIRED',

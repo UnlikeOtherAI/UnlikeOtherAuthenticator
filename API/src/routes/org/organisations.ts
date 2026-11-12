@@ -15,6 +15,8 @@ import { createRateLimiter } from '../../middleware/rate-limiter.js';
 import { requireOrgFeatures } from '../../middleware/org-features.js';
 import { requireOrgBackendOnly, requireOrgRole } from '../../middleware/org-role-guard.js';
 import { AppError } from '../../utils/errors.js';
+import { parseCreationKey, readCreatedResource, runOrgCreation } from '../../services/org-creation-operation.service.js';
+import { creationScope } from './creation-operations.js';
 import {
   CreateOrgBodySchema,
   OrgBodySchema,
@@ -110,6 +112,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const { name, owner_user_id: ownerUserId, slug } = CreateOrgBodySchema.parse(request.body ?? {});
       const caller = orgCaller(request);
       const config = requireVerifiedConfig(request);
+      const key = parseCreationKey(request.headers['idempotency-key']);
 
       // The owner is the acting user on the user path, and an explicit body field
       // in backend mode. Exactly one of the two — a user-token call that also
@@ -136,14 +139,22 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       // app.user_id); app.org_id is not yet known. The owner is the subject of the
       // INSERT policy either way, so it is `app.user_id` on both paths.
       setTenantContextFromRequest(request, { orgId: null, userId: ownerId });
-      const org = await request.withTenantTx((tx) =>
-        createOrganisation(
+      const org = await request.withTenantTx((tx) => {
+        const prisma = asPrismaClient(tx);
+        const create = () => createOrganisation(
           { domain, name, slug, ownerId, config, ...caller },
-          { prisma: asPrismaClient(tx) },
-        ),
-      );
+          { prisma, ...(key ? { auditPrisma: prisma } : {}) },
+        );
+        if (!key) return create();
+        const scope = creationScope(request, 'organisation');
+        return runOrgCreation(prisma, { scope, key, request: [name, slug?.toLowerCase() ?? null, ownerId] }, create,
+          result => ({ resultOrgId: result.id, resultTeamId: result.defaultTeam.id }), async ids => {
+            const result = await readCreatedResource(prisma, scope, ids, config);
+            return { ...result.organisation, defaultTeam: result.team };
+          });
+      });
 
-      reply.status(200).send(org);
+      reply.header('Cache-Control', 'private, no-store').status(200).send(org);
     },
   );
 

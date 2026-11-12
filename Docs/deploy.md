@@ -858,3 +858,14 @@ transactional outbox and change triggers. Deploy the exact-subject resolver befo
 consumers remove profile copies, configure their matching dedicated secret, and
 verify an actual profile and membership change. See
 [the wire contract and rollout order](Auth/directory-webhooks.md).
+
+### Organisation creation recovery rollout
+
+Apply additive migration `20261112150000_org_creation_recovery` before the API.
+Verify all serving replicas advertise `org_creation_recovery_v1` version 1 at
+`/api` before enabling consuming-product retries. Old replicas ignore the header,
+so a mixed serving revision is not an activation proof. No historical data is
+backfilled and no production operation is retried by this migration. Preserve
+minimal immutable receipts across resource deletion and rollback; never remove
+them to unblock a key. Follow [creation recovery](Auth/organisation-creation-recovery.md)
+for PostgreSQL/RLS, lost-response and consuming-form acceptance checks.

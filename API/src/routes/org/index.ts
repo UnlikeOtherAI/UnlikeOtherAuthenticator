@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import { registerOrgMeRoute } from './me.js';
+import { registerOrgCreationStatusRoutes } from './creation-operations.js';
 import { registerOrganisationRoutes } from './organisations.js';
 import { registerOrganisationMemberRoutes } from './organisation-members.js';
 import { registerGroupRoutes } from './groups.js';
@@ -16,6 +17,7 @@ import { registerMemberInvitationRoutes } from './member-invitations.js';
 
 export function registerOrgRoutes(app: FastifyInstance): void {
   registerOrgMeRoute(app);
+  registerOrgCreationStatusRoutes(app);
   registerOrganisationRoutes(app);
   registerOrganisationMemberRoutes(app);
   registerGroupRoutes(app);

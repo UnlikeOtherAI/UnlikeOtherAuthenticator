@@ -1049,3 +1049,13 @@ loss. Transaction-ID prefix ordering prevents skipped late commits. The existing
 revocation consumer carries opt-in HMAC push; pull checkpoint/reconciliation and
 absolute admission deadlines remain authoritative. See
 [Machine enrollment v1](machine-enrollment.md).
+
+### Organisation creation recovery
+
+`services/org-creation-operation.service.ts` owns permanent scoped creation
+receipts, operation locking and currently authorized result reads.
+`routes/org/creation-operations.ts` exposes the two authenticated status reads;
+the existing creation routes compose the service inside their authority/tenant
+transaction. `root/llm-creation-recovery.ts` documents the same published `/api`
+capability. See [the contract](organisation-creation-recovery.md). No new identity
+store, background service or user-facing screen is introduced.

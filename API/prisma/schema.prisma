@@ -1438,6 +1438,23 @@ model Organisation {
   @@map("organisations")
 }
 
+// Minimal permanent replay evidence, independent of mutable identity/resource
+// rows. No cascading foreign keys: deleting a result must never reopen its key.
+model OrgCreationOperation {
+  id             String   @id @db.Char(64)
+  clientDomainId String   @map("client_domain_id")
+  domain         String
+  actorUserId    String?  @map("actor_user_id")
+  operation      String   @db.VarChar(16)
+  parentId       String?  @map("parent_id")
+  requestHash    String   @map("request_hash") @db.Char(64)
+  resultOrgId    String   @map("result_org_id")
+  resultTeamId   String   @map("result_team_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("org_creation_operations")
+}
+
 // Database-maintained occupancy, not another published label or identity store.
 // NULL owners reserve pre-existing ambiguous labels.
 model OrganisationSlugClaim {

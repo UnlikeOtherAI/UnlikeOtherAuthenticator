@@ -3541,3 +3541,19 @@ and history. Physical installation continuity, original connection dual proof
 and one physical capacity pool remain Nessie/native responsibilities. No
 production enrollment, silent grandfathering or renewal of unrelated human
 grants is included. See [Machine enrollment v1](Auth/machine-enrollment.md).
+
+## 2026-11-12 Organisation and team creation recovery
+
+The consuming product's existing Create action must recover automatically after
+response loss without duplicate organisations or teams. The confidential `/org`
+creation routes therefore accept a durable operation key scoped to the original
+registered domain, user/backend principal, action and parent. Creation, default
+team/memberships, audit and minimal permanent receipt commit atomically. Matching
+retries return the original IDs; conflicting inputs refuse. Authenticated status
+reads recover the IDs without spending the creation rate-limit budget. Current
+resource authority remains required, and deletion never reopens a used key.
+Consumers must verify the published version before relying on retries and retain
+the original request through transient failures. This is machine-only recovery
+behind the existing product form, not another sign-in or an instruction to hunt
+through lists. Historical unkeyed ambiguity cannot be guessed from names. See
+[the contract and verification plan](Auth/organisation-creation-recovery.md).

@@ -266,6 +266,11 @@ export async function createOrganisation(
     };
   }));
 
+  // An atomic caller supplies this same transaction. The new organisation did
+  // not have an RLS container before creation; its audit row now does.
+  if (deps?.auditPrisma === prisma) {
+    await prisma.$executeRaw`SELECT set_config('app.org_id', ${created.id}, true)`;
+  }
   await auditOrg({
     orgId: created.id,
     actorUserId,

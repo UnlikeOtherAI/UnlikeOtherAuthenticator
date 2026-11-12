@@ -42,7 +42,8 @@ export async function assertTenantEffectAuthority(
     normalizeDomain(backend.domain) !== normalizeDomain(context.domain))) deny();
 
   const userIds = [claims?.userId, field(request.params, 'userId'),
-    field(request.body, 'userId'), field(request.body, 'newOwnerId'), field(request.body, 'ownerId')];
+    field(request.body, 'userId'), field(request.body, 'newOwnerId'), field(request.body, 'ownerId'),
+    field(request.body, 'owner_user_id')];
   for (const id of [...new Set(userIds.filter((id): id is string => Boolean(id)))].sort()) {
     if (options?.userEpochLock === 'shared') {
       await lockRefreshSessionUserShared(id, { prisma: tx });
