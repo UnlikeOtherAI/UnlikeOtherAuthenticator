@@ -19,6 +19,8 @@ export const orgCreationRecovery = {
   capability: 'org_creation_recovery_v1',
   version: 1,
   key_header: 'Idempotency-Key',
+  registration_header: 'X-UOA-Creation-Registration',
+  contract: '/org/creation-contract',
   organisation_status: '/org/organisations/creation-status',
   team_status: '/org/organisations/:orgId/teams/creation-status',
   retention: 'permanent receipt; deletion never permits key reuse',

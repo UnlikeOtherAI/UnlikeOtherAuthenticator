@@ -6,6 +6,11 @@ version=1 before relying on retries. On POST /org/organisations and POST
 /org/organisations/:orgId/teams, send a random Idempotency-Key (16–200 ASCII
 letters, digits, dot, underscore, colon or hyphen). Persist it with the original
 request before sending. Do not put personal data or credentials in the key.
+GET /org/creation-contract with the normal verified credentials before starting
+the operation. Persist its registrationId and send X-UOA-Creation-Registration
+on every keyed POST and status read. A missing or different registration is
+409 CREATION_REGISTRATION_CHANGED, never an absent-operation result. Do not
+replace the saved registration after an uncertain response.
 
 UOA commits the resource, default team, requested memberships, audit and minimal
 receipt in one transaction. A concurrent or later matching POST returns the
@@ -14,7 +19,7 @@ under the same key return 409 CREATION_KEY_CONFLICT. Header absence preserves
 ordinary creation and provides no replay guarantee.
 
 After a lost response, GET /org/organisations/creation-status or
-/org/organisations/:orgId/teams/creation-status with the same header and normal
+/org/organisations/:orgId/teams/creation-status with both saved headers and normal
 domain/config authentication. Successful response is
 {status:"committed",organisationId,teamId}; teamId is the original created or
 default team. Only 404 CREATION_OPERATION_NOT_FOUND means no committed receipt

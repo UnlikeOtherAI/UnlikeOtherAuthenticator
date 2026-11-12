@@ -9,6 +9,13 @@ until a confirmed result or a definitive refusal. A lost response is retryable.
 and `version=1`. Consumers must verify this capability before relying on the
 contract. Older servers ignore unknown headers and cannot provide this guarantee.
 
+Before dispatch, call authenticated `GET /org/creation-contract` and persist its
+`registrationId` alongside the operation key. Every keyed POST and status GET
+must send that ID in `X-UOA-Creation-Registration`. Missing or different IDs
+return `409 CREATION_REGISTRATION_CHANGED` before any creation or absent-result
+answer. Never replace this saved binding during recovery, even if the domain has
+since been registered again or the product configuration now points elsewhere.
+
 Both existing creation POSTs accept `Idempotency-Key`, containing 16–200 ASCII
 letters, digits, `.`, `_`, `:` or `-`. Omission retains existing behavior. A
 provided but invalid key is refused. The key is not a credential and must not

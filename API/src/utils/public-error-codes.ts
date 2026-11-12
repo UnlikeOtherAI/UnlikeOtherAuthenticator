@@ -7,6 +7,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // Authenticated operation recovery must distinguish an absent receipt from a
   // retired/inaccessible result. Neither response grants creation authority.
   'CREATION_KEY_INVALID',
+  'CREATION_REGISTRATION_CHANGED',
   'CREATION_KEY_REQUIRED',
   'CREATION_KEY_CONFLICT',
   'CREATION_OPERATION_NOT_FOUND',

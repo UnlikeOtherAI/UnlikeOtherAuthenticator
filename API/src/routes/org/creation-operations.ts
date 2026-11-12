@@ -6,7 +6,8 @@ import requireDomainHashAuthForDomainQuery from '../../middleware/domain-hash-au
 import { requireOrgFeatures } from '../../middleware/org-features.js';
 import { requireOrgRole } from '../../middleware/org-role-guard.js';
 import { setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
-import { parseCreationKey, readOrgCreationStatus, type OrgCreationScope } from '../../services/org-creation-operation.service.js';
+import { orgCreationRecovery, parseCreationKey, readOrgCreationStatus,
+  type OrgCreationScope } from '../../services/org-creation-operation.service.js';
 import { AppError } from '../../utils/errors.js';
 import { getOrgIdFromParams, orgCaller, parseDomainContext, parseDomainContextHook,
   requireVerifiedConfig, tenantUserId } from './organisation-route.shared.js';
@@ -16,12 +17,21 @@ export function creationScope(request: FastifyRequest, operation: 'organisation'
   const caller = orgCaller(request);
   const clientDomainId = request.domainAuthClientDomainId;
   if (!clientDomainId) throw new AppError('UNAUTHORIZED', 401);
+  if (request.headers['x-uoa-creation-registration'] !== clientDomainId) {
+    throw new AppError('BAD_REQUEST', 409, 'CREATION_REGISTRATION_CHANGED');
+  }
   return { domain, clientDomainId, operation,
     actorUserId: 'actorUserId' in caller ? caller.actorUserId : null,
     parentId: operation === 'team' ? getOrgIdFromParams(request.params) : null };
 }
 
 export function registerOrgCreationStatusRoutes(app: FastifyInstance): void {
+  app.get('/org/creation-contract', { preValidation: [requireDomainHashAuthForDomainQuery(), configVerifier,
+    parseDomainContextHook, requireOrgFeatures, requireOrgRole()] }, async (request, reply) => {
+    const registrationId = request.domainAuthClientDomainId;
+    if (!registrationId) throw new AppError('UNAUTHORIZED', 401);
+    return reply.header('Cache-Control', 'private, no-store').send({ ...orgCreationRecovery, registrationId });
+  });
   for (const operation of ['organisation', 'team'] as const) {
     const path = operation === 'organisation'
       ? '/org/organisations/creation-status' : '/org/organisations/:orgId/teams/creation-status';

@@ -20,7 +20,11 @@ describe.skipIf(!hasDatabase)('organisation creation recovery under production R
     const app = await createApp();
     apps.push(app);
     await app.ready();
-    return { app, owner, headers: { authorization: `Bearer ${bearer}`, 'idempotency-key': randomUUID() } };
+    const headers = { authorization: `Bearer ${bearer}`, 'idempotency-key': randomUUID() };
+    const contract = await app.inject({ method: 'GET', url: url('/org/creation-contract'), headers });
+    expect(contract.statusCode).toBe(200);
+    expect(contract.json()).toMatchObject({ capability: 'org_creation_recovery_v1', version: 1 });
+    return { app, owner, headers: { ...headers, 'x-uoa-creation-registration': contract.json().registrationId as string } };
   }
 
   it('recovers a discarded response in a new app and replays current fields without another creation', async () => {
@@ -125,7 +129,8 @@ describe.skipIf(!hasDatabase)('organisation creation recovery under production R
     const otherBearer = await seedDomainSecret(state.handle!.prisma, VICTIM_DOMAIN);
     const wrongDomain = await app.inject({ method: 'GET', url: url('/org/organisations/creation-status', VICTIM_DOMAIN),
       headers: { ...headers, authorization: `Bearer ${otherBearer}` } });
-    expect(wrongDomain.statusCode).toBe(404);
+    expect(wrongDomain.statusCode).toBe(409);
+    expect(wrongDomain.payload).toContain('CREATION_REGISTRATION_CHANGED');
     const own = await app.inject({ method: 'GET', url: url('/org/organisations/creation-status'), headers: humanHeaders });
     expect(own.statusCode).toBe(200);
     await state.handle!.prisma.orgMember.update({ where: { orgId_userId: { orgId: created.json().id, userId: owner.id } },
@@ -169,5 +174,22 @@ describe.skipIf(!hasDatabase)('organisation creation recovery under production R
     expect((await app.inject({ method: 'GET', url: url('/org/organisations/creation-status'),
       headers: { 'idempotency-key': headers['idempotency-key'] } })).statusCode).toBe(401);
     expect(await state.handle!.prisma.organisation.count({ where: { ownerId: owner.id } })).toBe(0);
+  });
+
+  it('refuses an old registration on reads and writes without creating another resource', async () => {
+    const { app, owner, headers } = await fixture();
+    const original = { method: 'POST' as const, url: url('/org/organisations'), headers,
+      payload: { name: 'Registration Bound', owner_user_id: owner.id } };
+    expect((await app.inject(original)).statusCode).toBe(200);
+    for (const registration of [randomUUID(), '']) {
+      const changed = { ...headers, 'x-uoa-creation-registration': registration };
+      const post = await app.inject({ ...original, headers: changed });
+      const lookup = await app.inject({ method: 'GET', url: url('/org/organisations/creation-status'), headers: changed });
+      for (const result of [post, lookup]) {
+        expect(result.statusCode).toBe(409);
+        expect(result.payload).toContain('CREATION_REGISTRATION_CHANGED');
+      }
+    }
+    expect(await state.handle!.prisma.organisation.count({ where: { ownerId: owner.id } })).toBe(1);
   });
 });
