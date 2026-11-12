@@ -11,6 +11,17 @@ const CONFIG = {
 };
 
 describe('selectAllowedContinueUrl', () => {
+  it('carries invitation navigation hints only after allowlist validation and product opt-in', () => {
+    const target = { orgId: 'new-org', teamId: 'invited-team' };
+    const optedIn = { ...CONFIG, login_flow: { invitation_return_target: true } };
+    expect(selectAllowedContinueUrl(optedIn, ALLOWED, target))
+      .toBe(`${ALLOWED}?uoa_invite_org=new-org&uoa_invite_team=invited-team`);
+    expect(selectAllowedContinueUrl(CONFIG, ALLOWED, target)).toBe(ALLOWED);
+    expect(selectAllowedContinueUrl(optedIn, ALLOWED)).toBe(ALLOWED);
+    expect(selectAllowedContinueUrl(optedIn, `${ALLOWED}?next=evil`, target)).toBeNull();
+    expect(selectAllowedContinueUrl({ ...optedIn, redirect_urls: [NATIVE] }, NATIVE, target)).toBe(NATIVE);
+  });
+
   it('accepts an exact entry of config.redirect_urls', () => {
     expect(selectAllowedContinueUrl(CONFIG, ALLOWED)).toBe(ALLOWED);
   });

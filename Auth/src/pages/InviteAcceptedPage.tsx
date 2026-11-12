@@ -8,12 +8,12 @@ import { resolveProductName, selectAllowedContinueUrl } from '../utils/continue-
 export function InviteAcceptedPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
-  const { config, redirectUrl } = usePopup();
+  const { config, redirectUrl, acceptedInvite } = usePopup();
 
   // F5: an invitee who registered from a mailbox has no product tab to go back to. When the
   // invitation carried an allow-listed redirect URL, name the product and offer the way in;
   // without one this page is exactly what it was — a close-the-window confirmation.
-  const continueUrl = selectAllowedContinueUrl(config, redirectUrl);
+  const continueUrl = selectAllowedContinueUrl(config, redirectUrl, acceptedInvite);
   const productName = resolveProductName(config, t('message.inviteAccepted.product'));
 
   return (

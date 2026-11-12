@@ -56,14 +56,23 @@ function isAcceptableRedirectUrl(value: string): boolean {
  * NOT trimmed, so a stored entry with stray whitespace does not match here either, exactly as
  * it does not match on the server.
  */
-export function selectAllowedContinueUrl(config: unknown, requested: string | null): string | null {
+export function selectAllowedContinueUrl(config: unknown, requested: string | null,
+  acceptedInvite?: { orgId: string; teamId: string } | null): string | null {
   const candidate = requested?.trim();
   if (!candidate || !isAcceptableRedirectUrl(candidate)) return null;
   if (!isRecord(config)) return null;
 
   const allowed = config.redirect_urls;
   if (!Array.isArray(allowed)) return null;
-  return allowed.includes(candidate) ? candidate : null;
+  if (!allowed.includes(candidate)) return null;
+  const url = new URL(candidate);
+  if (acceptedInvite && isRecord(config.login_flow) && config.login_flow.invitation_return_target === true
+    && (url.protocol === 'https:' || url.protocol === 'http:')) {
+    url.searchParams.set('uoa_invite_org', acceptedInvite.orgId);
+    url.searchParams.set('uoa_invite_team', acceptedInvite.teamId);
+    return url.href;
+  }
+  return candidate;
 }
 
 /** The product's own name for a "Continue to …" control: its logo alt text, else its domain. */

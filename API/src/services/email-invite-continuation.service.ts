@@ -36,7 +36,7 @@ export type EmailInviteContinuation =
    */
   | { kind: 'registration'; email: string; inviteName: string | null }
   /** An existing account: the invitation has been accepted and the token consumed. */
-  | { kind: 'accepted'; teamName: string; organisationName: string }
+  | { kind: 'accepted'; teamName: string; organisationName: string; orgId: string; teamId: string }
   /** The invitation could not be used (expired, revoked, already used, conflicting). */
   | { kind: 'unavailable'; error: unknown };
 
@@ -97,6 +97,8 @@ export async function resolveEmailInviteContinuation(
     }
     return {
       kind: 'accepted',
+      orgId: result.acceptedInvite.orgId,
+      teamId: result.acceptedInvite.teamId,
       teamName: invite.teamName,
       organisationName: invite.organisationName,
     };

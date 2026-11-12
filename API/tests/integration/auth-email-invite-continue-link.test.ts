@@ -124,6 +124,26 @@ describe.skipIf(!hasDatabase)('invitation terminal page continue link', () => {
     return `/auth/email/link?${query.toString()}`;
   }
 
+  it('carries the consumed invitation target into an opted-in product without issuing a code', async () => {
+    const configJwt = await signTestConfigJwt(baseClientConfigPayload({
+      redirect_urls: [allowedRedirectUrl], org_features: { enabled: true, user_needs_team: true },
+      login_flow: { team_selection: 'auto', invitation_return_target: true },
+    }));
+    vi.stubGlobal('fetch', vi.fn(await createTestConfigFetchHandler(configJwt)));
+    const token = await seedInvitation('target');
+    const target = await handle.prisma.teamInvite.findFirstOrThrow({
+      where: { email: 'invitee-target@example.com' }, select: { orgId: true, teamId: true },
+    });
+    const app = await createApp();
+    try {
+      const response = await app.inject({ method: 'GET', url: landingUrl(token, allowedRedirectUrl),
+        headers: { accept: 'text/html' } });
+      expect(response.statusCode, response.body).toBe(200);
+      expect(response.body).toContain(`href="${allowedRedirectUrl}?uoa_invite_org=${target.orgId}&amp;uoa_invite_team=${target.teamId}"`);
+      expect(response.body).not.toContain('?code=');
+    } finally { await app.close(); }
+  });
+
   it('offers "Continue to <product>" only for an allow-listed redirect_url', async () => {
     const configJwt = await signTestConfigJwt(
       baseClientConfigPayload({

@@ -34,9 +34,13 @@ const TEST_CONFIG = {
   language_config: 'en',
 };
 
-function render(redirectUrl?: string, config: unknown = TEST_CONFIG): string {
+function render(redirectUrl?: string, config: unknown = TEST_CONFIG, target?: { orgId: string; teamId: string }): string {
   const search = new URLSearchParams({ config_url: 'https://api.nessie.works/auth-config' });
   search.set('flow', 'invite_accepted');
+  if (target) {
+    search.set('uoa_invite_org', target.orgId);
+    search.set('uoa_invite_team', target.teamId);
+  }
   if (redirectUrl) search.set('redirect_url', redirectUrl);
   return renderToString(
     <ThemeProvider config={config} configUrl="">
@@ -52,6 +56,13 @@ function render(redirectUrl?: string, config: unknown = TEST_CONFIG): string {
 }
 
 describe('InviteAcceptedPage', () => {
+  it('offers the accepted team after a social invitation instead of a bare login link', () => {
+    const html = render(ALLOWED, { ...TEST_CONFIG, login_flow: { invitation_return_target: true } },
+      { orgId: 'new-org', teamId: 'invited-team' });
+    expect(html).toContain(`href="${ALLOWED}?uoa_invite_org=new-org&amp;uoa_invite_team=invited-team"`);
+    expect(html).toContain('Continue to Nessie');
+  });
+
   it('is a close-the-window confirmation when no redirect URL was carried', () => {
     const html = render();
     expect(html).toContain('You’re in');

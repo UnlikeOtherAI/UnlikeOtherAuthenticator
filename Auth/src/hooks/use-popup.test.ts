@@ -3,6 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { parsePopupQueryParams } from './use-popup';
 
 describe('parsePopupQueryParams', () => {
+  it('keeps accepted-team navigation hints scoped to the invitation confirmation', () => {
+    const hints = 'uoa_invite_org=invited-org&uoa_invite_team=invited-team';
+    expect(parsePopupQueryParams(`?flow=invite_accepted&${hints}`).acceptedInvite)
+      .toEqual({ orgId: 'invited-org', teamId: 'invited-team' });
+    expect(parsePopupQueryParams(`?${hints}`).acceptedInvite).toBeNull();
+    expect(parsePopupQueryParams('?flow=invite_accepted&uoa_invite_org=org').acceptedInvite).toBeNull();
+    expect(parsePopupQueryParams('?flow=invite_accepted&uoa_invite_org=org&uoa_invite_team=https://evil.test')
+      .acceptedInvite).toBeNull();
+  });
+
   it('accepts a signing capability only with the dedicated signatures flow marker', () => {
     const parsed = parsePopupQueryParams(
       '?flow=signatures&signing_token=opaque-capability&scope=openid%20profile',

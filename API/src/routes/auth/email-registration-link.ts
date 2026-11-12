@@ -243,7 +243,7 @@ export function registerAuthEmailRegistrationLinkRoute(app: FastifyInstance): vo
                 body: continueUrl
                   ? `You’ve joined ${joined}.`
                   : `You’ve joined ${joined}. ${nextStep}`,
-                continueUrl,
+                continueUrl: resolveInviteContinueUrl(config, redirect_url, continuation),
                 productName,
               }),
             );

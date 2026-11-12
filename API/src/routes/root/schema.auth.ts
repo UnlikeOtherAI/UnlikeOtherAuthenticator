@@ -303,6 +303,7 @@ export const authEndpoints: EndpointSchema[] = [
       ok: 'true (team_selection "off"/skipped branch only — finalizes immediately)',
       invite_accepted:
         'true only for a direct live team invitation without PKCE; no authorization code is issued',
+      accepted_invite: '{orgId, teamId} only with invite_accepted; public navigation references, never authentication proof',
       code: 'authorization code (team_selection "off"/skipped branch only)',
       redirect_to: 'redirect URL (team_selection "off"/skipped branch only)',
       access_request_status: '"pending" when request_access created a pending access request',

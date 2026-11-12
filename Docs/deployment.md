@@ -358,3 +358,10 @@ checkpoint/reconciliation. It adds no global lock or dedicated DB listener.
 Pull remains required every 15 seconds; decisions expire within 30 seconds,
 including delivery outages. Expired push cursors require readiness repair, never
 authority fallback. See [the exact contract](Auth/machine-enrollment.md).
+
+## Invitation return rollout
+
+Deploy UOA's invitation-target producer and Nessie's consuming login entry.
+Nessie enables signed `login_flow.invitation_return_target`; old email links
+read the current config. No database migration, new credential or native release
+is needed. See [Invitation return](Auth/invitation-return.md).

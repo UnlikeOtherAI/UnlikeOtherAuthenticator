@@ -236,6 +236,34 @@ describe('GET /auth/callback/:provider', () => {
     await app.close();
   });
 
+  it('carries the accepted team and product return through a social invitation without issuing a code', async () => {
+    verifySocialStateMock.mockResolvedValue({
+      provider: 'google', config_url: 'https://client.example.com/auth-config',
+      redirect_url: 'https://client.example.com/oauth/callback', nonce: TEST_NONCE, team_invite: true,
+    });
+    getTeamInviteLandingDataMock.mockResolvedValue({ email: 'user@gmail.com' });
+    loginWithSocialProfileMock.mockResolvedValue({ status: 'authenticated', userId: 'invited-user', twoFaEnabled: false });
+    acceptTeamInviteTokenForSocialLoginMock.mockResolvedValue({ orgId: 'invited-org', teamId: 'invited-team' });
+    const { createApp } = await import('../../src/app.js');
+    const app = await createApp();
+    await app.ready();
+    try {
+      const res = await app.inject({
+        method: 'GET', url: '/auth/callback/google?code=provider-code&state=state-token',
+        cookies: { [SOCIAL_STATE_COOKIE_NAME]: app.signCookie(TEST_NONCE),
+          [SOCIAL_INVITE_COOKIE_NAME]: app.signCookie('invite-capability') },
+      });
+      expect(res.statusCode).toBe(302);
+      const target = new URL(String(res.headers.location));
+      expect(target.pathname).toBe('/auth');
+      expect(target.searchParams.get('flow')).toBe('invite_accepted');
+      expect(target.searchParams.get('redirect_url')).toBe('https://client.example.com/oauth/callback');
+      expect(target.searchParams.get('uoa_invite_org')).toBe('invited-org');
+      expect(target.searchParams.get('uoa_invite_team')).toBe('invited-team');
+      expect(issueAuthorizationCodeMock).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+
   it('uses the exact first-party admin config URL locally during social callback', async () => {
     verifySocialStateMock.mockResolvedValue({
       provider: 'google',

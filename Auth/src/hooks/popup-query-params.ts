@@ -28,6 +28,7 @@ export type PopupQueryParams = {
   inviteName: string | null;
   /** Server-set marker after a direct social invitation has been accepted. */
   inviteAccepted: boolean;
+  acceptedInvite?: { orgId: string; teamId: string } | null;
   /** Public-client / MCP profile (brief §22.14): present only on /oauth/authorize. */
   clientId: string | null;
   state: string | null;
@@ -136,6 +137,8 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
   const teamHint = params.get('team_hint');
   const managementOrgId = params.get('management_org_id');
   const inviteAccepted = params.get('flow') === 'invite_accepted';
+  const inviteOrgId = params.get('uoa_invite_org');
+  const inviteTeamId = params.get('uoa_invite_team');
   // Only the one OIDC prompt value UOA forwards is recognised; any other value is ignored rather
   // than passed on, so the provider never sees a prompt the relying party did not mean.
   const selectAccount = params.get('prompt') === 'select_account';
@@ -161,6 +164,9 @@ export function parsePopupQueryParams(search: string): PopupQueryParams {
     // Kept exactly as it arrived, like its siblings: the address-bar scrub compares raw values.
     inviteName: inviteName && inviteName.trim() ? inviteName : null,
     inviteAccepted,
+    acceptedInvite: inviteAccepted && inviteOrgId && inviteTeamId
+      && /^[A-Za-z0-9_-]{1,256}$/.test(inviteOrgId) && /^[A-Za-z0-9_-]{1,256}$/.test(inviteTeamId)
+      ? { orgId: inviteOrgId, teamId: inviteTeamId } : null,
     nativeSocialComplete: params.get('native_social_complete') === 'true',
     nativeFlowId: params.get('native_flow_id') ?? undefined,
     clientId: clientId && clientId.trim() ? clientId : null,
