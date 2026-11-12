@@ -93,5 +93,15 @@ audit. The consuming product must exercise its actual Create form through an
 interrupted response and automatic recovery before the end-to-end capability is
 called complete.
 
+For that HTTP check, use the opt-in `tests/manual/org-creation-http.test.ts`
+Vitest fixture. Set `UOA_CREATION_HTTP_FIXTURE_DIR` to a protected directory
+outside the checkout and reserve `UOA_CREATION_HTTP_PORT` (default 57262).
+The fixture exposes the real API on loopback and writes synthetic client
+credentials to `client.json`; never print that file. Send public HTTP requests
+from a separate client. A `command.json` containing an `action` (`restart`,
+`inspect`, or `stop`) and an increasing numeric `generation` controls only the
+fixture. `ready.json` confirms the command; `counts.json` contains resource and
+audit counts without credentials. The ordinary test run skips this opt-in server.
+
 Implementation and tests are a candidate until those checks pass. No runtime
 verification is implied by this document.
