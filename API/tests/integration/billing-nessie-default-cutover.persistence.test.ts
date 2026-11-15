@@ -14,7 +14,7 @@ async function cutover() {
 async function publish(currency: string, amount: bigint) {
   return prisma.billingTariff.create({ data: { serviceId: ids.service, key: `standard-${currency.toLowerCase()}`,
     version: 1, name: `Regular ${currency}`, currency, usageCurrency: currency, mode: 'STANDARD',
-    collectionMode: 'STRIPE', monthlyChargeBasis: 'PER_SEAT', monthlyAmountMinor: amount,
+    collectionMode: 'STRIPE', markupBps: 0, monthlyChargeBasis: 'PER_SEAT', monthlyAmountMinor: amount,
     seatPolicy: 'AUTOMATIC', seatChargeTiming: 'PRORATED', usagePaymentMode: 'PREPAID', anniversarySeats: false } });
 }
 
