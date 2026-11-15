@@ -37,9 +37,23 @@ export function assertNessieUsageAdmission(product: string, effective: Effective
 export async function resolveDispatchFundingTariff(
   reader: Prisma.TransactionClient,
   scope: Parameters<typeof resolveCurrentBillingTariff>[1] & { userId?: string }, product: string,
+  verifiedOriginProduct = product,
 ) {
   const effective = await resolveCurrentBillingTariff(reader, scope, product);
   assertNessieUsageAdmission(product, effective);
   await assertNessieSeatUsage(reader, { ...scope, product });
+  if (product !== 'nessie' && verifiedOriginProduct === 'nessie') {
+    // A delegated product keeps its own prices, but cannot turn Nessie's prepaid costs into PAYG.
+    const explicitSubsidy = effective.tariff.mode === 'FREE' && effective.source !== 'SERVICE_DEFAULT';
+    if (!explicitSubsidy && (effective.tariff.mode === 'FREE' || effective.tariff.usagePaymentMode !== 'PREPAID')) {
+      throw new AppError('FORBIDDEN', 402, 'NESSIE_PREPAID_SETUP_REQUIRED');
+    }
+    const service = await reader.billingService.findUnique({ where: { identifier: 'nessie' }, select: { id: true, active: true } });
+    if (!service?.active) throw new AppError('SERVICE_UNAVAILABLE', 503, 'NESSIE_BILLING_ORIGIN_UNAVAILABLE');
+    const originScope = { ...scope, serviceId: service.id };
+    const origin = await resolveCurrentBillingTariff(reader, originScope, 'nessie');
+    assertNessieUsageAdmission('nessie', origin);
+    await assertNessieSeatUsage(reader, { ...originScope, product: 'nessie' });
+  }
   return effective.tariff;
 }

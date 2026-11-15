@@ -1,3 +1,4 @@
+import { seatRenewalPaymentReason } from './billing-seat-renewal-reason.service.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
@@ -7,9 +8,9 @@ import type { StripeAccountContext } from './billing-stripe-client.service.js';
 import { verifyStripePaymentInvoiceLines } from './billing-stripe-payment-lines.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 
-type Provider = Pick<Stripe, 'invoices' | 'events'>;
+type Provider = Pick<Stripe, 'invoices' | 'events' | 'subscriptions' | 'paymentMethods'>;
 type RenewalFailure = { accountId: string; subscriptionId: string; stripeInvoiceId: string;
-  failedAt: Date; graceEndsAt: Date; reason: 'payment_required' | 'payment_action_required' };
+  failedAt: Date; graceEndsAt: Date; reason: 'payment_required' | 'payment_action_required' | 'card_expired' };
 
 /** One bounded page per delivery; retries continue the retained probe instead of restarting it. */
 export async function firstSeatRenewalFailure(invoice: Stripe.Invoice, event: Stripe.Event,
@@ -67,7 +68,7 @@ export async function prepareSeatRenewalFailure(event: Stripe.Event, account: St
   const failedAt = await firstSeatRenewalFailure(invoice, event, account.id, prisma, stripe);
   return { accountId: account.id, subscriptionId: subscription.id, stripeInvoiceId: invoice.id, failedAt,
     graceEndsAt: weekdayGraceDeadline(failedAt, 'UTC'),
-    reason: event.type === 'invoice.payment_action_required' ? 'payment_action_required' : 'payment_required' };
+    reason: await seatRenewalPaymentReason(invoice, externalSubscription, event.type === 'invoice.payment_action_required', stripe) };
 }
 
 export async function recordSeatRenewalFailure(tx: Prisma.TransactionClient, failure: RenewalFailure): Promise<void> {

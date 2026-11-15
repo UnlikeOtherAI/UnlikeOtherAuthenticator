@@ -40,7 +40,7 @@ describe('prospective Nessie purchase terms', () => {
     expect((await resolveCurrentBillingTariff(reader as never, scope, 'nessie')).tariff)
       .toMatchObject({ id: 'eur', currency: 'EUR', usageCurrency: 'USD' });
     expect(reader.billingTariff.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({ where: expect.objectContaining({
-      serviceId: 'svc', currency: 'EUR', anniversarySeats: true, usageCurrency: 'USD', usagePaymentMode: 'PREPAID', anniversarySeats: true,
+      serviceId: 'svc', currency: 'EUR', usageCurrency: 'USD', usagePaymentMode: 'PREPAID', anniversarySeats: true,
     }) }));
   });
   it('does not change another product', async () => {

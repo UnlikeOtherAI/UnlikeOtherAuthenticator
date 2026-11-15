@@ -124,7 +124,7 @@ export async function reservePrepaidDispatch(
     const tariff = await resolveDispatchFundingTariff(tx, {
       serviceId: key.serviceId, organisationId: input.organisationId,
       teamId: input.teamId, userId: input.userId, billingMonth,
-    }, input.product);
+    }, input.product, input.billingContext?.originProduct);
     const previous = await tx.billingLedgerDispatchDecision.findUnique({
       where: { dispatchId: input.dispatchId }, include: { release: true },
     });
@@ -206,8 +206,10 @@ export async function reservePrepaidDispatch(
       }
       throw error;
     });
+  // The first transaction has verified the origin against the live job grant.
+  const cardScope = { ...input, product: input.billingContext?.originProduct === 'nessie' ? 'nessie' : input.product };
   if (decision) {
-    if (decision.payment_mode === 'prepaid') await (deps?.cardOnFile ?? assertNessieCardOnFile)(input, prisma);
+    if (decision.payment_mode === 'prepaid') await (deps?.cardOnFile ?? assertNessieCardOnFile)(cardScope, prisma);
     return withBudgetContextDigest(prisma, decision);
   }
   if (bound === null) throw new AppError('BAD_REQUEST', 422, 'PREPAID_BOUND_REQUIRED');
@@ -217,7 +219,7 @@ export async function reservePrepaidDispatch(
   const collection = await resolveCreditCollectionContext({
     organisationId: input.organisationId, teamId: input.teamId,
   }, { prisma });
-  await (deps?.cardOnFile ?? assertNessieCardOnFile)(input, prisma, { collection });
+  await (deps?.cardOnFile ?? assertNessieCardOnFile)(cardScope, prisma, { collection });
   const creditAccount = await resolveCreditAccount({
     account: collection.account,
     organisationId: input.organisationId, teamId: input.teamId,
@@ -248,7 +250,7 @@ export async function reservePrepaidDispatch(
     const tariff = await resolveDispatchFundingTariff(tx, {
       serviceId: key.serviceId, organisationId: input.organisationId,
       teamId: input.teamId, userId: input.userId, billingMonth,
-    }, input.product);
+    }, input.product, input.billingContext?.originProduct);
     const existing = await tx.billingPrepaidReservation.findUnique({
       where: { dispatchId: input.dispatchId },
     });
