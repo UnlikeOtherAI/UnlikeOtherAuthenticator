@@ -34,6 +34,10 @@ export async function machineHarness() {
   vi.stubGlobal('fetch', vi.fn(fetchConfig));
   const bearer = await seedDomainSecret(db.prisma, machineDomain);
   const service = await db.prisma.billingService.create({ data: { identifier: 'nessie', name: 'Fictional Nessie' } });
+  // These authority tests use an explicit free-seat agreement, never an implicit billing bypass.
+  const tariff = await db.prisma.billingTariff.create({ data: { serviceId: service.id,
+    key: 'machine-fixture-free', version: 1, name: 'Machine fixture seats', mode: 'FREE',
+    collectionMode: 'NONE', markupBps: 0, monthlyAmountMinor: 0n, monthlyChargeBasis: 'FLAT', currency: 'USD' } });
   const publicJwk = (await testConfigJwks()).keys[0];
   await db.prisma.billingAppKey.create({ data: { serviceId: service.id, purpose: 'CUSTOMER_LIFECYCLE',
     name: 'Machine test mapping', keyPrefix: 'fixture', secretDigest: createHash('sha256').update(randomUUID()).digest('hex'), actorIssuer: `https://${machineDomain}`,
@@ -58,6 +62,11 @@ export async function machineHarness() {
     const user = await db!.prisma.user.create({ data: { userKey: userEmail, email: userEmail, passwordHash: await hashPassword(password) } });
     await db!.prisma.domainRole.create({ data: { userId: user.id, domain: machineDomain, role: 'USER' } });
     const org = await db!.prisma.organisation.create({ data: { name: 'Fictional Studio', slug: `studio-${id}`, domain: machineDomain, ownerId: owner.id } });
+    const assignment = await db!.prisma.billingTariffAssignment.create({ data: { serviceId: service.id,
+      orgId: org.id, scope: 'ORGANISATION', scopeKey: org.id, tariffId: tariff.id } });
+    await db!.prisma.billingTariffTermEvent.create({ data: { serviceId: service.id, source: 'ORGANISATION',
+      scopeKey: org.id, tariffId: tariff.id, assignmentId: assignment.id,
+      effectiveFromMonth: new Date().toISOString().slice(0, 7), reason: 'machine-authority-fixture' } });
     await db!.prisma.orgMember.createMany({ data: [{ orgId: org.id, userId: owner.id, role: 'owner' }, { orgId: org.id, userId: user.id, role: 'member' }] });
     const team = await db!.prisma.team.create({ data: { orgId: org.id, name: 'Fictional Design', slug: 'design', isDefault: true } });
     await db!.prisma.teamMember.create({ data: { teamId: team.id, userId: user.id } });
