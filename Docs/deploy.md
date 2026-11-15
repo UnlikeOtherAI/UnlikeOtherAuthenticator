@@ -146,12 +146,24 @@ Configured as GitHub repository variables:
 
 The workload identity provider is restricted to GitHub repository `UnlikeOtherAI/UnlikeOtherAuthenticator`.
 
-Every main-branch deployment records the exact `latestCreatedRevisionName`,
+Every main-branch deployment names its candidate revision from the GitHub run ID
+and attempt, submits creation asynchronously without assigning traffic, and checks that exact revision's
+Ready condition and image digest against the image tagged with the merged SHA.
+The check is bounded to 30 attempts with four-second delays. It does not wait
+for service-wide readiness: that can still refer to a failed older traffic target,
+which otherwise prevents the workflow from reaching its replacement promotion.
+After candidate verification, the workflow
 explicitly routes 100% of service traffic to that revision, and verifies it is
 the `latestReadyRevisionName` before probing the public health endpoints. This
 explicit promotion is required after a canary or rollback pins traffic to a
 named revision: a successful image upload plus a health response from the old
 revision is not a successful deployment.
+
+An imported candidate may not have started a container yet. Promotion must still
+pass Cloud Run startup, including migration recovery, and the public health
+probes. A failed candidate, mismatched digest or expired readiness check never
+promotes traffic. The actual shell regression is
+`API/tests/unit/cloud-run-route-recovery.test.ts`.
 
 ### Manual fallback
 
