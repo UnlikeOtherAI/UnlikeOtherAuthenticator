@@ -5,6 +5,7 @@ import {
   BillingUsagePaymentMode, Prisma, type PrismaClient,
 } from '@prisma/client';
 
+import { resolveDispatchFundingTariff } from './billing-nessie-usage-admission.service.js';
 import { getPublicBaseUrl } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -135,6 +136,10 @@ export async function reservePrepaidDispatch(
       sourceDomain: actor.source_domain, context: input.billingContext ?? null,
       jobGrantId: input.jobCompute?.grantId ?? null,
       originInvocationId: input.jobCompute?.originInvocationId ?? null });
+    const tariff = await resolveDispatchFundingTariff(tx, {
+      serviceId: key.serviceId, organisationId: input.organisationId,
+      teamId: input.teamId, billingMonth,
+    }, input.product);
     const previous = await tx.billingLedgerDispatchDecision.findUnique({
       where: { dispatchId: input.dispatchId }, include: { release: true },
     });
@@ -181,10 +186,6 @@ export async function reservePrepaidDispatch(
     if (Math.abs(now.getTime() - dispatchStartedAt.getTime()) > 5 * 60_000) {
       throw new AppError('BAD_REQUEST', 400, 'PREPAID_DISPATCH_TIME_INVALID');
     }
-    const tariff = (await resolveBillingTariffForMonth(tx, {
-      serviceId: key.serviceId, organisationId: input.organisationId,
-      teamId: input.teamId, billingMonth,
-    })).tariff;
     if (tariff.usagePaymentMode === BillingUsagePaymentMode.PAY_AS_YOU_GO ||
       tariff.mode === BillingTariffMode.FREE) {
       await reserveBudgetDispatch(tx, { dispatchId: input.dispatchId,
@@ -254,6 +255,10 @@ export async function reservePrepaidDispatch(
       where: { dispatchId: input.dispatchId }, select: { status: true },
     });
     if (cancelled) throw new AppError('BAD_REQUEST', 409, 'PREPAID_DISPATCH_CONFLICT');
+    const tariff = await resolveDispatchFundingTariff(tx, {
+      serviceId: key.serviceId, organisationId: input.organisationId,
+      teamId: input.teamId, billingMonth,
+    }, input.product);
     const existing = await tx.billingPrepaidReservation.findUnique({
       where: { dispatchId: input.dispatchId },
     });
@@ -275,10 +280,6 @@ export async function reservePrepaidDispatch(
         reserved_microcredits: existing.reservedMicrocredits.toString(),
         billing_month: existing.billingMonth, currency: existing.currency };
     }
-    const tariff = (await resolveBillingTariffForMonth(tx, {
-      serviceId: key.serviceId, organisationId: input.organisationId,
-      teamId: input.teamId, billingMonth,
-    })).tariff;
     if (tariff.usagePaymentMode !== BillingUsagePaymentMode.PREPAID ||
       tariff.mode === BillingTariffMode.FREE ||
       tariff.currency !== input.currency) {
