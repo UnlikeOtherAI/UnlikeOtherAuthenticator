@@ -90,6 +90,9 @@ export async function smsPaidNumberFixture(prisma: PrismaClient) {
       pricing: { price_details: { price: 'price_sms' }, unit_amount_decimal: '975' } }] } };
   const cash = { available: true };
   const stripe = { accounts: { retrieveCurrent: async () => ({ id: 'acct_SmsFixture' }) },
+    paymentMethods: { list: async ({ customer }: { customer: string }) => ({ has_more: false,
+      data: customer === 'cus_sms' ? [{ id: 'pm_sms', customer, type: 'card', livemode: false,
+        card: { brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2035 } }] : [] }) },
     subscriptions: { retrieve: async () => remote, cancel: async () => { remote.status = 'canceled'; return remote; } },
     invoices: { retrieve: async () => invoice }, invoicePayments: { list: async () => ({ has_more: false,
       data: cash.available ? [{ id: 'ip_sms', invoice: 'in_sms', status: 'paid', currency: 'usd', livemode: false,
