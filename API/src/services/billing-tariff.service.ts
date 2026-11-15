@@ -10,6 +10,7 @@ import { normalizeBillingServiceIdentifier, normalizeTariffInput, type TariffInp
 export { normalizeBillingServiceIdentifier, normalizeTariffInput, DEFAULT_STANDARD_MARKUP_BPS } from './billing-tariff-input.service.js';
 export type { TariffInput, PublicTariffMode, PublicBillingCollectionMode } from './billing-tariff-input.service.js';
 import { AppError } from '../utils/errors.js';
+import { usesAnniversarySeats } from './billing-nessie-onboarding.service.js';
 import {
   assertContractAssignmentRemovalAllowed,
   assertContractAssignmentWriteAllowed,
@@ -78,6 +79,7 @@ export async function createBillingService(
           version: 1,
           isDefault: true,
           ...tariff,
+          anniversarySeats: usesAnniversarySeats(identifier, tariff),
           ...auditActor(params.actor),
         },
       });
@@ -154,6 +156,7 @@ export async function createBillingTariffVersion(
               version: (latest?.version ?? 0) + 1,
               isDefault: params.setAsDefault,
               ...tariff,
+              anniversarySeats: usesAnniversarySeats(service.identifier, tariff),
               ...auditActor(params.actor),
             },
           });

@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
+import { paymentBinding } from './billing-credit-funding-binding.service.js';
 import { applyCreditFundingWebhook } from './billing-credit-funding-webhook.service.js';
 import { prepareCreditFundingWebhook } from './billing-credit-funding-webhook-prepare.service.js';
 import type { PreparedCreditFundingWebhook } from './billing-credit-funding-webhook.types.js';
@@ -12,9 +13,15 @@ import {
 } from './billing-stripe-client.service.js';
 
 export function assertStripeEventApiVersion(event: Stripe.Event): void {
-  if (event.api_version !== STRIPE_BILLING_API_VERSION) {
-    throw new AppError('BAD_REQUEST', 400, 'STRIPE_WEBHOOK_API_VERSION_UNSUPPORTED');
+  if (event.api_version === STRIPE_BILLING_API_VERSION) return;
+  // Stripe's Events API retains the account's original snapshot version on replay.
+  // This Clover payment shape is compared with a fresh, pinned-version PaymentIntent
+  // and its bound local purchase before the credit webhook can change a balance.
+  if (event.api_version === '2025-12-15.clover' && event.type === 'payment_intent.succeeded') {
+    const intent = event.data.object;
+    if (intent.object === 'payment_intent' && intent.status === 'succeeded' && paymentBinding(intent.metadata)) return;
   }
+  throw new AppError('BAD_REQUEST', 400, 'STRIPE_WEBHOOK_API_VERSION_UNSUPPORTED');
 }
 
 const CREDIT_PAYMENT_INTENT_EVENT_TYPES = new Set([

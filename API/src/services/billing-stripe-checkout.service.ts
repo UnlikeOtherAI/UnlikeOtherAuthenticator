@@ -140,7 +140,7 @@ export async function createStripeCheckoutSession(
   const modeRevision = configured?.selection.revision ?? 0;
   if (
     payload.tariff.collection_mode !== 'stripe' ||
-    payload.tariff.mode === 'free' ||
+    (payload.tariff.mode === 'free' && payload.tariff.monthly_subscription.amount_minor === '0') ||
     !payload.tariff.payment_collection_enabled
   ) {
     throw new AppError('BAD_REQUEST', 409, 'STRIPE_COLLECTION_NOT_ENABLED');
@@ -227,7 +227,7 @@ export async function createStripeCheckoutSession(
   if (
     !details.tariff ||
     details.tariff.collectionMode !== BillingCollectionMode.STRIPE ||
-    details.tariff.mode === BillingTariffMode.FREE ||
+    (details.tariff.mode === BillingTariffMode.FREE && details.tariff.monthlyAmountMinor === 0n) ||
     details.tariff.currency !== payload.tariff.monthly_subscription.currency ||
     details.tariff.monthlyAmountMinor.toString() !==
       payload.tariff.monthly_subscription.amount_minor
@@ -412,6 +412,10 @@ export async function createStripeCheckoutSession(
     throw new AppError('INTERNAL', 500, 'STRIPE_CATALOG_INCOMPLETE');
   }
 
+  const monthlyQuantity = details.tariff.anniversarySeats ? checkout.initialSeatMembers.length : 1;
+  if (details.tariff.anniversarySeats && (!tariffPrice.stripeMonthlyPriceId || monthlyQuantity < 1)) {
+    throw new AppError('INTERNAL', 503, 'STRIPE_SEAT_QUANTITY_BINDING_INVALID');
+  }
   const prepared = { customerId: customer.stripeCustomerId,
     usagePriceId: catalog.stripeUsagePriceId, tariff: details.tariff };
   const session = await withLiveTeamBillingEffect(prisma, params.request, () => stripe.checkout.sessions.create(
@@ -426,16 +430,16 @@ export async function createStripeCheckoutSession(
       billing_address_collection: 'required',
       payment_method_collection: 'always',
       line_items: [
-        ...(prepared.tariff.monthlyChargeBasis !== BillingMonthlyChargeBasis.PER_SEAT &&
-          tariffPrice.stripeMonthlyPriceId
-          ? [{ price: tariffPrice.stripeMonthlyPriceId, quantity: 1 }]
+        ...(tariffPrice.stripeMonthlyPriceId
+          ? [{ price: tariffPrice.stripeMonthlyPriceId, quantity: monthlyQuantity }]
           : []),
         { price: prepared.usagePriceId },
       ],
       metadata: { uoa_checkout_id: checkout.id },
       subscription_data: {
-        billing_cycle_anchor: nextUtcMonthStart(now),
-        proration_behavior: 'none',
+        ...(prepared.tariff.anniversarySeats
+          ? { billing_mode: { type: 'classic' as const } }
+          : { billing_cycle_anchor: nextUtcMonthStart(now), proration_behavior: 'none' as const }),
         metadata: {
           uoa_checkout_id: checkout.id,
           uoa_service_id: params.credential.service.id,

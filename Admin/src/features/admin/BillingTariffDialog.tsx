@@ -93,7 +93,7 @@ export function BillingTariffDialog({
               <option value="standard">Standard</option>
               <option value="custom">Custom</option>
               <option value="at_cost">At cost</option>
-              <option value="free">Free</option>
+              <option value="free">Free AI usage</option>
             </SelectField>
           </FieldShell>
           <FieldShell

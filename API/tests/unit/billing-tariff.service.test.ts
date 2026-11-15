@@ -63,7 +63,15 @@ describe('billing tariff validation', () => {
       .toThrowError('INVALID_USAGE_PAYMENT_MODE');
   });
 
-  it('requires free tariffs to have no usage markup or subscription', () => {
+  it('accepts a paid seat with free AI usage', () => {
+    for (const collectionMode of ['manual', 'stripe'] as const) {
+      expect(normalizeTariffInput({ key: 'staff', name: 'Staff', mode: 'free', collectionMode,
+        monthlyChargeBasis: 'per_seat', monthlyAmountMinor: '299', currency: 'EUR' }))
+        .toMatchObject({ mode: 'FREE', monthlyAmountMinor: 299n, markupBps: 0, seatPolicy: 'AUTOMATIC' });
+    }
+  });
+
+  it('requires free usage to have zero markup and reserves collection for paid seats', () => {
     expect(() =>
       normalizeTariffInput({
         key: 'free',

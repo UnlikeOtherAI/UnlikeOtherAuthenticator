@@ -264,7 +264,7 @@ describe('Stripe invoice grace-period reconciliation', () => {
         },
       ),
     ).rejects.toThrow('STRIPE_INVOICE_GRACE_PERIOD_INSUFFICIENT');
-    expect(state.prisma.billingStripeSubscription.findUnique).not.toHaveBeenCalled();
+    expect(state.prisma.billingStripeSubscription.findUnique).toHaveBeenCalledOnce();
     expect(state.exportUsage).not.toHaveBeenCalled();
   });
 

@@ -74,22 +74,6 @@ export async function reconcileStripeCycleInvoiceUsage(
     logFinalizationFailure(invoice, deps.log ?? getAppLogger());
   }
   if (invoice.billing_reason !== 'subscription_cycle') return null;
-  const graceInsufficient =
-    params.eventType === 'invoice.created' &&
-    (typeof invoice.created !== 'number' ||
-      typeof invoice.automatically_finalizes_at !== 'number' ||
-      invoice.automatically_finalizes_at - invoice.created < MINIMUM_CYCLE_INVOICE_GRACE_SECONDS);
-  if (graceInsufficient && !manageClose) {
-    throw new AppError('INTERNAL', 409, 'STRIPE_INVOICE_GRACE_PERIOD_INSUFFICIENT');
-  }
-  if (
-    invoice.status !== 'draft' ||
-    invoice.collection_method !== 'charge_automatically' ||
-    invoice.auto_advance === false
-  ) {
-    if (!manageClose && params.eventType === 'invoice.finalization_failed') return null;
-    if (!manageClose) throw new AppError('INTERNAL', 409, 'STRIPE_INVOICE_NOT_DRAFT');
-  }
 
   const subscriptionId = invoiceSubscriptionId(invoice);
   if (!subscriptionId) {
@@ -113,7 +97,7 @@ export async function reconcileStripeCycleInvoiceUsage(
       status: true,
       cancelAtPeriodEnd: true,
       customer: { select: { stripeCustomerId: true } },
-      tariff: { select: { currency: true } },
+      tariff: { select: { currency: true, anniversarySeats: true } },
     },
   });
   if (!subscription || subscription.accountId !== params.account.id ||
@@ -122,6 +106,24 @@ export async function reconcileStripeCycleInvoiceUsage(
     externalId(invoice.customer) !== subscription.customer.stripeCustomerId ||
     invoice.currency.toUpperCase() !== subscription.tariff.currency) {
     throw new AppError('INTERNAL', 502, 'STRIPE_INVOICE_BINDING_INVALID');
+  }
+  // Stripe invoices the licensed seats at their anniversary. Wallet purchases settle AI separately.
+  if (subscription.tariff.anniversarySeats) return null;
+  const graceInsufficient =
+    params.eventType === 'invoice.created' &&
+    (typeof invoice.created !== 'number' ||
+      typeof invoice.automatically_finalizes_at !== 'number' ||
+      invoice.automatically_finalizes_at - invoice.created < MINIMUM_CYCLE_INVOICE_GRACE_SECONDS);
+  if (graceInsufficient && !manageClose) {
+    throw new AppError('INTERNAL', 409, 'STRIPE_INVOICE_GRACE_PERIOD_INSUFFICIENT');
+  }
+  if (
+    invoice.status !== 'draft' ||
+    invoice.collection_method !== 'charge_automatically' ||
+    invoice.auto_advance === false
+  ) {
+    if (!manageClose && params.eventType === 'invoice.finalization_failed') return null;
+    if (!manageClose) throw new AppError('INTERNAL', 409, 'STRIPE_INVOICE_NOT_DRAFT');
   }
   const period = await stripeSubscriptionInvoicePeriod({
     invoiceId: invoice.id,

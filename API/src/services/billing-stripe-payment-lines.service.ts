@@ -3,9 +3,10 @@ import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
 import { stripeInvoiceMinor } from './billing-stripe-payment-evidence.service.js';
+import { netSeatProration } from './billing-anniversary-seat-invoice.service.js';
 
 export type VerifiedStripeInvoiceLine = {
-  stripeLineId: string; serviceId: string; serviceIdentifier: string;
+  stripeLineId: string; offsetStripeLineId?: string; carriedFromStripeInvoiceId?: string; serviceId: string; serviceIdentifier: string;
   billingMonth: string; label: string; subscriptionMinor: bigint; usageMinor: bigint;
   taxMinor: bigint; creditMinor: bigint; grossMinor: bigint; dueMinor: bigint;
 };
@@ -16,12 +17,12 @@ function hold(): never {
 
 export async function verifyStripePaymentInvoiceLines(params: {
   invoice: Stripe.Invoice; accountId: string; subscriptionId: string;
-  orgId: string; stripeCustomerId: string;
+  orgId: string; stripeCustomerId: string; beforeVerifiedBalanceTransfer?: boolean;
 }, prisma: PrismaClient, stripe: Pick<Stripe, 'invoices'>): Promise<VerifiedStripeInvoiceLine[]> {
   const subscriptions = await prisma.billingStripeSubscription.findMany({
     where: { accountId: params.accountId, orgId: params.orgId,
       customer: { stripeCustomerId: params.stripeCustomerId } },
-    include: { service: true, tariff: { select: { currency: true } } },
+    include: { service: true, tariff: { select: { currency: true, anniversarySeats: true } } },
   });
   const payer = subscriptions.find((row) => row.id === params.subscriptionId);
   if (!payer) hold();
@@ -34,6 +35,7 @@ export async function verifyStripePaymentInvoiceLines(params: {
   });
   const result: VerifiedStripeInvoiceLine[] = [];
   const seen = new Set<string>();
+  const seatProrations: Stripe.InvoiceLineItem[] = [];
   let after: string | undefined;
   let complete = false;
   for (let page = 0; page < 10; page += 1) {
@@ -63,6 +65,11 @@ export async function verifyStripePaymentInvoiceLines(params: {
         (details && details.subscription_item !== subscription.stripeUsageItemId &&
           details.subscription_item !== subscription.stripeMonthlyItemId) ||
         (!details && !monthly && !correction)) hold();
+      if (payer.tariff.anniversarySeats && params.invoice.billing_reason === 'subscription_update' &&
+        details?.proration && details.subscription_item === payer.stripeMonthlyItemId && subscription.id === payer.id) {
+        seatProrations.push(line);
+        continue;
+      }
       if (monthly && (monthly.currency !== line.currency.toUpperCase() ||
         monthly.amountMinor !== stripeInvoiceMinor(line.amount) ||
         monthly.periodStartsAt.getTime() !== line.period.start * 1000 ||
@@ -93,9 +100,10 @@ export async function verifyStripePaymentInvoiceLines(params: {
     after = rows.data.at(-1)?.id;
     if (!after) break;
   }
+  if (seatProrations.length) result.push(netSeatProration(seatProrations, payer.service));
   result.sort((a, b) => Buffer.compare(Buffer.from(a.stripeLineId), Buffer.from(b.stripeLineId)));
   const gross = stripeInvoiceMinor(params.invoice.total);
-  const due = stripeInvoiceMinor(params.invoice.amount_due);
+  const due = params.beforeVerifiedBalanceTransfer ? gross : stripeInvoiceMinor(params.invoice.amount_due);
   if (!complete || result.length === 0 || due > gross ||
     result.reduce((sum, row) => sum + row.grossMinor, 0n) !== gross ||
     params.invoice.total_taxes === null ||
