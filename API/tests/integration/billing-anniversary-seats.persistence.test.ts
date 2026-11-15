@@ -5,13 +5,16 @@ import { assignNewNessieOrganisation } from '../../src/services/billing-nessie-o
 import { createBillingTariffVersion } from '../../src/services/billing-tariff.service.js';
 import { syncBaseStripeSubscription } from '../../src/services/billing-stripe-subscription-projection.service.js';
 import { getActiveUserOrgContext } from '../../src/services/org-context.service.js';
+import { createTestSandboxOrganisationPolicy } from '../helpers/organisation-financial-binding.js';
+import { configureSyntheticStripeMode } from '../helpers/stripe-mode-config.js';
+import { seatCashProvider } from '../helpers/seat-cash-provider.js';
 import { createTestDb } from '../helpers/test-db.js';
 
 type Db = NonNullable<Awaited<ReturnType<typeof createTestDb>>>;
 describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', () => {
   let db: Db;
   beforeAll(async () => { const created = await createTestDb(); if (!created) throw new Error('DATABASE_URL_REQUIRED'); db = created; });
-  afterAll(async () => { if (db) await db.cleanup(); });
+  afterAll(async () => { if (db) await db.cleanup(); vi.unstubAllEnvs(); });
 
   it('collects the founder at signup, blocks unpaid access and preserves every join, departure and rejoin', async () => {
     const p = db.prisma;
@@ -41,6 +44,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
       email: 'seat-member@example.test', lastSentAt: new Date() } });
     await expect(invite()).rejects.toThrow('complete the seat payment');
     await expect(orgMember(member.id)).rejects.toThrow('complete the seat payment');
+    const billingScopeEpoch = await createTestSandboxOrganisationPolicy(p, org.id);
+    configureSyntheticStripeMode('acct_seat', false);
     const acct = await p.billingStripeAccount.create({ data: { stripeAccountId: 'acct_seat', livemode: false } });
     const customer = await p.billingStripeCustomer.create({ data: { accountId: acct.id, orgId: org.id, scope: 'ORGANISATION',
       scopeKey: org.id, stripeCustomerId: 'cus_seat' } });
@@ -50,6 +55,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
       monthlyAmountMinor: 299n, stripeMonthlyPriceId: 'price_seat' } });
     const assignment = await p.billingTariffAssignment.findFirstOrThrow({ where: { orgId: org.id, tariffId: tariff.id } });
     const checkout = await p.billingStripeCheckoutSession.create({ data: { accountId: acct.id, appKeyId: appKey.id,
+      billingScopeEpoch, billingModeTeamId: team.id, billingModeRevision: 1,
       stripeCheckoutSessionId: 'cs_seat', tariffAssignmentId: assignment.id,
       customerId: customer.id, tariffId: tariff.id, serviceId: service.id, tariffSource: 'ORGANISATION', orgId: org.id,
       scope: 'ORGANISATION', scopeKey: org.id, actorJti: 'actor', requestedByUserId: founder.id, status: 'complete',
@@ -108,16 +114,18 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
       actorAudience: appKey.actorAudience, actorKeyId: 'rotated', actorPublicJwk: {}, checkoutReturnOrigins: appKey.checkoutReturnOrigins } });
     let pending = true;
     const invoices = new Map<string, { id: string; status: string; livemode: boolean; currency: string; customer: string;
+      total: number; amount_due: number; amount_paid: number; amount_remaining: number; ending_balance: number;
       billing_reason: string; parent: { subscription_details: { subscription: string } } }>();
     const update = vi.fn(async (_id, params) => {
       if (params.proration_behavior === 'none') { item.quantity = params.items[0].quantity; return remote; }
       const invoice = { id: 'in_' + (invoices.size + 1), status: pending ? 'open' : 'paid', livemode: false,
+        total: 299, amount_due: 299, amount_paid: 299, amount_remaining: 0, ending_balance: 0,
         currency: 'eur', customer: 'cus_seat', billing_reason: 'subscription_update', parent: { subscription_details: { subscription: remote.id } } };
       invoices.set(invoice.id, invoice);
       if (!pending) item.quantity = params.items[0].quantity;
       return { ...remote, latest_invoice: invoice, pending_update: pending ? {} : null };
     });
-    const stripe = { subscriptions: { retrieve: async () => remote, update }, invoices: { retrieve: async (id: string) => invoices.get(id) },
+    const stripe = { ...seatCashProvider(id => invoices.get(id)!), subscriptions: { retrieve: async () => remote, update }, invoices: { retrieve: async (id: string) => invoices.get(id) },
       accounts: { retrieveCurrent: async () => ({ id: acct.stripeAccountId }) } };
     const cycle = () => runAnniversarySeatCycle({ prisma: p, stripe: stripe as never, livemode: false, now: () => now });
     await Promise.all([cycle(), cycle()]);

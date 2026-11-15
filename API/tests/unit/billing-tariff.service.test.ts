@@ -145,6 +145,7 @@ describe('billing tariff validation', () => {
   it('retries a concurrent default update in a serializable transaction', async () => {
     const tariff = { id: 'tariff_2', serviceId: 'service_1', isDefault: false };
     const transactionClient = {
+      billingService: { findUniqueOrThrow: vi.fn().mockResolvedValue({ identifier: 'deepwater' }) },
       $queryRaw: vi.fn().mockResolvedValue([{ id: 'service_1' }]),
       billingTariffTermEvent: { create: vi.fn().mockResolvedValue({}) },
       billingTariff: {

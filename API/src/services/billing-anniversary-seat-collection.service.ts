@@ -1,8 +1,10 @@
 import type Stripe from 'stripe';
 
+import { hasCollectedSeatFunding } from './billing-anniversary-seat-funding.service.js';
+import type { StripeInvoiceCashClient } from './billing-stripe-payment-evidence.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 
-type Provider = Pick<Stripe, 'subscriptions' | 'invoices' | 'events'>;
+type Provider = StripeInvoiceCashClient & Pick<Stripe, 'subscriptions' | 'events' | 'customers'>;
 export type SeatPayment = {
   id: bigint;
   delta: number;
@@ -43,7 +45,8 @@ function boundItem(subscription: Stripe.Subscription, change: SeatPayment) {
   return item;
 }
 
-function paidInvoice(invoice: Stripe.Invoice, change: SeatPayment, subscription: Stripe.Subscription): Decision {
+async function paidInvoice(invoice: Stripe.Invoice, change: SeatPayment, subscription: Stripe.Subscription,
+  stripe: Provider): Promise<Decision> {
   if (invoice.livemode !== change.livemode || stripeExternalId(invoice.customer) !== change.customerId ||
     stripeExternalId(invoice.parent?.subscription_details?.subscription) !== change.subscriptionId ||
     invoice.billing_reason !== 'subscription_update' || invoice.currency !== change.currency.toLowerCase()) {
@@ -51,7 +54,9 @@ function paidInvoice(invoice: Stripe.Invoice, change: SeatPayment, subscription:
   }
   const quantity = boundItem(subscription, change)?.quantity;
   if (invoice.status === 'paid' && quantity === change.toQuantity && !subscription.pending_update) {
-    return { status: 'complete', invoice: invoice.id };
+    return await hasCollectedSeatFunding(invoice, change.subscriptionId, stripe)
+      ? { status: 'complete', invoice: invoice.id }
+      : { status: 'pending', invoice: invoice.id, reason: 'PAYMENT_COLLECTION_REQUIRED' };
   }
   if (invoice.status === 'void' && !subscription.pending_update && quantity === change.fromQuantity) {
     return { status: 'retry-void' };
@@ -65,7 +70,7 @@ export async function collectAnniversarySeat(change: SeatPayment, stripe: Provid
   const item = boundItem(subscription, change);
   if (!item) return { status: 'hold', reason: 'SUBSCRIPTION_BINDING' };
   if (change.stripeInvoiceId) {
-    return paidInvoice(await stripe.invoices.retrieve(change.stripeInvoiceId), change, subscription);
+    return paidInvoice(await stripe.invoices.retrieve(change.stripeInvoiceId), change, subscription, stripe);
   }
   const canReduce = change.delta < 0 && ['past_due', 'unpaid'].includes(subscription.status);
   if (subscription.status !== 'active' && !canReduce) return { status: 'hold', reason: 'SUBSCRIPTION_PAYMENT_REQUIRED' };
@@ -85,7 +90,7 @@ export async function collectAnniversarySeat(change: SeatPayment, stripe: Provid
       if (event.request?.idempotency_key !== key || applied.id !== subscription.id) continue;
       if (change.delta < 0) return { status: 'complete', invoice: null };
       const invoice = stripeExternalId(applied.latest_invoice);
-      if (invoice) return paidInvoice(await stripe.invoices.retrieve(invoice), change, subscription);
+      if (invoice) return paidInvoice(await stripe.invoices.retrieve(invoice), change, subscription, stripe);
     }
     return { status: 'hold', reason: 'PAYMENT_RECONCILIATION_REQUIRED' };
   }
@@ -114,5 +119,5 @@ export async function collectAnniversarySeat(change: SeatPayment, stripe: Provid
   if (!updated.latest_invoice || typeof updated.latest_invoice === 'string') {
     return { status: 'hold', reason: 'INVOICE_BINDING' };
   }
-  return paidInvoice(updated.latest_invoice, change, updated);
+  return paidInvoice(updated.latest_invoice, change, updated, stripe);
 }

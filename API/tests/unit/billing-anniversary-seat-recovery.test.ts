@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+import { seatCashProvider } from '../helpers/seat-cash-provider.js';
 import { collectAnniversarySeat, type SeatPayment } from '../../src/services/billing-anniversary-seat-collection.service.js';
 
 it('recovers a lost acknowledgement after renewal and key expiry using the exact Stripe event', async () => {
@@ -15,10 +16,12 @@ it('recovers a lost acknowledgement after renewal and key expiry using the exact
         recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' } } }] } };
   const update = vi.fn();
   const retrieveInvoice = vi.fn(async (id: string) => ({ id, livemode: false, currency: 'eur', customer: 'cus_test',
+    total: 299, amount_due: 299, amount_paid: 299, amount_remaining: 0, ending_balance: 0,
     status: 'paid', billing_reason: 'subscription_update', parent: { subscription_details: { subscription: 'sub_test' } } }));
   const list = vi.fn(() => [{ request: { idempotency_key: 'uoa:acct_test:test:checkout:seat:19:1' },
     data: { object: { ...subscription, latest_invoice: 'in_original' } } }]);
-  const provider = { subscriptions: { retrieve: async () => subscription, update }, events: { list }, invoices: { retrieve: retrieveInvoice } };
+  const provider = { ...seatCashProvider(id => ({ id, customer: 'cus_test', currency: 'eur', livemode: false, amount_paid: 299 })),
+    subscriptions: { retrieve: async () => subscription, update }, events: { list }, invoices: { retrieve: retrieveInvoice } };
   expect(await collectAnniversarySeat(change, provider as never, nextPeriod)).toEqual({ status: 'complete', invoice: 'in_original' });
   expect(retrieveInvoice).toHaveBeenCalledWith('in_original');
   list.mockReturnValue([]);
@@ -91,4 +94,3 @@ it.each(['past_due', 'unpaid', 'canceled', 'incomplete', 'incomplete_expired', '
     expect(provider.subscriptions.update).not.toHaveBeenCalled();
   },
 );
-

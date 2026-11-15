@@ -135,7 +135,7 @@ export function beforeFinalAdmission(action: () => Promise<unknown>) {
   return { prisma: guarded, count: () => transactions };
 }
 
-export async function seed(): Promise<void> {
+export async function seed(product = 'deepwater'): Promise<void> {
   configureSyntheticStripeMode('acct_PrepaidRating',false);
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
@@ -159,7 +159,7 @@ export async function seed(): Promise<void> {
       VALUES ('team-member-prepaid', ${ids.team}, ${ids.user}, 'admin', CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "billing_services"
       ("id", "identifier", "name", "tariff_history_from_month", "updated_at")
-      VALUES (${ids.service}, 'deepwater', 'DeepWater', '2026-10', CURRENT_TIMESTAMP)`);
+      VALUES (${ids.service}, ${product}, ${product}, '2026-10', CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "billing_tariffs"
       ("id", "service_id", "key", "version", "name", "mode", "collection_mode",
        "markup_bps", "currency", "usage_payment_mode")
@@ -205,7 +205,7 @@ export async function reserveFixture(index: number, cost = '0.00000000013',
     events: { create: { kind: 'RESERVED', amountMicrocredits: reservedMicrocredits } },
   } });
 }
-export function setupPersistenceSuite() {
+export function setupPersistenceSuite(product = 'deepwater') {
 beforeAll(async () => {
     const pair = await generateKeyPair('RS256', { extractable: true });
     signingKey = pair.privateKey;
@@ -215,7 +215,7 @@ beforeAll(async () => {
       actorKeyId: 'prepaid-test-key', actorPublicJwk: {
         ...await exportJWK(pair.publicKey), kid: 'prepaid-test-key', alg: 'RS256', use: 'sig',
       }, checkoutReturnOrigins: [], service: {
-        id: ids.service, identifier: 'deepwater', name: 'DeepWater',
+        id: ids.service, identifier: product, name: product,
       },
     };
     const jwk = await exportJWK(pair.privateKey);
@@ -227,7 +227,7 @@ beforeAll(async () => {
     if (!db) throw new Error('DATABASE_URL required');
     prisma = db.prisma;
     cleanup = db.cleanup;
-    await seed();
+    await seed(product);
   });
 afterAll(async () => {
     for (const [key, value] of Object.entries(originalEnv)) {

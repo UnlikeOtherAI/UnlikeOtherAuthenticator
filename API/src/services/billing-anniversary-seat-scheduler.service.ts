@@ -2,10 +2,11 @@ import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 
 import { getAdminPrisma } from '../db/prisma.js';
+import type { StripeInvoiceCashClient } from './billing-stripe-payment-evidence.service.js';
 import { collectAnniversarySeat } from './billing-anniversary-seat-collection.service.js';
 import { requireStripeBillingEnabled, resolveStripeAccountContext } from './billing-stripe-client.service.js';
 
-type Provider = Pick<Stripe, 'accounts' | 'subscriptions' | 'invoices' | 'events'>;
+type Provider = StripeInvoiceCashClient & Pick<Stripe, 'accounts' | 'subscriptions' | 'events' | 'customers'>;
 
 export async function runAnniversarySeatCycle(deps?: {
   prisma?: PrismaClient; stripe?: Provider; livemode?: boolean; now?: () => Date;
