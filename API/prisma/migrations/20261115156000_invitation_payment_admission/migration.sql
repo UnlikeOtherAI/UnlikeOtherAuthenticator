@@ -182,6 +182,9 @@ DECLARE invitation team_invites; root team_invites;
 BEGIN
   SELECT * INTO invitation FROM team_invites WHERE id=p_invite;
   IF NOT FOUND THEN RETURN false; END IF;
+  IF invitation.accepted_at IS NOT NULL OR invitation.declined_at IS NOT NULL OR invitation.revoked_at IS NOT NULL
+    OR invitation.approval_status NOT IN ('APPROVED','NOT_REQUIRED')
+    OR invitation.expires_at<=now() THEN RETURN false; END IF;
   IF (session_user='uoa_app' OR current_setting('role',true)='uoa_app')
     AND nullif(current_setting('app.org_id',true),'') IS DISTINCT FROM invitation.org_id THEN RETURN false; END IF;
   IF NOT invitation.billing_seat_required THEN RETURN true; END IF;

@@ -7,7 +7,9 @@ import { assertNessieCardOnFile } from './billing-nessie-card-admission.service.
 
 /** The tenant read runs after the invitation transaction commits, before provider IO. */
 export async function invitationFundingRequest(prisma: PrismaClient, inviteId: string) {
-  const invitation = await prisma.teamInvite.findUnique({ where: { id: inviteId }, select: {
+  const invitation = await prisma.teamInvite.findUnique({ where: { id: inviteId,
+    acceptedAt: null, declinedAt: null, revokedAt: null, approvalStatus: { in: ['APPROVED', 'NOT_REQUIRED'] },
+  }, select: {
     orgId: true, teamId: true, billingSeatRequired: true, billingSeatSourceInviteId: true,
   } });
   if (!invitation) throw new AppError('NOT_FOUND', 404);

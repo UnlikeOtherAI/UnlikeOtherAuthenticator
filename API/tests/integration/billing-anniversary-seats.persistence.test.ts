@@ -48,7 +48,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
       SELECT billing_invitation_seat_ready(${id}) AS ready`)[0]?.ready;
     expect(await ready(held.id)).toBe(false);
     expect((await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: org.id } })).endedAt).not.toBeNull();
-    await p.teamInvite.update({ where: { id: held.id }, data: { revokedAt: new Date(), revokedReason: 'CANCELLED' } });
+    await p.teamInvite.update({ where: { id: held.id }, data: { revokedAt: new Date(), revokedReason: 'REVOKED' } });
     await expect(orgMember(member.id)).rejects.toThrow('complete the seat payment');
     const billingScopeEpoch = await createTestSandboxOrganisationPolicy(p, org.id);
     configureSyntheticStripeMode('acct_seat', false);
@@ -134,7 +134,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     await cycle();
     expect(update).toHaveBeenCalledTimes(1);
     expect(await ready(invitation.id)).toBe(true);
-    await accept(invitation.id, member.id);
+    await p.teamInvite.update({ where: { id: invitation.id }, data: { revokedAt: new Date(), revokedReason: 'REPLACED' } });
+    const resent = await invite();
+    expect(resent.billingSeatSourceInviteId).toBe(invitation.id);
+    expect(await ready(resent.id)).toBe(true);
+    await accept(resent.id, member.id);
     expect(await p.billingAutomaticSeatChange.count()).toBe(1);
     expect((await context())?.teams).toContain(team.id);
     const identity = { orgId_userId: { orgId: org.id, userId: member.id } };
@@ -184,5 +188,53 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
       data: { completedAt: null } })).rejects.toThrow('immutable');
     await expect(p.billingAutomaticSeatChange.update({ where: { id: evidence[0].id },
       data: { userId: founder.id } })).rejects.toThrow('immutable');
+    const cancelled = await p.teamInvite.create({ data: { orgId: org.id, teamId: team.id,
+      email: 'cancel-before-provider@example.test', lastSentAt: now } });
+    await p.teamInvite.update({ where: { id: cancelled.id }, data: { revokedAt: new Date(), revokedReason: 'REVOKED' } });
+    const cancelledChanges = await p.billingAutomaticSeatChange.findMany({ where: { inviteId: cancelled.id }, orderBy: { id: 'asc' } });
+    expect(cancelledChanges.map(row => [row.delta, row.cancelledWithoutCharge, row.stripeInvoiceId])).toEqual([
+      [1, true, null], [-1, true, null],
+    ]);
+    expect(cancelledChanges.every(row => row.completedAt)).toBe(true);
+    expect(await ready(cancelled.id)).toBe(false);
+    await cycle();
+    expect(item.quantity).toBe(4);
+
+    // A free-to-paid transition charges the frozen existing cohort plus the new invitation.
+    const cohortOrg = await p.organisation.create({ data: { name: 'Existing cohort', slug: 'existing-cohort',
+      domain: 'cohort.example', ownerId: founder.id } });
+    const cohortTeam = await p.team.create({ data: { orgId: cohortOrg.id, name: 'Cohort', slug: 'cohort' } });
+    await p.orgMember.createMany({ data: [{ orgId: cohortOrg.id, userId: founder.id, role: 'owner' },
+      { orgId: cohortOrg.id, userId: member.id, role: 'member' }] });
+    await p.billingAppKey.create({ data: { serviceId: service.id, purpose: appKey.purpose, name: 'Cohort key',
+      keyPrefix: 'uoa_test_cohort', secretDigest: 'cohort-scope-test-digest', actorIssuer: 'https://cohort.example',
+      actorAudience: appKey.actorAudience, actorKeyId: 'cohort', actorPublicJwk: {}, checkoutReturnOrigins: appKey.checkoutReturnOrigins } });
+    await p.$transaction(tx => assignNewNessieOrganisation(tx, { ...enrollment, orgId: cohortOrg.id,
+      issuer: 'https://cohort.example' }));
+    await p.$queryRaw`SELECT billing_nessie_start_transition(${cohortOrg.id})`;
+    const cohort = await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: cohortOrg.id } });
+    expect(cohort.cohortUserIds).toEqual([founder.id, member.id].sort());
+    expect(cohort.endsAt.getTime() - cohort.startsAt.getTime()).toBe(14 * 86400_000);
+    await p.$queryRaw`SELECT billing_nessie_start_transition(${cohortOrg.id})`;
+    expect(await p.billingNessieSeatTransition.findUnique({ where: { orgId: cohortOrg.id } })).toEqual(cohort);
+    const extra = await p.teamInvite.create({ data: { orgId: cohortOrg.id, teamId: cohortTeam.id,
+      email: 'cohort-addition@example.test', lastSentAt: now } });
+    expect((await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: cohortOrg.id } })).endedAt).not.toBeNull();
+    expect(await ready(extra.id)).toBe(false);
+    const cohortEpoch = await createTestSandboxOrganisationPolicy(p, cohortOrg.id);
+    const cohortCustomer = await p.billingStripeCustomer.create({ data: { accountId: acct.id, orgId: cohortOrg.id,
+      scope: 'ORGANISATION', scopeKey: cohortOrg.id, stripeCustomerId: 'cus_cohort' } });
+    const cohortAssignment = await p.billingTariffAssignment.findFirstOrThrow({ where: { orgId: cohortOrg.id, tariffId: tariff.id } });
+    const cohortCheckout = await p.billingStripeCheckoutSession.create({ data: { accountId: acct.id, appKeyId: appKey.id,
+      billingScopeEpoch: cohortEpoch, billingModeTeamId: cohortTeam.id, billingModeRevision: 1,
+      tariffAssignmentId: cohortAssignment.id, customerId: cohortCustomer.id, tariffId: tariff.id, serviceId: service.id,
+      tariffSource: 'ORGANISATION', orgId: cohortOrg.id, scope: 'ORGANISATION', scopeKey: cohortOrg.id,
+      actorJti: 'cohort-actor', requestedByUserId: founder.id, status: 'creating',
+      successUrlDigest: 'a'.repeat(64), cancelUrlDigest: 'b'.repeat(64), leaseExpiresAt: new Date() } });
+    expect(cohortCheckout.initialSeatMembers).toEqual([founder.id, member.id].sort());
+    expect(cohortCheckout.initialSeatInvites).toEqual([extra.id]);
+    await expect(p.teamInvite.create({ data: { orgId: cohortOrg.id, teamId: cohortTeam.id,
+      email: 'changed-quantity@example.test', lastSentAt: now } })).rejects.toThrow('open seat checkout');
+
   });
 });
