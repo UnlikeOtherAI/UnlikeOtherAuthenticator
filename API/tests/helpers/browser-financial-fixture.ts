@@ -6,7 +6,7 @@ import { smsIds } from './sms-financial-fixture.js';
 import { configureSyntheticStripeMode } from './stripe-mode-config.js';
 
 /** Isolated synthetic live-mode wallet. The injected Stripe transport never contacts a provider. */
-export async function browserFinancialFixture(prisma: PrismaClient) {
+export async function browserFinancialFixture(prisma: PrismaClient, openingMicrocredits = 100000000000n) {
   vi.stubEnv('STRIPE_BILLING_ENABLED', 'true');
   vi.stubEnv('LEDGER_BILLING_BASE_URL', 'https://ledger.example.test');
   vi.stubEnv('UOA_SMS_COMMERCIAL_POLICY_VERSION', 'synthetic-policy');
@@ -40,7 +40,7 @@ export async function browserFinancialFixture(prisma: PrismaClient) {
       Prisma.sql`UPDATE billing_stripe_accounts SET livemode=true WHERE id=${smsIds.account}`,
     );
     await tx.$executeRaw(
-      Prisma.sql`UPDATE billing_credit_accounts SET balance_microcredits=100000000000 WHERE id=${smsIds.credit}`,
+      Prisma.sql`UPDATE billing_credit_accounts SET balance_microcredits=${openingMicrocredits} WHERE id=${smsIds.credit}`,
     );
   });
   const credential = { ...base.lifecycle, id: 'browser-runtime', purpose: 'BROWSER_RUNTIME' as const };

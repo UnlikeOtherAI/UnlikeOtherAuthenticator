@@ -52,3 +52,19 @@ against isolated migrated PostgreSQL; unit tests cannot prove wallet races.
 The protocol is vendored into Nessie from the committed UOA source revision.
 Browser migrations bound lock waits to five seconds and statements to two
 minutes, including changes to the existing paid-usage exception table.
+
+The cross-repository `billing-browser-nessie.contract.test.ts` journey loads
+Nessie's built production adapter and exercises actual authenticated UOA routes
+against fresh migrated schemas. Run it from Nessie's `test:browser-contract`
+Turbo task with the prepared UOA checkout and separate dedicated test databases,
+as documented in Nessie's central browser billing focused gate. It checks holds,
+original payer/team, integer-credit settlement, unused-hold release, concurrent
+admission and retry after a lost settlement response. Provider HTTP, opening
+credit and Stripe account identity are synthetic; this does not prove payment
+collection or actual Browserbase receipt compatibility.
+
+Authenticated browser-route production responses preserve the safe refusal codes for insufficient credit,
+budget limits, reconciliation, missing tariff/live funding and wrong-purpose or
+revoked app credentials. Nessie uses them to distinguish customer funding from
+operator setup and temporary failures. They expose no amounts, identity directory
+or credential material; other routes and unauthenticated diagnostics remain generic.
