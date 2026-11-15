@@ -1,6 +1,7 @@
 import { registerNessieBillingAccessRoute } from './nessie-access.js';
 import { registerModelPriceRoutes } from './model-prices.js';
 import { registerOrganisationBillingRoutes } from './organisation.js';
+import { registerBrowserBillingRoutes } from './browser.js';
 import { registerVoiceRoutes } from './voice.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -36,6 +37,7 @@ export function registerBillingRoutes(app: FastifyInstance): void {
   registerNessieBillingAccessRoute(app);
   registerModelPriceRoutes(app);
   registerVoiceRoutes(app);
+  registerBrowserBillingRoutes(app);
   registerSmsQuoteRoutes(app);
   registerSmsNumberRoutes(app);
   registerSmsGrantRoutes(app);

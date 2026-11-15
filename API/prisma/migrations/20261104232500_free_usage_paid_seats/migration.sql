@@ -1,3 +1,7 @@
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
+
 ALTER TABLE billing_tariffs DROP CONSTRAINT billing_tariffs_mode_values_check;
 ALTER TABLE billing_tariffs ADD CONSTRAINT billing_tariffs_mode_values_check CHECK (
   (mode = 'FREE' AND markup_bps = 0 AND (
@@ -23,3 +27,5 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+COMMIT;

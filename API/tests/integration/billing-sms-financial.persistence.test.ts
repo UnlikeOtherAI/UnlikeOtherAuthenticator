@@ -6,6 +6,8 @@ import { seedSmsFinance, smsCredential, smsIds, smsReceiptProvider, smsStanding 
   '../helpers/sms-financial-fixture.js';
 import { settleSmsInbound } from '../../src/services/billing-sms-inbound.service.js';
 import { readSmsStanding } from '../../src/services/billing-sms-standing.service.js';
+import { holdFinancialTransaction, startFinancialTransaction, waitForFinancialLock }
+  from '../helpers/billing-financial-authority-race.js';
 
 let prisma: PrismaClient;
 let cleanup: () => Promise<void>;
@@ -92,24 +94,31 @@ describe.skipIf(!process.env.DATABASE_URL)('SMS financial PostgreSQL invariants'
   });
 
   it('serializes overlapping reservations against one shared balance with a real transaction barrier', async () => {
-    let unblock!: () => void;
-    let acquired!: () => void;
-    const firstLocked = new Promise<void>((resolve) => { acquired = resolve; });
-    const barrier = new Promise<void>((resolve) => { unblock = resolve; });
-    const first = prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_credit_accounts WHERE id=${smsIds.credit} FOR UPDATE`);
-      acquired(); await barrier;
-      return tx.billingSmsStandingHold.create({ data: { creditAccountId: smsIds.credit, serviceId: smsIds.service,
+    const insert = (tx: Prisma.TransactionClient, allocationId: string) =>
+      tx.billingSmsStandingHold.create({ data: { creditAccountId: smsIds.credit, serviceId: smsIds.service,
         appKeyId: smsIds.lifecycle, orgId: smsIds.org, teamId: smsIds.team, numberId: smsIds.number,
-        allocationId: 'race-one', quoteId: smsIds.quote, requestedByUserId: smsIds.user,
-        idempotencyKey: 'race-one', reservedMicrocredits: 40_000_000n } });
-    });
-    await firstLocked;
-    const second = smsStanding(prisma, 'race-two', 40_000_000n);
-    unblock();
-    const results = await Promise.allSettled([first, second]);
-    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected']);
-    expect(await prisma.billingSmsStandingHold.count({ where: { allocationId: { in: ['race-one', 'race-two'] } } })).toBe(1);
+        allocationId, quoteId: smsIds.quote, requestedByUserId: smsIds.user,
+        idempotencyKey: allocationId, reservedMicrocredits: 40_000_000n } });
+    // Pause after the actual admission: pre-locking the wallet reversed the
+    // organisation-mode -> wallet trigger order and could deadlock the fixture.
+    const first = holdFinancialTransaction(prisma, tx => insert(tx, 'race-one'));
+    let second: ReturnType<typeof startFinancialTransaction> | undefined;
+    try {
+      const firstPid = await first.ready;
+      second = startFinancialTransaction(prisma, tx => insert(tx, 'race-two'));
+      await waitForFinancialLock(prisma, await second.started, firstPid);
+      first.release();
+      expect(await first.result).toMatchObject({ ok: true });
+      const outcome = await second.result;
+      expect(outcome.ok).toBe(false);
+      if (!outcome.ok) expect(String(outcome.error)).toContain('insufficient available prepaid credits');
+      expect(await prisma.billingSmsStandingHold.findMany({
+        where: { allocationId: { in: ['race-one', 'race-two'] } }, select: { allocationId: true },
+      })).toEqual([{ allocationId: 'race-one' }]);
+    } finally {
+      first.release();
+      await Promise.allSettled([first.result, second?.result]);
+    }
   });
 
   it('rejects changing frozen refund proof or completing refund recovery without verified evidence', async () => {

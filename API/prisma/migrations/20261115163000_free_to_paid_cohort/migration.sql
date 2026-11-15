@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 -- One organisation allowance. Resolve its start from the effective paid scope,
 -- including a team moving off a free agreement; never from a later login.
 CREATE OR REPLACE FUNCTION billing_nessie_start_transition(p_org text) RETURNS void

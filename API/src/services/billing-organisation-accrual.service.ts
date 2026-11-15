@@ -26,7 +26,7 @@ export async function readOrganisationAccruedBill(context:OrganisationBillingCon
     (deps.manual??readOrganisationAccruedManual)({organisationId:context.request.organisationId,accountId:account.id,period,observedAt:now},prisma),
     (deps.addons??readOrganisationAccruedAddons)({organisationId:context.request.organisationId,account,period,observedAt:now},prisma),
     prisma.billingCreditEntry.count({where:{creditAccount:{orgId:context.request.organisationId,accountId:account.id},
-      kind:{in:['SMS_PREPAID_USAGE','VOICE_PREPAID_USAGE']},occurredAt:{gte:period.start,lt:period.asOf}}}),
+      kind:{in:['SMS_PREPAID_USAGE','VOICE_PREPAID_USAGE','BROWSER_PREPAID_USAGE']},occurredAt:{gte:period.start,lt:period.asOf}}}),
   ]);
   if(phone)throw new AppError('INTERNAL',409,'BILLING_ACCRUAL_TELEPHONY_RECONCILIATION_REQUIRED');
   const subscriptions=await (deps.subscriptions??readOrganisationAccruedSubscriptions)({

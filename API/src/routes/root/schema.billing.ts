@@ -5,6 +5,7 @@ import { billingLedgerRuntimeKeyEndpoints } from './schema.billing-ledger-runtim
 import { billingContractInvoiceEndpoints } from './schema.billing-contract-invoices.js';
 import { billingFundingEndpoints } from './schema.billing-funding.js';
 import { billingSmsEndpoints } from './schema.billing-sms.js';
+import { billingBrowserEndpoints } from './schema.billing-browser.js';
 
 const adminAuth =
   'Authorization: Bearer <access_token>; token must be an ADMIN_AUTH_DOMAIN platform superuser and remain backed by a SUPERUSER domain_roles row';
@@ -22,6 +23,7 @@ const tariffBody = {
 };
 
 export const billingEndpoints: EndpointSchema[] = [
+  ...billingBrowserEndpoints,
   { method: 'POST', path: '/billing/v1/model-prices',
     description: 'Advisory model prices in customer credits per million tokens, rated by the current exact-subject tariff. No spending authority.',
     auth: 'Product customer_lifecycle app key and exact endpoint-audience X-UOA-Actor with current subject membership',

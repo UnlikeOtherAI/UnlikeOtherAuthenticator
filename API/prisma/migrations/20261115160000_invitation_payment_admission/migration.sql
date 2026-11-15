@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 -- The same scope is used for invitation issuance, direct membership writes and acceptance.
 CREATE FUNCTION billing_nessie_paid_seat_scope(p_org text,p_team text)
 RETURNS TABLE(tariff_id text,team_id text) LANGUAGE plpgsql STABLE SECURITY DEFINER AS $$

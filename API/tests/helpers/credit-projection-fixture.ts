@@ -69,7 +69,7 @@ export function projectionData(balanceMicrocredits = 2_000_000_000n): BillingCre
     reloadCurrency: 'USD',
     regionPolicy: null,
     catalogs: [],
-    prepaidReservations: [],
+    prepaidReservations: [], browserReservations: [],
     activeReservedMicrocredits: 0n,
     settlements: [
       {
