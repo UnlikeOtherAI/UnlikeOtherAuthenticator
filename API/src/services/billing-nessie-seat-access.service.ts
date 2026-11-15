@@ -55,6 +55,7 @@ export async function readNessieSeatAccess(tx: Prisma.TransactionClient, scope: 
     serviceId: scope.serviceId, orgId: scope.organisationId, teamId,
   } })) return hold('payment_required');
   const transition = await nessieSeatTransition(tx, scope.organisationId);
+  if (!transition) return hold('setup_required');
   if (!transition.endedAt && transition.endsAt > now &&
     (scope.userId === undefined || transition.cohortUserIds.includes(scope.userId))) {
     return { allowed: true, status: 'transition', deadline: transition.endsAt.toISOString(), reason: 'setup_required' };

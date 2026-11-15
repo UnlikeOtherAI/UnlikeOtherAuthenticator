@@ -13,7 +13,7 @@ describe.skipIf(!process.env.DATABASE_URL)('free-to-paid seat cohort', () => {
     serviceId = service.id;
     const common = { serviceId, setAsDefault: false, actor: { email: 'operator@example.test' } };
     freeId = (await createBillingTariffVersion({ ...common, tariff: { key: 'explicit-free', name: 'Free seats',
-      mode: 'free', collectionMode: 'none', currency: 'USD', usagePaymentMode: 'prepaid',
+      mode: 'free', collectionMode: 'none', currency: 'USD', usagePaymentMode: 'pay_as_you_go',
       monthlyAmountMinor: '0', monthlyChargeBasis: 'flat' } }, { prisma: db.prisma })).id;
     paidId = (await createBillingTariffVersion({ ...common, tariff: { key: 'standard-usd', name: 'Regular seats',
       mode: 'standard', collectionMode: 'stripe', currency: 'USD', usagePaymentMode: 'prepaid',

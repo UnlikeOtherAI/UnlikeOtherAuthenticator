@@ -7,6 +7,8 @@ DECLARE start_at timestamptz;
 BEGIN
   PERFORM billing_seat_touch_org(p_org);
   IF EXISTS(SELECT 1 FROM billing_nessie_seat_transitions WHERE org_id=p_org) THEN RETURN; END IF;
+  IF NOT EXISTS(SELECT 1 FROM billing_services svc JOIN billing_tariffs t ON t.service_id=svc.id
+    WHERE svc.identifier='nessie' AND svc.active AND t.anniversary_seats) THEN RETURN; END IF;
   WITH scopes AS (
     SELECT selected.* FROM billing_nessie_paid_seat_scope(p_org,NULL) selected
     UNION

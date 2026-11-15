@@ -50,6 +50,9 @@ describe.skipIf(!enabled)('Nessie payment gate at the real reservation interface
   });
 
   it('requires funded capacity under regular terms and never creates a PAYG decision on exhaustion', async () => {
+    await prisma.billingAppKey.create({ data: { serviceId: ids.service, purpose: 'CUSTOMER_LIFECYCLE', name: 'Nessie fixture',
+      keyPrefix: 'uoa_test_nessie', secretDigest: 'nessie-fixture-digest', actorIssuer: 'https://prepaid.example.com',
+      actorAudience: 'https://identity.example', actorKeyId: 'test', actorPublicJwk: {}, checkoutReturnOrigins: ['https://prepaid.example.com'] } });
     const tariff = await createBillingTariffVersion({ serviceId: ids.service, tariff: standard, setAsDefault: true, actor }, { prisma });
     // The fixture binds October dispatches; production default mutations remain prospective.
     await prisma.billingTariffTermEvent.create({ data: { serviceId: ids.service, source: 'SERVICE_DEFAULT',

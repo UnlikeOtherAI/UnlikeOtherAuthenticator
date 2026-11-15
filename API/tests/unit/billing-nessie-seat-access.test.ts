@@ -40,6 +40,11 @@ describe('Nessie seat access', () => {
     mocks.transition.mockResolvedValue({ endedAt: now, endsAt: new Date('2026-11-29T12:00:00Z'), cohortUserIds: ['original'] });
     expect(await readNessieSeatAccess(db() as never, scope, now)).toMatchObject({ allowed: false });
   });
+  it('holds missing product enrollment instead of inventing a free-seat cohort', async () => {
+    mocks.transition.mockResolvedValue(null);
+    expect(await readNessieSeatAccess(db() as never, scope, now))
+      .toMatchObject({ allowed: false, reason: 'setup_required' });
+  });
   it('does not grant another allowance after cancellation or a billing-mode change', async () => {
     expect(await readNessieSeatAccess(db([{ ...paid, status: 'canceled' }]) as never, scope, now)).toMatchObject({ allowed: false });
     expect(await readNessieSeatAccess(db([], 1) as never, scope, now)).toMatchObject({ allowed: false });
