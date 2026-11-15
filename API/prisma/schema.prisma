@@ -1969,6 +1969,7 @@ model BillingTariff {
   seatChargeTiming BillingSeatChargeTiming? @map("seat_charge_timing")
   anniversarySeats Boolean @default(false) @map("anniversary_seats")
   usagePaymentMode BillingUsagePaymentMode @default(PAY_AS_YOU_GO) @map("usage_payment_mode")
+  usageCurrency String @default(dbgenerated("''")) @map("usage_currency") @db.Char(3)
   currency           String                @db.Char(3)
   isDefault          Boolean               @default(false) @map("is_default")
   createdByUserId    String?               @map("created_by_user_id")

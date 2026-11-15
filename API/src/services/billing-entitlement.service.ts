@@ -62,6 +62,7 @@ export type EffectiveTariffPayload<TeamId extends string | null = string> = {
     };
     usage_billing_enabled: boolean;
     usage_payment_mode: 'prepaid' | 'pay_as_you_go';
+    usage_currency: string;
     payment_collection_enabled: boolean;
     raw_usage_preserved: true;
   };
@@ -92,6 +93,7 @@ type TariffRow = {
   seatPolicy: BillingSeatPolicy | null;
   seatChargeTiming: BillingSeatChargeTiming | null;
   usagePaymentMode: BillingUsagePaymentMode;
+  usageCurrency: string;
   currency: string;
 };
 
@@ -159,6 +161,7 @@ function payloadFor<TeamId extends string | null>(params: {
     },
     tariff: {
       id: params.tariff.id,
+      usage_currency: params.tariff.usageCurrency,
       mode: billingModeToPublic(params.tariff.mode),
       collection_mode: billingCollectionModeToPublic(params.tariff.collectionMode),
       monthly_subscription: {

@@ -56,6 +56,7 @@ const TariffSchema = z
     markup_percent: z.string().optional(),
     monthly_subscription: MonthlySchema,
     usage_payment_mode: z.enum(['pay_as_you_go', 'prepaid']).optional(),
+    usage_currency: z.string().trim().regex(/^[A-Z]{3}$/).optional(),
   })
   .strict();
 const CreateServiceSchema = z
@@ -131,6 +132,7 @@ function tariffInput(body: z.infer<typeof TariffSchema>) {
     seatPolicy: body.monthly_subscription.seat_policy,
     seatChargeTiming: body.monthly_subscription.seat_charge_timing,
     usagePaymentMode: body.usage_payment_mode,
+    usageCurrency: body.usage_currency,
     currency: body.monthly_subscription.currency,
   };
 }

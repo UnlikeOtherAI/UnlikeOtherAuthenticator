@@ -35,10 +35,11 @@ export type TariffInput = {
   seatChargeTiming?: PublicSeatChargeTiming;
   usagePaymentMode?: PublicUsagePaymentMode;
   currency: string;
+  usageCurrency?: string;
 };
 
 type NormalizedTariffInput = Omit<TariffInput,
-  'mode' | 'collectionMode' | 'monthlyAmountMinor' | 'monthlyChargeBasis' | 'seatPolicy' | 'seatChargeTiming' | 'usagePaymentMode' | 'markupBps'> & {
+  'mode' | 'collectionMode' | 'monthlyAmountMinor' | 'monthlyChargeBasis' | 'seatPolicy' | 'seatChargeTiming' | 'usagePaymentMode' | 'markupBps' | 'usageCurrency'> & {
   mode: BillingTariffMode;
   collectionMode: BillingCollectionMode;
   markupBps: number;
@@ -47,6 +48,7 @@ type NormalizedTariffInput = Omit<TariffInput,
   seatPolicy: BillingSeatPolicy | null;
   seatChargeTiming: BillingSeatChargeTiming | null;
   usagePaymentMode: BillingUsagePaymentMode;
+  usageCurrency: string;
 };
 
 export function normalizeBillingServiceIdentifier(value: string): string {
@@ -104,6 +106,7 @@ export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput 
   const key = input.key.trim().toLowerCase();
   const name = input.name.trim();
   const currency = input.currency.trim().toUpperCase();
+  const usageCurrency = (input.usageCurrency ?? currency).trim().toUpperCase();
   if (!TARIFF_KEY_PATTERN.test(key) || !name || name.length > 120) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_INPUT');
   }
@@ -116,7 +119,7 @@ export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput 
   if (!Number.isInteger(markupBps) || markupBps < 0 || markupBps > MAX_MARKUP_BPS) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_MARKUP');
   }
-  if (!CURRENCY_PATTERN.test(currency)) {
+  if (!CURRENCY_PATTERN.test(currency) || !CURRENCY_PATTERN.test(usageCurrency)) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_CURRENCY');
   }
 
@@ -147,6 +150,9 @@ export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput 
   const usagePaymentMode = toUsagePaymentMode(input.usagePaymentMode);
   const paidSeats = monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT &&
     monthlyAmountMinor > 0n && collectionMode !== BillingCollectionMode.NONE;
+  if (usageCurrency !== currency && usagePaymentMode !== BillingUsagePaymentMode.PREPAID) {
+    throw new AppError('BAD_REQUEST', 400, 'BILLING_CROSS_CURRENCY_PREPAID_REQUIRED');
+  }
   if (
     ((mode === BillingTariffMode.FREE || mode === BillingTariffMode.AT_COST) &&
       markupBps !== 0) ||
@@ -169,5 +175,6 @@ export function normalizeTariffInput(input: TariffInput): NormalizedTariffInput 
     seatChargeTiming,
     usagePaymentMode,
     currency,
+    usageCurrency,
   };
 }

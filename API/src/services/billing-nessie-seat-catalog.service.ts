@@ -27,12 +27,12 @@ export async function provisionNessieSeatCatalog(params: {
       if (prior.currency !== currency || prior.mode !== 'STANDARD' || prior.isDefault || !usesAnniversarySeats(service.identifier, prior)) {
         throw new AppError('INTERNAL', 409, 'NESSIE_REGIONAL_SEAT_TERMS_INVALID');
       }
-      if (prior.anniversarySeats || params.dryRun) { rows.push(prior); continue; }
+      if ((prior.anniversarySeats && prior.usageCurrency === 'USD') || params.dryRun) { rows.push(prior); continue; }
       const created = await tx.billingTariff.create({ data: { key, serviceId: service.id, version: prior.version + 1,
         name: prior.name, mode: prior.mode, collectionMode: prior.collectionMode, markupBps: prior.markupBps,
         monthlyAmountMinor: prior.monthlyAmountMinor, monthlyChargeBasis: prior.monthlyChargeBasis,
         seatPolicy: prior.seatPolicy, seatChargeTiming: prior.seatChargeTiming,
-        usagePaymentMode: prior.usagePaymentMode, currency, isDefault: false, anniversarySeats: true } });
+        usagePaymentMode: prior.usagePaymentMode, usageCurrency: 'USD', currency, isDefault: false, anniversarySeats: true } });
       await tx.adminAuditLog.create({ data: { actorEmail: 'system:billing-catalog', action: 'billing.regional_seat_version_published',
         metadata: { service_id: service.id, tariff_id: created.id, previous_tariff_id: prior.id,
           stripe_account_id: remote.id, livemode: account.livemode } } });
