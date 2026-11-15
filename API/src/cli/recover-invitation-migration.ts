@@ -51,6 +51,14 @@ export async function recoverInvitationMigration(databaseUrl: string): Promise<b
     // Prisma uses this lock for its schema engine. An in-flight migration must
     // finish before we inspect rollback evidence or grant its missing privilege.
     await client.query('SELECT pg_advisory_lock(72707369)');
+    const current = await client.query<{ id: string; checksum: string }>(
+      'SELECT id,checksum FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL',
+    );
+    if (current.rows.length === 0) return false;
+    if (current.rows.length !== 1 || current.rows[0].id !== unfinished.rows[0].id
+      || current.rows[0].checksum !== checksum) {
+      throw new Error('Invitation migration recovery refused: migration state changed');
+    }
     const state = await client.query<{ clean: boolean; owner: boolean }>(`
       SELECT NOT EXISTS (
         SELECT 1 FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid

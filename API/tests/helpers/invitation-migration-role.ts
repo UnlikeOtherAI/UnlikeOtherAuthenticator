@@ -69,6 +69,12 @@ export async function migrationRoleFixture() {
     return {
       admin, client, name, databaseUrl: roleUrl.toString(), copyMigration,
       deploy: () => deploy(roleUrl.toString()),
+      recover: () => new Promise<number | null>((accept, reject) => {
+        const child = spawn(process.execPath, [join(prismaRoot, '../dist/cli/recover-invitation-migration.js')], {
+          env: { ...process.env, DATABASE_URL: roleUrl.toString() }, stdio: 'ignore', timeout: 60_000,
+        });
+        child.once('error', reject); child.once('close', accept);
+      }),
       copyRemaining: async () => {
         for (const migration of names.filter(n => n >= permissionMigration)) await copyMigration(migration);
       },

@@ -53,8 +53,9 @@ describe.skipIf(!process.env.DATABASE_URL)('invitation migration with the produc
   });
 
   it('recovers once across two callers, preserves history, then migrates the remaining chain as the owner role', async () => {
-    const results = await Promise.all([recoverInvitationMigration(fixture.databaseUrl), recoverInvitationMigration(fixture.databaseUrl)]);
-    expect(results.sort()).toEqual([false, true]);
+    // Run the exact built command used by production, including Prisma resolve.
+    const results = await Promise.all([fixture.recover(), fixture.recover()]);
+    expect(results).toEqual([0, 0]);
     const prior = (await fixture.client.query('SELECT finished_at,rolled_back_at FROM _prisma_migrations WHERE id=$1', [failedId])).rows[0];
     expect(prior.finished_at).toBeNull(); expect(prior.rolled_back_at).not.toBeNull();
     await fixture.copyRemaining();
