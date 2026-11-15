@@ -1,3 +1,4 @@
+import { recognizeInitialSeatPayment } from './billing-initial-seat-payment.service.js';
 import { createHash } from 'node:crypto';
 
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -175,5 +176,6 @@ export async function persistStripePaymentInvoice(
       throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_PAYMENT_HISTORY_CHANGED');
     }
   }
+  await recognizeInitialSeatPayment(tx, prepared.invoice, row);
   return row;
 }

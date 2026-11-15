@@ -2532,6 +2532,9 @@ model BillingStripeCheckoutSession {
 }
 
 model BillingStripeSubscription {
+  initialSeatInvoiceId String? @unique @map("initial_seat_invoice_id")
+  initialSeatPaymentInvoice BillingStripePaymentInvoice? @relation("InitialSeatPayment",
+    fields: [initialSeatInvoiceId], references: [id], onDelete: Restrict)
   id                   String                 @id @default(cuid())
   accountId            String                 @map("account_id")
   checkoutId           String                 @unique @map("checkout_id")
@@ -5055,6 +5058,7 @@ model BillingManualCreditNote {
 // Verified cash payment and its existing Stripe legal invoice. Financial
 // provenance is immutable; incomplete legal documents remain pending.
 model BillingStripePaymentInvoice {
+  initialSeatSubscription BillingStripeSubscription? @relation("InitialSeatPayment")
   id                     String   @id @default(cuid())
   accountId              String   @map("account_id")
   subscriptionId         String?   @map("subscription_id")

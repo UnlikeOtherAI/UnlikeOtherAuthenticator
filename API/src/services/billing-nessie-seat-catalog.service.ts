@@ -24,7 +24,7 @@ export async function provisionNessieSeatCatalog(params: {
     for (const currency of CREDIT_PURCHASE_CURRENCIES) {
       const key = 'standard-' + currency.toLowerCase();
       const prior = await tx.billingTariff.findFirstOrThrow({ where: { serviceId: service.id, key }, orderBy: { version: 'desc' } });
-      if (prior.currency !== currency || prior.mode !== 'STANDARD' || prior.isDefault || !usesAnniversarySeats(service.identifier, prior)) {
+      if (prior.currency !== currency || prior.mode !== 'STANDARD' || !usesAnniversarySeats(service.identifier, prior)) {
         throw new AppError('INTERNAL', 409, 'NESSIE_REGIONAL_SEAT_TERMS_INVALID');
       }
       if ((prior.anniversarySeats && prior.usageCurrency === 'USD') || params.dryRun) { rows.push(prior); continue; }

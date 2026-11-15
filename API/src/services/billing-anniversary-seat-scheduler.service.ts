@@ -29,6 +29,7 @@ export async function runAnniversarySeatCycle(deps?: {
         JOIN billing_seat_subscriptions s ON s.id=c.seat_subscription_id
         JOIN billing_stripe_subscriptions b ON b.id=s.stripe_subscription_id
         WHERE b.account_id=${account.id} AND b.livemode=${account.livemode}
+          AND b.initial_seat_invoice_id IS NOT NULL
           AND c.completed_at IS NULL AND c.next_attempt_at <= ${now}
           AND NOT EXISTS (SELECT 1 FROM billing_automatic_seat_changes prior
             WHERE prior.seat_subscription_id=c.seat_subscription_id AND prior.id<c.id AND prior.completed_at IS NULL)
