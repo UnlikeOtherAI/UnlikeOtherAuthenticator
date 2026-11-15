@@ -271,6 +271,43 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
         amount_paid: 1196, amount_remaining: 0, ending_balance: 0 },
     } as never));
     expect((await access(deadline)).status).toBe('paid');
+    // A fully paid base period cannot hide lost cash on an additional seat.
+    for (const carried of [false, true]) {
+      const suffix = carried ? 'carried' : 'proration';
+      await p.$transaction(tx => persistStripePaymentInvoice(tx, {
+        facts: { accountId: acct.id, subscriptionId: initialSubscription.id, livemode: false,
+          stripeInvoiceId: 'in_' + suffix, stripeCustomerId: 'cus_seat', stripePaymentIntentIds: ['pi_' + suffix],
+          paymentEvidence: [{ invoice_payment_id: 'inpay_' + suffix, payment_intent_id: 'pi_' + suffix,
+            charge_id: 'ch_' + suffix, amount_minor: '299', paid_at: deadline.toISOString() }],
+          orgId: org.id, teamId: null, paidAt: deadline, currency: 'EUR', grossAmountMinor: 299n,
+          taxAmountMinor: 0n, creditAmountMinor: 0n, dueAmountMinor: 299n, paidAmountMinor: 299n },
+        lines: [{ stripeLineId: 'il_' + suffix, serviceId: service.id, serviceIdentifier: 'nessie',
+          ...(carried ? { carriedFromStripeInvoiceId: 'in_minimum_carry' } : {}),
+          billingMonth: renewalAt.toISOString().slice(0, 7), label: 'Additional seat',
+          subscriptionMinor: 299n, usageMinor: 0n, taxMinor: 0n, creditMinor: 0n, grossMinor: 299n, dueMinor: 299n,
+          seatPeriod: { subscriptionId: initialSubscription.id, startsAt: deadline,
+            endsAt: new Date(renewalAt.getTime() + 30 * 86400_000), quantity: 1 } }],
+        sourceDigest: (carried ? '1' : '2').repeat(64), invoice: { billing_reason: 'subscription_update',
+          status: 'paid', total: 299, amount_due: 299, amount_paid: 299, amount_remaining: 0, ending_balance: 0 },
+      } as never));
+      expect((await access(deadline)).status).toBe('paid');
+      const extraReceipt = await p.billingStripePaymentInvoice.findFirstOrThrow({ where: { stripeInvoiceId: 'in_' + suffix } });
+      const lost = { invoiceId: extraReceipt.id, stripePaymentIntentId: 'pi_' + suffix, stripeChargeId: 'ch_' + suffix,
+        stripeObjectId: 'dp_' + suffix, amountMinor: 299n, currency: 'EUR', occurredAt: deadline,
+        evidenceDigest: 'f'.repeat(64), stripeEventId: 'evt_' + suffix };
+      await p.billingStripePaymentInvoiceAdjustment.create({ data: { ...lost, kind: 'DISPUTE' } });
+      expect((await access(deadline)).allowed).toBe(false);
+      await p.billingStripePaymentInvoiceAdjustment.create({ data: { ...lost, kind: 'DISPUTE_REVERSAL',
+        stripeEventId: 'evt_won_' + suffix } });
+      expect((await access(deadline)).status).toBe('paid');
+      const rollback = new Error('rollback isolated refund probe');
+      await expect(p.$transaction(async tx => {
+        await tx.billingStripePaymentInvoiceAdjustment.create({ data: { ...lost, kind: 'REFUND',
+          stripeObjectId: 're_' + suffix, amountMinor: 1n, stripeEventId: 'evt_refund_' + suffix } });
+        expect((await readNessieSeatAccess(tx, seatScope, deadline)).allowed).toBe(false);
+        throw rollback;
+      })).rejects.toBe(rollback);
+    }
     const receipt = await p.billingStripePaymentInvoice.findFirstOrThrow({ where: { stripeInvoiceId: 'in_renewal' } });
     const adjustment = { invoiceId: receipt.id, stripePaymentIntentId: 'pi_renewal', stripeChargeId: 'ch_renewal',
       stripeObjectId: 'dp_renewal', amountMinor: 1196n, currency: 'EUR', occurredAt: deadline,

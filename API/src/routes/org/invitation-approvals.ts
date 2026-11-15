@@ -1,4 +1,5 @@
 import { withInvitationDelivery } from './invitation-delivery.js';
+import { getOrganisationMember } from '../../services/organisation.service.base.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -135,6 +136,11 @@ export function registerInvitationApprovalRoutes(app: FastifyInstance): void {
           },
           { prisma: asPrismaClient(tx), afterCommit },
         ),
+        async tx => {
+          if (!('actorUserId' in caller)) return;
+          const member = await getOrganisationMember(asPrismaClient(tx), { orgId, userId: caller.actorUserId }, { activeOnly: true });
+          if (!member || !['owner', 'admin'].includes(member.role)) throw new AppError('FORBIDDEN', 403);
+        },
       );
 
       reply.status(200).send(invite);

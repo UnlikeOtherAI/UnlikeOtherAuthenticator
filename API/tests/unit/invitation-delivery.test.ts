@@ -21,6 +21,7 @@ describe('committed invitation delivery', () => {
     billing.read.mockImplementation(async () => { events.push('read'); return { inviteId: 'held' }; });
     billing.collect.mockImplementation(async () => { events.push('collect'); });
     return { request, events, transactions };
+
   }
   it('commits the intent before provider IO and mints the link in a fresh tenant transaction', async () => {
     const { request, events, transactions } = fixture();
@@ -30,7 +31,7 @@ describe('committed invitation delivery', () => {
         expect(deliveryTx).not.toBe(tx); events.push('mail');
       });
       return { id: 'held' };
-    });
+    }, vi.fn());
     expect(result).toEqual({ id: 'held' });
     expect(events).toEqual(['begin', 'create', 'commit', 'begin', 'read', 'commit', 'collect', 'begin', 'mail', 'commit']);
     expect(transactions).toHaveLength(3);
@@ -41,7 +42,7 @@ describe('committed invitation delivery', () => {
     const deliver = vi.fn();
     await expect(withInvitationDelivery(request, async (_tx, defer) => {
       events.push('create'); defer('held', deliver);
-    })).rejects.toThrow('payment required');
+    }, vi.fn())).rejects.toThrow('payment required');
     expect(events).toEqual(['begin', 'create', 'commit', 'begin', 'read', 'commit']);
     expect(deliver).not.toHaveBeenCalled();
   });
@@ -49,7 +50,7 @@ describe('committed invitation delivery', () => {
     const { request, events } = fixture();
     await expect(withInvitationDelivery(request, async (_tx, defer) => {
       defer('held', vi.fn()); throw new Error('authority revoked');
-    })).rejects.toThrow('authority revoked');
+    }, vi.fn())).rejects.toThrow('authority revoked');
     expect(events).toEqual(['begin', 'rollback']);
     expect(billing.collect).not.toHaveBeenCalled();
   });
@@ -57,9 +58,22 @@ describe('committed invitation delivery', () => {
     const { request, events } = fixture();
     await expect(withInvitationDelivery(request, async (_tx, defer) => {
       defer('held', async () => { throw new Error('invitation revoked'); });
-    })).rejects.toThrow('invitation revoked');
+    }, vi.fn())).rejects.toThrow('invitation revoked');
     expect(billing.collect).toHaveBeenCalledOnce();
     expect(events.at(-1)).toBe('rollback');
     expect(events.filter(event => event === 'commit')).toHaveLength(2);
+  });
+  it.each(['before collection', 'after collection'])('refuses lost invitation authority %s', async phase => {
+    const { request, events } = fixture();
+    const deliver = vi.fn();
+    const authorize = vi.fn().mockResolvedValue(undefined);
+    if (phase === 'before collection') authorize.mockRejectedValueOnce(new Error('permission removed'));
+    else authorize.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('permission removed'));
+    await expect(withInvitationDelivery(request, async (_tx, defer) => {
+      defer('held', deliver);
+    }, authorize)).rejects.toThrow('permission removed');
+    expect(deliver).not.toHaveBeenCalled();
+    expect(billing.collect).toHaveBeenCalledTimes(phase === 'before collection' ? 0 : 1);
+    expect(events.at(-1)).toBe('rollback');
   });
 });

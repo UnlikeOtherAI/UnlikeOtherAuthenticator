@@ -10,17 +10,15 @@ import {
   assertDatabaseEnabled,
   auditOrg,
   type OrgActorProvenance,
-  getOrganisationMember,
   resolveOrgActor,
   resolveOrganisation,
 } from './organisation.service.base.js';
-import { hasTeamCapability } from './team.service.base.js';
+import { memberInvitePermission } from './team-invite.service.permissions.js';
 import { buildUserIdentity } from './user-scope.service.js';
 import {
   ACTIONABLE_TEAM_INVITE_WHERE,
   TEAM_INVITE_SELECT,
   computeInviteExpiresAt,
-  normalizeInviteGrantRole,
   type InviteDeps,
   type TeamInviteRecord,
   buildTeamInviteLink,
@@ -44,13 +42,6 @@ import {
 // out of team-invite.service.management.ts (which was already at the 500-line cap before this task)
 // so the permission matrix and the approve/deny flow have their own home, mirroring the existing
 // base/token/acceptance/management/resend slicing.
-
-type MemberInvitesSetting = 'allowed' | 'admin_approval' | 'disabled';
-
-function normalizeMemberInvitesSetting(value: string | undefined): MemberInvitesSetting {
-  if (value === 'admin_approval' || value === 'disabled') return value;
-  return 'allowed';
-}
 
 /**
  * Member-initiated invite (user-token variant of the backend bulk-invite endpoint, same route).
@@ -98,64 +89,12 @@ export async function createMemberInvite(
       })
     : undefined;
 
-  const actorOrgMembership = await getOrganisationMember(
-    prisma,
-    { orgId: org.id, userId: params.actorUserId },
-    { activeOnly: true },
-  );
-  if (!actorOrgMembership) {
-    // Not an active org member (or deactivated) — generic, no distinction from any other 403.
-    throw new AppError('FORBIDDEN', 403);
-  }
-
-  let approvalStatus: 'NOT_REQUIRED' | 'PENDING' = 'NOT_REQUIRED';
-  let memberInvitableRoles: string[] | undefined;
-  // A manager invites outright; everyone else goes through the org's member-invite policy. This
-  // used to inline its own `owner|admin` comparison at both scopes — the same predicate
-  // `hasTeamCapability` now owns, so a domain's configured roles decide it here too.
-  const isManager = await hasTeamCapability(prisma, 'members.manage', {
-    orgId: org.id,
-    teamId: team.id,
-    actorUserId: params.actorUserId,
-    config: params.config,
+  const { approvalStatus, teamRole } = await memberInvitePermission(prisma, {
+    orgId: org.id, teamId: team.id, actorUserId: params.actorUserId,
+    config: params.config, teamRole: params.invite.teamRole,
   });
-
-  if (!isManager) {
-    const actorTeamMembership = await prisma.teamMember.findFirst({
-      where: { teamId: team.id, userId: params.actorUserId, status: 'ACTIVE' },
-      select: { teamRole: true },
-    });
-    if (!actorTeamMembership) {
-      throw new AppError('FORBIDDEN', 403);
-    }
-
-    const setting = normalizeMemberInvitesSetting(org.memberInvites);
-
-    if (setting === 'disabled') {
-      throw new AppError('FORBIDDEN', 403);
-    }
-    if (setting === 'admin_approval') {
-      approvalStatus = 'PENDING';
-    }
-    memberInvitableRoles = params.config.org_features?.member_invitable_team_roles ?? [];
-  }
-
-  if (memberInvitableRoles?.length === 0) {
-    throw new AppError('FORBIDDEN', 403);
-  }
-
   const email = normalizeEmail(params.invite.email);
   const inviteName = normalizeInviteName(params.invite.name);
-  const teamRole = normalizeInviteGrantRole(
-    params.invite.teamRole ?? memberInvitableRoles?.[0],
-    params.config,
-  );
-  if (memberInvitableRoles && !memberInvitableRoles.includes(teamRole)) {
-    // A member-invite policy says whether this actor may propose an invite; the configured
-    // invitable-role list separately says which authority that proposal may grant. Resolve an
-    // omitted role first so it cannot bypass the same policy through a default.
-    throw new AppError('FORBIDDEN', 403);
-  }
 
   const identity = buildUserIdentity({
     userScope: params.config.user_scope,

@@ -52,12 +52,17 @@ describe('seat renewal recovery', () => {
       ending_balance: 0, billing_reason: 'subscription_cycle' };
     const line = { stripeLineId: 'line', subscriptionMinor: 399n,
       seatPeriod: { subscriptionId: 'sub', startsAt: new Date('2026-11-15'), endsAt: new Date('2026-12-15'), quantity: 1 } };
-    for (const item of [{ ...line, carriedFromStripeInvoiceId: 'previous' }, { ...line, seatPeriod: undefined },
+    for (const item of [{ ...line, seatPeriod: undefined },
       { ...line, seatPeriod: { ...line.seatPeriod, subscriptionId: 'different' } }]) {
       await recognizeSeatPaymentPeriod(tx as never, invoice as never, receipt as never, [item] as never);
     }
     await recognizeSeatPaymentPeriod(tx as never, { ...invoice, amount_paid: 0 } as never, receipt as never, [line] as never);
     expect(tx.billingSeatRenewalRecovery.updateMany).not.toHaveBeenCalled();
+    await recognizeSeatPaymentPeriod(tx as never, invoice as never, receipt as never,
+      [{ ...line, carriedFromStripeInvoiceId: 'previous' }] as never);
+    expect(tx.billingSeatPaymentPeriod.create).toHaveBeenCalledOnce();
+    expect(tx.billingSeatRenewalRecovery.updateMany).not.toHaveBeenCalled();
+    tx.billingSeatPaymentPeriod.create.mockClear();
     await recognizeSeatPaymentPeriod(tx as never, invoice as never, receipt as never, [line] as never);
     expect(tx.billingSeatPaymentPeriod.create).toHaveBeenCalledOnce();
     expect(tx.billingSeatRenewalRecovery.updateMany).toHaveBeenCalledWith({ where: { accountId: 'acct', subscriptionId: 'sub',

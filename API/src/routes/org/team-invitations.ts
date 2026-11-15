@@ -1,4 +1,5 @@
 import { withInvitationDelivery } from './invitation-delivery.js';
+import { memberInvitePermission } from '../../services/team-invite.service.permissions.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -120,6 +121,13 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
             },
             { prisma: asPrismaClient(tx), afterCommit },
           ),
+          async (tx, inviteId) => {
+            const invite = await tx.teamInvite.findUniqueOrThrow({ where: { id: inviteId }, select: { teamRole: true } });
+            const permission = await memberInvitePermission(asPrismaClient(tx), {
+              orgId, teamId, actorUserId: caller.actorUserId, config, teamRole: invite.teamRole,
+            });
+            if (permission.approvalStatus !== 'NOT_REQUIRED') throw new AppError('FORBIDDEN', 403);
+          },
         );
 
         reply.status(200).send(result);
@@ -143,6 +151,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
           },
           { prisma: asPrismaClient(tx), afterCommit },
         ),
+        tx => requireInvitationManager(request, asPrismaClient(tx)),
       );
 
       reply.status(200).send(result);
@@ -275,7 +284,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
           { orgId, teamId, inviteId, domain, config, configUrl },
           { prisma: asPrismaClient(tx), afterCommit },
         );
-      });
+      }, tx => requireInvitationManager(request, asPrismaClient(tx)));
 
       reply.status(200).send(invite);
     },

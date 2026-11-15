@@ -108,7 +108,12 @@ export async function verifyStripePaymentInvoiceLines(params: {
     after = rows.data.at(-1)?.id;
     if (!after) break;
   }
-  if (seatProrations.length) result.push(netSeatProration(seatProrations, payer.service));
+  if (seatProrations.length) {
+    const line = netSeatProration(seatProrations, payer.service);
+    const period = seatProrations[0].period;
+    result.push({ ...line, seatPeriod: { subscriptionId: payer.id,
+      startsAt: new Date(period.start * 1000), endsAt: new Date(period.end * 1000), quantity: 1 } });
+  }
   result.sort((a, b) => Buffer.compare(Buffer.from(a.stripeLineId), Buffer.from(b.stripeLineId)));
   const gross = stripeInvoiceMinor(params.invoice.total);
   const due = params.beforeVerifiedBalanceTransfer ? gross : stripeInvoiceMinor(params.invoice.amount_due);

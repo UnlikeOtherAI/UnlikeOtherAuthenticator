@@ -98,7 +98,12 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$
           AND i.subscription_id=b.id AND i.account_id=b.account_id AND i.livemode=b.livemode AND i.due_amount_minor>0
           AND (SELECT COALESCE(sum(c.amount_minor),0) FROM billing_stripe_payment_invoice_cash_payments c WHERE c.invoice_id=i.id)
             -(SELECT COALESCE(sum(CASE WHEN a.kind='DISPUTE_REVERSAL' THEN -a.amount_minor ELSE a.amount_minor END),0)
-              FROM billing_stripe_payment_invoice_adjustments a WHERE a.invoice_id=i.id)>=i.due_amount_minor));
+              FROM billing_stripe_payment_invoice_adjustments a WHERE a.invoice_id=i.id)>=i.due_amount_minor)
+      AND NOT EXISTS(SELECT 1 FROM billing_seat_payment_periods p JOIN billing_stripe_payment_invoices i ON i.id=p.invoice_id
+        WHERE p.subscription_id=b.id AND p.starts_at<=p_now AND p.ends_at>p_now
+          AND (SELECT COALESCE(sum(c.amount_minor),0) FROM billing_stripe_payment_invoice_cash_payments c WHERE c.invoice_id=i.id)
+            -(SELECT COALESCE(sum(CASE WHEN a.kind='DISPUTE_REVERSAL' THEN -a.amount_minor ELSE a.amount_minor END),0)
+              FROM billing_stripe_payment_invoice_adjustments a WHERE a.invoice_id=i.id)<i.due_amount_minor));
 $$;
 DO $$ BEGIN
   EXECUTE format('ALTER FUNCTION billing_nessie_subscription_paid_now(text,timestamptz) SET search_path=pg_catalog,%I,pg_temp',current_schema());

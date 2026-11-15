@@ -10,11 +10,11 @@ export async function recognizeSeatPaymentPeriod(tx: Prisma.TransactionClient, i
   receipt: BillingStripePaymentInvoice, lines: VerifiedStripeInvoiceLine[]): Promise<void> {
   if (!receipt.subscriptionId || !hasFullSeatInvoicePayment(invoice)) return;
   const periods = lines.filter(line => line.seatPeriod?.subscriptionId === receipt.subscriptionId &&
-    !line.carriedFromStripeInvoiceId && line.subscriptionMinor > 0n);
+    line.subscriptionMinor > 0n);
   if (!periods.length) return;
   await tx.$queryRaw`SELECT id FROM billing_stripe_subscriptions WHERE id=${receipt.subscriptionId} FOR UPDATE`;
   for (const line of periods) {
-    if (!line.seatPeriod || line.carriedFromStripeInvoiceId || line.subscriptionMinor <= 0n) continue;
+    if (!line.seatPeriod || line.subscriptionMinor <= 0n) continue;
     const data = { ...line.seatPeriod, invoiceId: receipt.id, stripeLineId: line.stripeLineId };
     const prior = await tx.billingSeatPaymentPeriod.findUnique({
       where: { invoiceId_stripeLineId: { invoiceId: receipt.id, stripeLineId: line.stripeLineId } },
@@ -26,7 +26,7 @@ export async function recognizeSeatPaymentPeriod(tx: Prisma.TransactionClient, i
       }
     } else await tx.billingSeatPaymentPeriod.create({ data });
   }
-  if (invoice.billing_reason === 'subscription_cycle') {
+  if (invoice.billing_reason === 'subscription_cycle' && periods.some(line => !line.carriedFromStripeInvoiceId)) {
     await tx.billingSeatRenewalRecovery.updateMany({ where: { accountId: receipt.accountId,
       subscriptionId: receipt.subscriptionId, stripeInvoiceId: receipt.stripeInvoiceId, recoveredAt: null,
     }, data: { paymentInvoiceId: receipt.id, recoveredAt: receipt.paidAt } });

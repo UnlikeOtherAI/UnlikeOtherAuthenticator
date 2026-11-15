@@ -74,3 +74,17 @@ Follow Nessie's `docs/testing/paid-operation-manual.md` through real user entry
 points for new and existing organisations. Record exact revisions and separate
 synthetic boundary tests from actual Stripe and telephony evidence. An expired
 test key blocks provider verification; do not mark those cases passed.
+
+## Invitation and current-payment revalidation
+
+Each invitation attempt rechecks the current org/team permission before
+collection and again in the token-and-email transaction after collection.
+A role change or a new approval requirement leaves the paid intent retained
+and sends no invitation; an authorised person can retry through the existing flow.
+
+Current paid access requires retained cash for every recognised seat receipt
+covering the current period, including a prorated additional seat and a collected
+minimum-charge carry. A fully paid base invoice cannot hide a refund or dispute
+on another current seat. A dispute reversal can restore coverage. Carried
+coverage does not clear the receiving invoice’s renewal failure without its
+own non-carried seat-period proof.
