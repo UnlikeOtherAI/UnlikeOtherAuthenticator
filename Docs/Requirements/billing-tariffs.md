@@ -1947,3 +1947,33 @@ See [Team billing modes](../Billing/team-billing-modes.md) for eligibility,
 original-click protocol 5.9.0, exact credentials/webhook configuration, catalog
 provisioning, unsupported account replacement and the reviewed activation order.
 The webhook API version and exact lifecycle event set above remain authoritative.
+
+
+## Nessie prepaid admission and collection proof (15 November 2026)
+
+Nessie rejects uncollected PAYG and nonregular service defaults at the Ledger
+reservation interface with HTTP 402 `NESSIE_PREPAID_SETUP_REQUIRED`, before
+new decisions and before replaying an old decision. Regular defaults require
+STANDARD, STRIPE, PER_SEAT, a positive monthly price and PREPAID usage. Service
+creation, tariff version creation and default selection reject other Nessie
+defaults with `NESSIE_REGULAR_DEFAULT_REQUIRED`. Explicit organisation/team
+FREE usage assignments remain separate; other products retain their terms.
+A valid tariff still needs the atomic funded-balance reservation. Settlement
+and release of already dispatched work remain available.
+
+An anniversary seat addition is completed only after verified InvoicePayment,
+PaymentIntent and captured Charge evidence. An invoice merely marked paid is
+insufficient. A below-minimum invoice stays held; the collector can recover it
+when a later fully captured invoice proves the exact source through the
+customer balance transaction chain. This recovery never repeats the charge.
+Provider outages retain the pending operation. Source:
+[Stripe invoice amounts](https://docs.stripe.com/api/invoices/object).
+
+These changes do not activate a hosted default, rewrite historical terms,
+implement invitation-time collection or start the new 14-day seat transition.
+The recovered acceptance-time collector and signup UI are integration work,
+not fulfilment of the newer invitation-time policy. The required transition,
+login gate and employee/manager notices are specified in Nessie's
+`docs/standards/payment-admission.md`. Manual provider verification remains
+blocked by the expired original test account key; synthetic receipts are not
+provider evidence.

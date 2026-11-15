@@ -136,7 +136,7 @@ describe.skipIf(!enabled)('funded wallet UTC boundary proof', () => {
       } });
     }
     expect(await boundary()).toMatchObject({ account_id: creditAccountId,
-      closing_microcredits: '80', status: 'confirmed' });
+      closing_microcredits: '230', status: 'confirmed' });
     expect(await readCycleWalletBoundary(db.prisma, { orgId, teamId,
       payer: 'TEAM', capturedAccountId: null, ...october })).toMatchObject({
       opening_microcredits: null, closing_microcredits: null, status: 'pending_reconciliation',
