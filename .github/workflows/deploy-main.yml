@@ -289,25 +289,58 @@ jobs:
             scaling_args=(--min-instances 1 --no-cpu-throttling)
           fi
 
+          revision_suffix="r${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          deployed_revision="$GCP_CLOUD_RUN_SERVICE-$revision_suffix"
           gcloud run deploy "$GCP_CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --image "$IMAGE" \
+            --revision-suffix "$revision_suffix" \
+            --async \
+            --no-traffic \
             --add-cloudsql-instances "gen-lang-client-0561071620:europe-west1:uoa-auth-db" \
             --max-instances 3 \
             "${scaling_args[@]}" \
             --set-env-vars "$env_vars" \
             --set-secrets "$secret_vars"
 
-          deployed_revision="$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --format='value(status.latestCreatedRevisionName)')"
-          if [[ -z "$deployed_revision" ]]; then
-            echo "Cloud Run did not report the deployed revision"
+          echo "revision=$deployed_revision" >> "$GITHUB_OUTPUT"
+
+      - name: Verify candidate revision
+        run: |
+          # Service readiness can still refer to a failed older traffic target.
+          # Verify this run's exact candidate before replacing that desired route.
+          deployed_revision="${{ steps.deploy.outputs.revision }}"
+          expected_image="$(gcloud artifacts docker images describe "$IMAGE" \
+            --project "$GCP_PROJECT_ID" --format='value(image_summary.fully_qualified_digest)')"
+          if [[ ! "$expected_image" =~ ^.+@sha256:[0-9a-f]{64}$ ]]; then
+            echo "Could not resolve the deployed commit's image digest"
             exit 1
           fi
-          echo "revision=$deployed_revision" >> "$GITHUB_OUTPUT"
+          for attempt in $(seq 1 30); do
+            if ! candidate="$(gcloud run revisions describe "$deployed_revision" \
+              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json)"; then
+              sleep 4
+              continue
+            fi
+            candidate_state="$(node -e 'const fs=require("node:fs"); const r=JSON.parse(fs.readFileSync(0,"utf8")); console.log(r.status?.imageDigest ?? "-", r.status?.conditions?.find(c=>c.type==="Ready")?.status ?? "Unknown");' <<< "$candidate")"
+            read -r actual_image ready <<< "$candidate_state"
+            if [[ "$actual_image" != "-" && "$actual_image" != "$expected_image" ]]; then
+              echo "Candidate image does not match the deployed commit"
+              exit 1
+            fi
+            if [[ "$ready" == "False" ]]; then
+              echo "Candidate revision failed; traffic will not be promoted"
+              exit 1
+            fi
+            if [[ "$ready" == "True" && "$actual_image" == "$expected_image" ]]; then
+              echo "Verified candidate $deployed_revision at $actual_image"
+              exit 0
+            fi
+            sleep 4
+          done
+          echo "Candidate revision did not become ready within 30 checks"
+          exit 1
 
       - name: Promote deployed revision
         run: |
