@@ -50,3 +50,5 @@ contract is packages/billing-statement-protocol/BROWSER-BILLING.md. Test
 billing-browser.persistence.test.ts and billing-paid-usage-exception.persistence.test.ts
 against isolated migrated PostgreSQL; unit tests cannot prove wallet races.
 The protocol is vendored into Nessie from the committed UOA source revision.
+Browser migrations bound lock waits to five seconds and statements to two
+minutes, including changes to the existing paid-usage exception table.

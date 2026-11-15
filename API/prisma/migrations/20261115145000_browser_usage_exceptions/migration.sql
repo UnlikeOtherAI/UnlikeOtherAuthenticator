@@ -1,3 +1,6 @@
+SET lock_timeout = '5s';
+SET statement_timeout = '120s';
+
 -- Browser anomalies share the existing reviewed, immutable provider-exception ledger.
 ALTER TABLE billing_paid_usage_exceptions ALTER COLUMN runtime_key_id DROP NOT NULL;
 ALTER TABLE billing_paid_usage_exceptions ADD COLUMN app_key_id TEXT
