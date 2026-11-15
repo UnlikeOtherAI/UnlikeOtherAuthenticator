@@ -57,7 +57,8 @@ export async function prepareSeatRenewalFailure(event: Stripe.Event, account: St
   });
   if (!subscription || subscription.service.identifier !== 'nessie' || !subscription.tariff.anniversarySeats ||
     !subscription.initialSeatInvoiceId) return null;
-  if (subscription.livemode !== account.livemode || subscription.customer.stripeCustomerId !== stripeExternalId(invoice.customer)) {
+  if (subscription.livemode !== account.livemode || !subscription.customer.stripeCustomerId ||
+    subscription.customer.stripeCustomerId !== stripeExternalId(invoice.customer)) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_RENEWAL_SOURCE_DRIFT');
   }
   const lines = await verifyStripePaymentInvoiceLines({ invoice, accountId: account.id, subscriptionId: subscription.id,
