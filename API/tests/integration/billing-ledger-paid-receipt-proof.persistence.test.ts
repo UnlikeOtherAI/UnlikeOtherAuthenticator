@@ -86,7 +86,7 @@ describe.skipIf(!enabled)('signed paid receipt cohort', () => {
       receiptCount: 2 });
     const credits = await readVerifiedCycleCreditEvidence(db.prisma, {
       scope, proof: signed, payer: BillingAssignmentScope.TEAM,
-      tariff: { id: tariffId, currency: 'USD',
+      tariff: { id: tariffId, currency: 'USD', usageCurrency: 'USD',
         usagePaymentMode: BillingUsagePaymentMode.PAY_AS_YOU_GO } as BillingTariff,
       rawLines: [{ billingDisposition: 'paid', selectedProviderCost: '1',
         currency: 'USD' }] as never,
@@ -133,7 +133,7 @@ describe.skipIf(!enabled)('signed paid receipt cohort', () => {
     const signed = await verifyLedgerPaidReceiptSet(await proof(), scope, keys);
     const credits = await readVerifiedCycleCreditEvidence(db.prisma, {
       scope, proof: signed, payer: BillingAssignmentScope.TEAM,
-      tariff: { id: tariffId, currency: 'USD',
+      tariff: { id: tariffId, currency: 'USD', usageCurrency: 'USD',
         usagePaymentMode: BillingUsagePaymentMode.PAY_AS_YOU_GO } as BillingTariff,
       rawLines: [{ billingDisposition: 'paid', selectedProviderCost: '1',
         currency: 'USD' }] as never,

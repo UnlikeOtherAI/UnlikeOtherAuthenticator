@@ -87,10 +87,10 @@ export async function seed(prisma: PrismaClient): Promise<void> {
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "billing_tariffs" (
         "id", "service_id", "key", "version", "name", "mode",
-        "collection_mode", "markup_bps", "currency", "is_default"
+        "collection_mode", "markup_bps", "currency", "usage_currency", "is_default"
       ) VALUES (
         ${ids.tariff}, ${ids.service}, 'standard', 1, 'DeepWater standard',
-        'STANDARD', 'NONE', 0, 'USD', true
+        'STANDARD', 'NONE', 0, 'USD', 'USD', true
       )
     `);
     await tx.$executeRaw(Prisma.sql`
