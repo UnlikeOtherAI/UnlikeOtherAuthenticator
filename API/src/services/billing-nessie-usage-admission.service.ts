@@ -5,11 +5,12 @@ import { resolveCurrentBillingTariff } from './billing-current-tariff.service.js
 import { AppError } from '../utils/errors.js';
 
 type DefaultTerms = Pick<BillingTariff, 'mode' | 'usagePaymentMode' | 'collectionMode' |
-  'monthlyChargeBasis' | 'monthlyAmountMinor'>;
+  'monthlyChargeBasis' | 'monthlyAmountMinor' | 'seatPolicy' | 'seatChargeTiming'>;
 
 function regularTerms(tariff: DefaultTerms): boolean {
   return tariff.mode === 'STANDARD' && tariff.usagePaymentMode === 'PREPAID' &&
-    tariff.collectionMode === 'STRIPE' && tariff.monthlyChargeBasis === 'PER_SEAT' && tariff.monthlyAmountMinor > 0n;
+    tariff.collectionMode === 'STRIPE' && tariff.monthlyChargeBasis === 'PER_SEAT' && tariff.monthlyAmountMinor > 0n &&
+    tariff.seatPolicy === 'AUTOMATIC' && tariff.seatChargeTiming === 'PRORATED';
 }
 
 export function assertNessieDefaultTariff(product: string, tariff: DefaultTerms): void {

@@ -50,7 +50,8 @@ CREATE FUNCTION billing_guard_nessie_regular_default() RETURNS trigger LANGUAGE 
 BEGIN
   IF NEW.is_default AND EXISTS(SELECT 1 FROM billing_services WHERE id=NEW.service_id AND identifier='nessie')
     AND (NEW.mode<>'STANDARD' OR NEW.collection_mode<>'STRIPE' OR NEW.monthly_charge_basis<>'PER_SEAT'
-      OR NEW.monthly_amount_minor<=0 OR NEW.usage_payment_mode<>'PREPAID') THEN
+      OR NEW.monthly_amount_minor<=0 OR NEW.usage_payment_mode<>'PREPAID' OR NOT NEW.anniversary_seats
+      OR NEW.seat_policy IS DISTINCT FROM 'AUTOMATIC' OR NEW.seat_charge_timing IS DISTINCT FROM 'PRORATED') THEN
     RAISE EXCEPTION 'Nessie requires a regular prepaid default' USING ERRCODE='23514';
   END IF;
   RETURN NEW;

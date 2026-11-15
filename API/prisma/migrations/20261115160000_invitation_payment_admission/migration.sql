@@ -21,7 +21,7 @@ BEGIN
     SELECT r.currency INTO region_currency FROM billing_organisation_regions r WHERE r.org_id=p_org;
     SELECT t.id,t.anniversary_seats,NULL::text AS selected_team INTO selected
       FROM billing_services svc JOIN billing_tariffs t ON t.service_id=svc.id
-      WHERE svc.identifier='nessie' AND svc.active AND t.mode='STANDARD' AND t.collection_mode='STRIPE'
+      WHERE svc.identifier='nessie' AND svc.active AND t.anniversary_seats AND t.mode='STANDARD' AND t.collection_mode='STRIPE'
         AND t.usage_payment_mode='PREPAID' AND t.monthly_charge_basis='PER_SEAT' AND t.monthly_amount_minor>0
         AND ((region_currency IS NULL AND t.is_default) OR
           (region_currency IS NOT NULL AND t.key='standard-'||lower(region_currency) AND t.currency=region_currency))

@@ -6,7 +6,7 @@ function terms(overrides: Partial<EffectiveTariff['tariff']> = {},
   source: EffectiveTariff['source'] = 'SERVICE_DEFAULT'): EffectiveTariff {
   return { source, assignmentId: null, tariff: {
     mode: 'STANDARD', usagePaymentMode: 'PREPAID', collectionMode: 'STRIPE',
-    monthlyChargeBasis: 'PER_SEAT', monthlyAmountMinor: 399n, ...overrides,
+    monthlyChargeBasis: 'PER_SEAT', monthlyAmountMinor: 399n, seatPolicy: 'AUTOMATIC', seatChargeTiming: 'PRORATED', ...overrides,
   } as EffectiveTariff['tariff'] };
 }
 

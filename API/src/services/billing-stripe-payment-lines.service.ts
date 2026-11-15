@@ -92,15 +92,16 @@ export async function verifyStripePaymentInvoiceLines(params: {
       if (Number.isNaN(at.getTime())) hold();
       const paidPeriod = !usage && subscription.tariff.anniversarySeats && details && !details.proration &&
         ['subscription_create', 'subscription_cycle'].includes(params.invoice.billing_reason ?? '');
-      if (paidPeriod && (!Number.isSafeInteger(line.quantity) || !line.quantity || line.quantity < 1)) hold();
+      const quantity = line.quantity;
+      if (paidPeriod && (!Number.isSafeInteger(quantity) || quantity === null || quantity < 1)) hold();
       result.push({ stripeLineId: line.id, serviceId: subscription.serviceId,
         serviceIdentifier: subscription.service.identifier,
         billingMonth: correction?.close.billingMonth ?? monthly?.billingMonth ?? at.toISOString().slice(0, 7),
         label: `${subscription.service.name} ${usage ? 'usage charge' : 'monthly subscription'}`,
         subscriptionMinor: usage ? 0n : base, usageMinor: usage ? base : 0n,
         taxMinor, creditMinor: 0n, grossMinor: base + taxMinor, dueMinor: base + taxMinor,
-        ...(paidPeriod ? { seatPeriod: { subscriptionId: subscription.id, startsAt: at,
-          endsAt: new Date(line.period.end * 1000), quantity: line.quantity! } } : {}),
+        ...(paidPeriod && quantity !== null ? { seatPeriod: { subscriptionId: subscription.id, startsAt: at,
+          endsAt: new Date(line.period.end * 1000), quantity } } : {}),
       });
     }
     if (!rows.has_more) { complete = true; break; }

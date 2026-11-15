@@ -15,7 +15,7 @@ export async function resolveCurrentBillingTariff(reader: Reader,
     where: { serviceId: scope.serviceId, isDefault: true },
   });
   if (!selected || selected.mode !== 'STANDARD' || selected.usagePaymentMode !== 'PREPAID' ||
-    selected.collectionMode !== 'STRIPE' || selected.monthlyChargeBasis !== 'PER_SEAT' || selected.monthlyAmountMinor <= 0n) {
+    selected.collectionMode !== 'STRIPE' || !selected.anniversarySeats || selected.monthlyChargeBasis !== 'PER_SEAT' || selected.monthlyAmountMinor <= 0n) {
     throw new AppError('FORBIDDEN', 402, 'NESSIE_PREPAID_SETUP_REQUIRED');
   }
   const region = await reader.billingOrganisationRegion.findUnique({ where: { orgId: scope.organisationId } });

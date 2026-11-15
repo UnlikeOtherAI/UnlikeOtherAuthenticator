@@ -1,7 +1,7 @@
 /** Org-only actor assertions are admitted only at these financial surfaces. */
 export const ORGANISATION_FINANCIAL_ENDPOINTS = new Set<string>([
   '/billing/v1/organisation/capabilities','/billing/v1/organisation/overview',
-  '/billing/v1/organisation/region',
+  '/billing/v1/organisation/region', '/billing/v1/organisation/access',
   '/billing/v1/team/overview',
   '/billing/v1/credits/top-up-checkout','/billing/v1/credits/auto-top-up/setup',
   '/billing/v1/credits/auto-top-up/update','/billing/v1/credits/auto-top-up/disable',
