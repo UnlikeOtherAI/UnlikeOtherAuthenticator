@@ -118,7 +118,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // to choose it before SMS pricing, purchase or top-up; IMMUTABLE that it was already chosen. Both
   // follow fresh actor authentication and name nothing beyond the caller's own organisation.
   'BILLING_REGION_REQUIRED',
-  'NESSIE_PREPAID_SETUP_REQUIRED', 'NESSIE_REGULAR_DEFAULT_REQUIRED',
+  'NESSIE_PREPAID_SETUP_REQUIRED', 'NESSIE_REGULAR_DEFAULT_REQUIRED', 'NESSIE_BILLING_SETUP_REQUIRED',
   'BILLING_REGION_IMMUTABLE',
   // A product's monthly SMS number quote for a country whose provider rental reaches the flat
   // price: the product says numbers there are not offered. It names no cost or margin.

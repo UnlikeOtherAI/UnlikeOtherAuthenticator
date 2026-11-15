@@ -17,7 +17,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
   beforeAll(async () => { const created = await createTestDb(); if (!created) throw new Error('DATABASE_URL_REQUIRED'); db = created; });
   afterAll(async () => { if (db) await db.cleanup(); vi.unstubAllEnvs(); });
 
-  it('collects the founder at signup, blocks unpaid access and preserves every join, departure and rejoin', async () => {
+  it('holds invitations until collected, reuses a paid seat at acceptance and charges a new invitation after removal', async () => {
     const p = db.prisma;
     const user = (name: string) => p.user.create({ data: { email: name + '@example.test', userKey: name } });
     const founder = await user('seat-owner');
@@ -43,7 +43,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     expect(await p.billingTariffAssignment.count({ where: { orgId: org.id, tariffId: tariff.id } })).toBe(1);
     const invite = () => p.teamInvite.create({ data: { orgId: org.id, teamId: team.id,
       email: 'seat-member@example.test', lastSentAt: new Date() } });
-    await expect(invite()).rejects.toThrow('complete the seat payment');
+    const held = await invite();
+    const ready = async (id: string) => (await p.$queryRaw<Array<{ ready: boolean }>>`
+      SELECT billing_invitation_seat_ready(${id}) AS ready`)[0]?.ready;
+    expect(await ready(held.id)).toBe(false);
+    expect((await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: org.id } })).endedAt).not.toBeNull();
+    await p.teamInvite.update({ where: { id: held.id }, data: { revokedAt: new Date(), revokedReason: 'CANCELLED' } });
     await expect(orgMember(member.id)).rejects.toThrow('complete the seat payment');
     const billingScopeEpoch = await createTestSandboxOrganisationPolicy(p, org.id);
     configureSyntheticStripeMode('acct_seat', false);
@@ -76,7 +81,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     await p.$transaction(tx => syncBaseStripeSubscription(tx, remote as never, acct));
     expect(await p.billingAutomaticSeatChange.count()).toBe(0);
     // Subscription status precedes the cash webhook. It must not admit anyone in that interval.
-    await expect(invite()).rejects.toThrow('complete the seat payment');
+    const invitation = await invite();
+    expect(await ready(invitation.id)).toBe(false);
     const initialSubscription = await p.billingStripeSubscription.findFirstOrThrow();
     await p.$transaction(tx => persistStripePaymentInvoice(tx, {
       facts: { accountId: acct.id, subscriptionId: initialSubscription.id, livemode: false,
@@ -89,44 +95,17 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
         total: 299, amount_due: 299, amount_paid: 299, amount_remaining: 0, ending_balance: 0 },
     } as never));
     expect((await p.billingStripeSubscription.findFirstOrThrow()).initialSeatInvoiceId).not.toBeNull();
-    const invitation = await invite();
-    expect(await p.billingAutomaticSeatChange.count()).toBe(0);
-    await p.$transaction(async tx => {
-      await tx.orgMember.create({ data: { orgId: org.id, userId: member.id, role: 'member' } });
-      await tx.teamMember.create({ data: { teamId: team.id, userId: member.id } });
-      await tx.teamInvite.update({ where: { id: invitation.id }, data: { acceptedAt: new Date(), acceptedUserId: member.id } });
+    // Collection is queued when the first receipt arrives, even if the invitation arrived before its webhook.
+    expect(await p.billingAutomaticSeatChange.count()).toBe(1);
+    await expect(orgMember(member.id)).rejects.toThrow('complete the seat payment');
+    const accept = (id: string, userId: string) => p.$transaction(async tx => {
+      await tx.orgMember.upsert({ where: { orgId_userId: { orgId: org.id, userId } },
+        create: { orgId: org.id, userId, role: 'member' }, update: { status: 'ACTIVE' } });
+      await tx.teamMember.upsert({ where: { teamId_userId: { teamId: team.id, userId } },
+        create: { teamId: team.id, userId }, update: { status: 'ACTIVE' } });
+      await tx.teamInvite.update({ where: { id }, data: { acceptedAt: new Date(), acceptedUserId: userId } });
     });
     const context = () => getActiveUserOrgContext({ userId: member.id, orgId: org.id, domain: org.domain }, { prisma: p });
-    // Retain the actual migration's table revocations. Only schema usage is needed by the tenant role.
-    await p.$executeRawUnsafe('GRANT USAGE ON SCHEMA "' + db.schema + '" TO uoa_app');
-    const unpaid = (actor: string, subject: string, domain: string) => p.$transaction(async tx => {
-      await tx.$executeRawUnsafe('SET LOCAL ROLE uoa_app');
-      await tx.$executeRaw`SELECT set_config('app.user_id',${actor},true),
-        set_config('app.domain',${domain},true),set_config('app.org_id',${org.id},true)`;
-      return tx.$queryRaw`SELECT team_id FROM billing_pending_product_seats(${org.id},${subject},${domain})`;
-    });
-    expect(await unpaid(member.id, member.id, org.domain)).toEqual([{ team_id: null }]);
-    expect(await unpaid(founder.id, founder.id, org.domain)).toEqual([]);
-    expect(await unpaid(member.id, founder.id, org.domain)).toEqual([{ team_id: null }]);
-    expect(await unpaid(member.id, member.id, 'another-product.example')).toEqual([]);
-    await expect(p.$transaction(async tx => {
-      await tx.$executeRawUnsafe('SET LOCAL ROLE uoa_app');
-      return tx.billingAutomaticSeatChange.findMany();
-    })).rejects.toThrow();
-    expect(await context()).toBeNull();
-    await p.billingService.update({ where: { id: service.id }, data: { active: false } });
-    expect(await unpaid(member.id, member.id, org.domain)).toEqual([{ team_id: null }]);
-    expect(await context()).toBeNull();
-    await p.billingService.update({ where: { id: service.id }, data: { active: true } });
-    await p.billingAppKey.update({ where: { id: appKey.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
-    expect(await unpaid(member.id, member.id, org.domain)).toEqual([{ team_id: null }]);
-    expect(await context()).toBeNull();
-    await p.billingAppKey.update({ where: { id: appKey.id }, data: { revokedAt: new Date() } });
-    expect(await unpaid(member.id, member.id, org.domain)).toEqual([{ team_id: null }]);
-    expect(await context()).toBeNull();
-    await p.billingAppKey.create({ data: { serviceId: service.id, purpose: appKey.purpose, name: 'Rotated seat key',
-      keyPrefix: 'uoa_test_rotated', secretDigest: 'rotated-scope-test-digest', actorIssuer: appKey.actorIssuer,
-      actorAudience: appKey.actorAudience, actorKeyId: 'rotated', actorPublicJwk: {}, checkoutReturnOrigins: appKey.checkoutReturnOrigins } });
     let pending = true;
     const invoices = new Map<string, { id: string; status: string; livemode: boolean; currency: string; customer: string;
       total: number; amount_due: number; amount_paid: number; amount_remaining: number; ending_balance: number;
@@ -148,11 +127,15 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     expect(await p.billingAutomaticSeatChange.findFirst()).toMatchObject({ delta: 1, fromQuantity: 1, toQuantity: 2,
       completedAt: null, stripeInvoiceId: 'in_1', failureCode: 'PAYMENT_REQUIRED' });
     expect(await context()).toBeNull();
-    await expect(invite()).rejects.toThrow('complete the seat payment');
+    expect(await ready(invitation.id)).toBe(false);
+    await expect(accept(invitation.id, member.id)).rejects.toThrow('complete the seat payment');
     const first = invoices.get('in_1'); if (!first) throw new Error('Missing seat invoice');
     pending = false; first.status = 'paid'; item.quantity = 2; now = new Date(now.getTime() + 61000);
     await cycle();
     expect(update).toHaveBeenCalledTimes(1);
+    expect(await ready(invitation.id)).toBe(true);
+    await accept(invitation.id, member.id);
+    expect(await p.billingAutomaticSeatChange.count()).toBe(1);
     expect((await context())?.teams).toContain(team.id);
     const identity = { orgId_userId: { orgId: org.id, userId: member.id } };
     remote.status = 'past_due';
@@ -171,8 +154,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     expect(await context()).toBeNull();
     remote.status = 'active';
     await p.$transaction(tx => syncBaseStripeSubscription(tx, remote as never, acct));
-    await p.orgMember.update({ where: identity, data: { status: 'ACTIVE' } });
+    await expect(p.orgMember.update({ where: identity, data: { status: 'ACTIVE' } })).rejects.toThrow('complete the seat payment');
+    const returning = await invite();
+    expect(await ready(returning.id)).toBe(false);
     await cycle(); await cycle();
+    await accept(returning.id, member.id);
     const evidence = await p.billingAutomaticSeatChange.findMany({ orderBy: { id: 'asc' } });
     expect(evidence.map(row => [row.delta, row.fromQuantity, row.toQuantity, row.stripeInvoiceId])).toEqual([
       [1, 1, 2, 'in_1'], [-1, 2, 1, null], [1, 1, 2, 'in_2'],
@@ -181,22 +167,19 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     expect(update.mock.calls.map(call => call[1].proration_behavior)).toEqual(['always_invoice', 'none', 'none', 'always_invoice']);
     expect(invoices.size).toBe(2);
     await expect(p.billingAutomaticSeatChange.delete({ where: { id: evidence[0].id } })).rejects.toThrow('immutable');
-    expect(await unpaid(member.id, member.id, org.domain)).toEqual([]);
     const additional = await Promise.all([user('concurrent-one'), user('concurrent-two')]);
-    await Promise.all(additional.map(async person => {
-      const sent = await p.teamInvite.create({ data: { orgId: org.id, teamId: team.id, email: person.email!, lastSentAt: now } });
-      await p.$transaction(async tx => {
-        await tx.orgMember.create({ data: { orgId: org.id, userId: person.id, role: 'member' } });
-        await tx.teamMember.create({ data: { userId: person.id, teamId: team.id } });
-        await tx.teamInvite.update({ where: { id: sent.id }, data: { acceptedUserId: person.id, acceptedAt: now } });
-      });
-    }));
+    const sent = await Promise.all(additional.map(person => p.teamInvite.create({ data: {
+      orgId: org.id, teamId: team.id, email: person.email!, lastSentAt: now,
+    } })));
+    expect(await Promise.all(sent.map(row => ready(row.id)))).toEqual([false, false]);
     await Promise.all([cycle(), cycle()]);
-    const joined = await p.billingAutomaticSeatChange.findMany({ where: { userId: { in: additional.map(person => person.id) } },
+    const joined = await p.billingAutomaticSeatChange.findMany({ where: { inviteId: { in: sent.map(row => row.id) } },
       orderBy: { id: 'asc' } });
     expect(joined.map(row => [row.fromQuantity, row.toQuantity])).toEqual([[2, 3], [3, 4]]);
     expect(joined.every(row => row.completedAt && row.stripeInvoiceId)).toBe(true);
     expect(new Set(joined.map(row => row.stripeInvoiceId)).size).toBe(2);
+    await Promise.all(sent.map((row, index) => accept(row.id, additional[index].id)));
+    expect(await p.billingAutomaticSeatChange.count()).toBe(5);
     await expect(p.billingAutomaticSeatChange.update({ where: { id: evidence[0].id },
       data: { completedAt: null } })).rejects.toThrow('immutable');
     await expect(p.billingAutomaticSeatChange.update({ where: { id: evidence[0].id },

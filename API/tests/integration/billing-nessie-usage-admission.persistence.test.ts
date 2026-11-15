@@ -14,7 +14,7 @@ const unfunded = { ...standard, key: 'unfunded', mode: 'at_cost' as const,
 async function reserve(dispatchId: string, rawCostBound = '0.00000001') {
   const input = { ...admissionInput(dispatchId), product: 'nessie', rawCostBound };
   return reservePrepaidDispatch({ runtimeSecret: secret, input, delegation: await delegation({ product: 'nessie' }) },
-    { prisma, now: new Date(input.dispatchStartedAt) });
+    { prisma, now: new Date(input.dispatchStartedAt), cardOnFile: async () => undefined });
 }
 
 describe.skipIf(!enabled)('Nessie payment gate at the real reservation interface', () => {

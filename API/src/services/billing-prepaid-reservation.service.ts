@@ -1,3 +1,5 @@
+import { assertNessieCardOnFile } from './billing-nessie-card-admission.service.js';
+import { validId, rawCost } from './billing-prepaid-input.service.js';
 import { billingReservedMicrocredits } from './billing-credit-holds.service.js';
 import {
   BillingCreditEntryDirection, BillingCreditEntryKind, BillingPrepaidReservationStatus,
@@ -27,23 +29,6 @@ import { recordLegacyPrepaidLiability,
 import { finalizeUnreservedLedgerDispatch } from './billing-ledger-dispatch-finalization.service.js';
 import { ratedMicrocredits, ratedMicrocreditsFromQuanta, scaledRaw } from
   './billing-prepaid-rating.service.js';
-
-const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
-const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
-
-function validId(value: string): string {
-  if (!ID_PATTERN.test(value)) throw new AppError('BAD_REQUEST', 400, 'PREPAID_DISPATCH_ID_INVALID');
-  return value;
-}
-
-function rawCost(value: string): Prisma.Decimal {
-  if (!DECIMAL_PATTERN.test(value)) throw new AppError('BAD_REQUEST', 400, 'PREPAID_COST_INVALID');
-  const decimal = new Prisma.Decimal(value);
-  if (decimal.decimalPlaces() > 18 || !decimal.isFinite() || decimal.isNegative()) {
-    throw new AppError('BAD_REQUEST', 400, 'PREPAID_COST_INVALID');
-  }
-  return decimal;
-}
 
 export type ReservePrepaidDispatchInput = {
   dispatchId: string;
@@ -83,7 +68,7 @@ async function withBudgetContextDigest<T extends { dispatch_id: string }>(
 
 export async function reservePrepaidDispatch(
   params: { runtimeSecret: string; delegation: string; input: ReservePrepaidDispatchInput },
-  deps?: { prisma?: PrismaClient; now?: Date },
+  deps?: { prisma?: PrismaClient; now?: Date; cardOnFile?: typeof assertNessieCardOnFile },
 ) {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const key = await verifyLedgerRuntimeKey(params.runtimeSecret, { prisma });
@@ -221,7 +206,10 @@ export async function reservePrepaidDispatch(
       }
       throw error;
     });
-  if (decision) return withBudgetContextDigest(prisma, decision);
+  if (decision) {
+    if (decision.payment_mode === 'prepaid') await (deps?.cardOnFile ?? assertNessieCardOnFile)(input, prisma);
+    return withBudgetContextDigest(prisma, decision);
+  }
   if (bound === null) throw new AppError('BAD_REQUEST', 422, 'PREPAID_BOUND_REQUIRED');
   if (input.currency !== 'USD') {
     throw new AppError('BAD_REQUEST', 409, 'PREPAID_CURRENCY_UNSUPPORTED');
@@ -229,6 +217,7 @@ export async function reservePrepaidDispatch(
   const collection = await resolveCreditCollectionContext({
     organisationId: input.organisationId, teamId: input.teamId,
   }, { prisma });
+  await (deps?.cardOnFile ?? assertNessieCardOnFile)(input, prisma, { collection });
   const creditAccount = await resolveCreditAccount({
     account: collection.account,
     organisationId: input.organisationId, teamId: input.teamId,

@@ -1,3 +1,4 @@
+import { withInvitationDelivery } from './invitation-delivery.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -105,7 +106,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
         const body = MemberInviteBodySchema.parse(request.body ?? {});
 
         setTenantContextFromRequest(request, { orgId, userId: caller.actorUserId });
-        const result = await request.withTenantTx((tx) =>
+        const result = await withInvitationDelivery(request, (tx, afterCommit) =>
           createMemberInvite(
             {
               orgId,
@@ -117,7 +118,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
               redirectUrl: body.redirectUrl,
               invite: { email: body.email, name: body.name, teamRole: body.teamRole },
             },
-            { prisma: asPrismaClient(tx) },
+            { prisma: asPrismaClient(tx), afterCommit },
           ),
         );
 
@@ -128,7 +129,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       const body = BulkInviteBodySchema.parse(request.body ?? {});
 
       setTenantContextFromRequest(request, { orgId });
-      const result = await request.withTenantTx((tx) =>
+      const result = await withInvitationDelivery(request, (tx, afterCommit) =>
         createTeamInvites(
           {
             orgId,
@@ -140,7 +141,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
             invitedBy: body.invitedBy,
             invites: body.invites,
           },
-          { prisma: asPrismaClient(tx) },
+          { prisma: asPrismaClient(tx), afterCommit },
         ),
       );
 
@@ -268,11 +269,11 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       const inviteId = getInviteIdFromParams(request.params);
 
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
-      const invite = await request.withTenantTx(async (tx) => {
+      const invite = await withInvitationDelivery(request, async (tx, afterCommit) => {
         await requireInvitationManager(request, asPrismaClient(tx));
         return resendTeamInvite(
           { orgId, teamId, inviteId, domain, config, configUrl },
-          { prisma: asPrismaClient(tx) },
+          { prisma: asPrismaClient(tx), afterCommit },
         );
       });
 

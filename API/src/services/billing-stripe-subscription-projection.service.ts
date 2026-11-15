@@ -184,7 +184,8 @@ export async function syncBaseStripeSubscription(
     },
   });
   if (checkout.tariff.anniversarySeats && (subscription.billing_mode?.type !== 'classic' || !items.monthlyItem ||
-    (!existing && (checkout.initialSeatMembers.length < 1 || items.monthlyItem.quantity !== checkout.initialSeatMembers.length)))) {
+    (!existing && (checkout.initialSeatMembers.length < 1 ||
+      items.monthlyItem.quantity !== checkout.initialSeatMembers.length + checkout.initialSeatInvites.length)))) {
     throw new AppError('INTERNAL', 502, 'STRIPE_SEAT_QUANTITY_BINDING_INVALID');
   }
   if (existing) assertImmutableSubscription(existing, checkout, account);

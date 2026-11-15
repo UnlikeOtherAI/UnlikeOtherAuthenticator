@@ -412,7 +412,8 @@ export async function createStripeCheckoutSession(
     throw new AppError('INTERNAL', 500, 'STRIPE_CATALOG_INCOMPLETE');
   }
 
-  const monthlyQuantity = details.tariff.anniversarySeats ? checkout.initialSeatMembers.length : 1;
+  const monthlyQuantity = details.tariff.anniversarySeats
+    ? checkout.initialSeatMembers.length + checkout.initialSeatInvites.length : 1;
   if (details.tariff.anniversarySeats && (!tariffPrice.stripeMonthlyPriceId || monthlyQuantity < 1)) {
     throw new AppError('INTERNAL', 503, 'STRIPE_SEAT_QUANTITY_BINDING_INVALID');
   }

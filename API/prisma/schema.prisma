@@ -1370,6 +1370,7 @@ model OrgAuditLog {
 }
 
 model Organisation {
+  nessieSeatTransition BillingNessieSeatTransition?
   billingBudgetDispatches BillingCreditBudgetDispatch[]
   id                  String       @id @default(cuid())
   billingSeatGuardVersion BigInt   @default(0) @map("billing_seat_guard_version")
@@ -1725,6 +1726,16 @@ model TeamMember {
 }
 
 model TeamInvite {
+  billingSeatRequired Boolean @default(false) @map("billing_seat_required")
+  billingSeatSourceInviteId String? @map("billing_seat_source_invite_id")
+  billingSeatSubscriptionId String? @map("billing_seat_subscription_id")
+  billingSeatFundedAt DateTime? @map("billing_seat_funded_at") @db.Timestamptz(3)
+  billingSeatEndedAt DateTime? @map("billing_seat_ended_at") @db.Timestamptz(3)
+  billingSeatSourceInvite TeamInvite? @relation("InvitationSeatSource", fields: [billingSeatSourceInviteId], references: [id], onDelete: Restrict)
+  billingSeatReplacements TeamInvite[] @relation("InvitationSeatSource")
+  billingSeatSubscription BillingSeatSubscription? @relation(fields: [billingSeatSubscriptionId], references: [id], onDelete: Restrict)
+  billingSeatChanges BillingAutomaticSeatChange[]
+
   id                String               @id @default(cuid())
   orgId             String               @map("org_id")
   teamId            String               @map("team_id")
@@ -2497,6 +2508,7 @@ model BillingStripeCheckoutSession {
   scopeKey                String                 @map("scope_key") @db.VarChar(520)
   actorJti                String                 @map("actor_jti") @db.VarChar(256)
   fixedSeatQuantity       Int?                   @map("fixed_seat_quantity")
+  initialSeatInvites      String[] @default([]) @map("initial_seat_invites")
   initialSeatMembers      String[]               @default([]) @map("initial_seat_members")
   requestedByUserId       String                 @map("requested_by_user_id")
   successUrlDigest        String                 @map("success_url_digest") @db.Char(64)
@@ -2850,6 +2862,7 @@ model BillingContractServiceTerm {
 // whether Stripe or a manual organisation contract collects its monthly fee.
 // Activation must write the current-member baseline in the same transaction.
 model BillingSeatSubscription {
+  fundedInvitations TeamInvite[]
   id                    String                   @id @default(cuid())
   stripeSubscriptionId  String?                  @unique @map("stripe_subscription_id")
   contractServiceTermId String?                  @unique @map("contract_service_term_id")
@@ -2904,9 +2917,12 @@ model BillingSeatMembershipInterval {
 }
 
 model BillingAutomaticSeatChange {
+  inviteId String? @map("invite_id")
+  invitation TeamInvite? @relation(fields: [inviteId], references: [id], onDelete: Restrict)
+  cancelledWithoutCharge Boolean @default(false) @map("cancelled_without_charge")
   id                 BigInt    @id @default(autoincrement())
   seatSubscriptionId String    @map("seat_subscription_id")
-  userId             String    @map("user_id")
+  userId             String?   @map("user_id")
   delta              Int
   fromQuantity       Int       @map("from_quantity")
   toQuantity         Int       @map("to_quantity")
@@ -2917,7 +2933,7 @@ model BillingAutomaticSeatChange {
   failureCode        String?   @map("failure_code")
   firstAttemptAt     DateTime? @map("first_attempt_at")
   attemptVersion     Int       @default(1) @map("attempt_version")
-  user               User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user               User?     @relation(fields: [userId], references: [id], onDelete: Restrict)
   seatSubscription   BillingSeatSubscription @relation(fields: [seatSubscriptionId], references: [id], onDelete: Restrict)
   @@index([seatSubscriptionId, id])
   @@map("billing_automatic_seat_changes")
@@ -6330,4 +6346,15 @@ model MachineBrowserSession {
   finalizedAt DateTime? @map("finalized_at") @db.Timestamptz
   expiresAt DateTime @map("expires_at") @db.Timestamptz
   @@map("machine_browser_sessions")
+}
+
+// A one-time, frozen cohort for the transition to Nessie's regular seat plan.
+model BillingNessieSeatTransition {
+  orgId String @id @map("org_id")
+  startsAt DateTime @map("starts_at") @db.Timestamptz(3)
+  endsAt DateTime @map("ends_at") @db.Timestamptz(3)
+  cohortUserIds String[] @map("cohort_user_ids")
+  endedAt DateTime? @map("ended_at") @db.Timestamptz(3)
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  @@map("billing_nessie_seat_transitions")
 }

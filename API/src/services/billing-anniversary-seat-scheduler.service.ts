@@ -9,12 +9,15 @@ import { requireStripeBillingEnabled, resolveStripeAccountContext } from './bill
 type Provider = StripeInvoiceCashClient & Pick<Stripe, 'accounts' | 'subscriptions' | 'events' | 'customers'>;
 
 export async function runAnniversarySeatCycle(deps?: {
-  prisma?: PrismaClient; stripe?: Provider; livemode?: boolean; now?: () => Date;
+  prisma?: PrismaClient; stripe?: Provider; livemode?: boolean; now?: () => Date; inviteId?: string;
 }) {
   const prisma = deps?.prisma ?? getAdminPrisma();
   const now = deps?.now?.() ?? new Date();
+  if (!deps?.inviteId) await prisma.$queryRaw`SELECT billing_expire_invitation_seats(25)`;
   const due = await prisma.billingAutomaticSeatChange.findFirst({ where: {
-    completedAt: null, nextAttemptAt: { lte: now } }, select: { id: true } });
+    completedAt: null, nextAttemptAt: { lte: now },
+    ...(deps?.inviteId ? { inviteId: deps.inviteId } : {}),
+  }, select: { id: true } });
   if (!due) return 0;
   const runtime = deps?.stripe ? { client: deps.stripe, livemode: deps.livemode } : requireStripeBillingEnabled();
   if (runtime.livemode === undefined) throw new Error('STRIPE_SEAT_MODE_REQUIRED');
@@ -31,6 +34,7 @@ export async function runAnniversarySeatCycle(deps?: {
         WHERE b.account_id=${account.id} AND b.livemode=${account.livemode}
           AND b.initial_seat_invoice_id IS NOT NULL
           AND c.completed_at IS NULL AND c.next_attempt_at <= ${now}
+          AND (${deps?.inviteId ?? null}::text IS NULL OR c.invite_id=${deps?.inviteId ?? null})
           AND NOT EXISTS (SELECT 1 FROM billing_automatic_seat_changes prior
             WHERE prior.seat_subscription_id=c.seat_subscription_id AND prior.id<c.id AND prior.completed_at IS NULL)
         ORDER BY c.next_attempt_at,c.id LIMIT 1 FOR UPDATE OF c SKIP LOCKED

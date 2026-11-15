@@ -162,9 +162,9 @@ export async function seed(product = 'deepwater'): Promise<void> {
       VALUES (${ids.service}, ${product}, ${product}, '2026-10', CURRENT_TIMESTAMP)`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "billing_tariffs"
       ("id", "service_id", "key", "version", "name", "mode", "collection_mode",
-       "markup_bps", "currency", "usage_payment_mode")
+       "markup_bps", "currency", "usage_currency", "usage_payment_mode")
       VALUES (${ids.tariff}, ${ids.service}, 'prepaid', 1, 'Prepaid', 'STANDARD',
-        'NONE', 0, 'USD', 'PREPAID')`);
+        'NONE', 0, 'USD', 'USD', 'PREPAID')`);
     await tx.$executeRaw(Prisma.sql`INSERT INTO "billing_stripe_accounts"
       ("id", "stripe_account_id", "livemode", "updated_at")
       VALUES (${ids.account}, 'acct_PrepaidRating', false, CURRENT_TIMESTAMP)`);

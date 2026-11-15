@@ -223,42 +223,51 @@ export async function createMemberInvite(
   });
 
   if (approvalStatus === 'NOT_REQUIRED') {
+    const deliver = async (prisma: InvitePrisma) => {
+      const deliver = async (prisma: InvitePrisma) => {
     const token = await issueInviteToken({
-      prisma,
-      inviteId: invite.id,
-      existingUser,
-      email,
-      userKey: identity.userKey,
-      domain: identity.domain,
-      config: params.config,
-      configUrl: params.configUrl,
-      now,
-      sharedSecret: deps?.sharedSecret,
-      generateEmailTokenFn: deps?.generateEmailToken,
-      hashEmailTokenFn: deps?.hashEmailToken ?? hashEmailToken,
-    });
+          prisma,
+          inviteId: invite.id,
+          existingUser,
+          email,
+          userKey: identity.userKey,
+          domain: identity.domain,
+          config: params.config,
+          configUrl: params.configUrl,
+          now,
+          sharedSecret: deps?.sharedSecret,
+          generateEmailTokenFn: deps?.generateEmailToken,
+          hashEmailTokenFn: deps?.hashEmailToken ?? hashEmailToken,
+        });
 
-    const link = buildTeamInviteLink({
-      baseUrl: resolveBaseUrl(env),
-      token,
-      configUrl: params.configUrl,
-      redirectUrl,
-    });
+        const link = buildTeamInviteLink({
+          baseUrl: resolveBaseUrl(env),
+          token,
+          configUrl: params.configUrl,
+          redirectUrl,
+        });
 
-    await sendInviteEmail({
-      to: email,
-      link,
-      trackingPixelUrl: buildTeamInviteTrackingPixelUrl({
-        baseUrl: resolveBaseUrl(env),
-        inviteId: invite.id,
-      }),
-      organisationName: org.name,
-      teamName: team.name,
-      inviteeName: inviteName ?? undefined,
-      inviterName: (await resolveInviterName(invite, { prisma: deps?.inviterPrisma })) ?? undefined,
-      theme: extractEmailTheme(params.config),
-    });
-  }
+        await sendInviteEmail({
+          to: email,
+          link,
+          trackingPixelUrl: buildTeamInviteTrackingPixelUrl({
+            baseUrl: resolveBaseUrl(env),
+            inviteId: invite.id,
+          }),
+          organisationName: org.name,
+          teamName: team.name,
+          inviteeName: inviteName ?? undefined,
+          inviterName: (await resolveInviterName(invite, { prisma: deps?.inviterPrisma })) ?? undefined,
+          theme: extractEmailTheme(params.config),
+        });
+      };
+      if (deps?.afterCommit) deps.afterCommit(invite.id, deliver);
+      else await deliver(prisma);
+
+    }
+  };
+  if (deps?.afterCommit) deps.afterCommit(updated.id, deliver);
+  else await deliver(prisma);
 
   await auditOrg({
     orgId: org.id,
