@@ -9,6 +9,7 @@ export type VerifiedStripeInvoiceLine = {
   stripeLineId: string; offsetStripeLineId?: string; carriedFromStripeInvoiceId?: string; serviceId: string; serviceIdentifier: string;
   billingMonth: string; label: string; subscriptionMinor: bigint; usageMinor: bigint;
   taxMinor: bigint; creditMinor: bigint; grossMinor: bigint; dueMinor: bigint;
+  seatPeriod?: { subscriptionId: string; startsAt: Date; endsAt: Date; quantity: number };
 };
 
 function hold(): never {
@@ -89,12 +90,18 @@ export async function verifyStripePaymentInvoiceLines(params: {
         (details && details.subscription_item === subscription.stripeUsageItemId));
       const at = new Date(line.period.start * 1000);
       if (Number.isNaN(at.getTime())) hold();
+      const paidPeriod = !usage && subscription.tariff.anniversarySeats && details && !details.proration &&
+        ['subscription_create', 'subscription_cycle'].includes(params.invoice.billing_reason ?? '');
+      if (paidPeriod && (!Number.isSafeInteger(line.quantity) || !line.quantity || line.quantity < 1)) hold();
       result.push({ stripeLineId: line.id, serviceId: subscription.serviceId,
         serviceIdentifier: subscription.service.identifier,
         billingMonth: correction?.close.billingMonth ?? monthly?.billingMonth ?? at.toISOString().slice(0, 7),
         label: `${subscription.service.name} ${usage ? 'usage charge' : 'monthly subscription'}`,
         subscriptionMinor: usage ? 0n : base, usageMinor: usage ? base : 0n,
-        taxMinor, creditMinor: 0n, grossMinor: base + taxMinor, dueMinor: base + taxMinor });
+        taxMinor, creditMinor: 0n, grossMinor: base + taxMinor, dueMinor: base + taxMinor,
+        ...(paidPeriod ? { seatPeriod: { subscriptionId: subscription.id, startsAt: at,
+          endsAt: new Date(line.period.end * 1000), quantity: line.quantity! } } : {}),
+      });
     }
     if (!rows.has_more) { complete = true; break; }
     after = rows.data.at(-1)?.id;

@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
+import { prepareSeatRenewalFailure, recordSeatRenewalFailure } from './billing-seat-renewal.service.js';
 
 import { getEnv } from '../config/env.js';
 import { getAdminPrisma } from '../db/prisma.js';
@@ -45,7 +46,7 @@ export { refreshStripeSubscriptionProjection, syncStripeSubscriptionProjection }
 type StripeWebhookClient = Pick<
   Stripe,
     'accounts' | 'balanceTransactions' | 'billing' | 'charges' | 'checkout' | 'customers' | 'invoicePayments' |
-  'invoices' | 'invoiceItems' | 'subscriptions' | 'webhooks'
+    'invoices' | 'invoiceItems' | 'subscriptions' | 'webhooks' | 'events'
 > &
   CreditFundingWebhookClient;
 
@@ -255,6 +256,8 @@ export async function handleStripeWebhook(
     ? await prepareStripePaymentInvoice(cashInvoiceId, account, prisma, stripe) : null;
   const subscriptionPaymentAdjustment = !recurringAddon && !creditFunding
     ? await prepareStripePaymentAdjustment(event, stripe, account, prisma) : null;
+  const seatRenewalFailure = !recurringAddon && !creditFunding
+    ? await prepareSeatRenewalFailure(event, account, prisma, stripe) : null;
   if (recurringAddon && creditFunding) {
     throw new AppError('INTERNAL', 503, 'STRIPE_WEBHOOK_BINDING_AMBIGUOUS');
   }
@@ -290,6 +293,7 @@ export async function handleStripeWebhook(
       if (subscriptionPaymentAdjustment) {
         await persistStripePaymentAdjustment(tx, subscriptionPaymentAdjustment);
       }
+      if (seatRenewalFailure) await recordSeatRenewalFailure(tx, seatRenewalFailure);
       if (recurringAddon) {
         await applyRecurringAddonWebhook(tx, recurringAddon, webhookEventId, account);
       }

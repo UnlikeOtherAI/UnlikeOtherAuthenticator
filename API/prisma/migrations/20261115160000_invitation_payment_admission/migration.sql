@@ -33,12 +33,21 @@ END;
 $$;
 
 CREATE FUNCTION billing_nessie_start_transition(p_org text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE start_at timestamptz;
+DECLARE start_at timestamptz; changed_at timestamptz;
 BEGIN
   PERFORM billing_seat_touch_org(p_org);
   IF EXISTS(SELECT 1 FROM billing_nessie_seat_transitions WHERE org_id=p_org) THEN RETURN; END IF;
   SELECT CASE WHEN o.created_at>=c.applied_at THEN o.created_at ELSE clock_timestamp() END INTO STRICT start_at
     FROM organisations o CROSS JOIN billing_nessie_admission_cutover c WHERE o.id=p_org;
+  -- Delaying the first login cannot move a previously scheduled free-to-paid transition.
+  SELECT GREATEST(e.created_at,to_date(e.effective_from_month||'-01','YYYY-MM-DD')::timestamptz) INTO changed_at
+    FROM billing_tariff_term_events e JOIN billing_tariffs t ON t.id=e.tariff_id AND t.anniversary_seats
+      JOIN billing_services svc ON svc.id=e.service_id AND svc.identifier='nessie'
+    WHERE e.source='ORGANISATION' AND e.scope_key=p_org
+      AND e.effective_from_month<=to_char(now(),'YYYY-MM')
+    ORDER BY e.effective_from_month DESC,e.sequence DESC LIMIT 1;
+  IF changed_at IS NOT NULL AND EXISTS(SELECT 1 FROM organisations o CROSS JOIN billing_nessie_admission_cutover c
+    WHERE o.id=p_org AND o.created_at<c.applied_at) THEN start_at:=changed_at; END IF;
   INSERT INTO billing_nessie_seat_transitions(org_id,starts_at,ends_at,cohort_user_ids)
     VALUES(p_org,start_at,start_at+interval '336 hours',
       ARRAY(SELECT DISTINCT user_id FROM (

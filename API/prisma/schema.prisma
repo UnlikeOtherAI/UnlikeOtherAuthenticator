@@ -2544,6 +2544,8 @@ model BillingStripeCheckoutSession {
 }
 
 model BillingStripeSubscription {
+  paidSeatPeriods BillingSeatPaymentPeriod[]
+  seatRenewals BillingSeatRenewalRecovery[]
   initialSeatInvoiceId String? @unique @map("initial_seat_invoice_id")
   initialSeatPaymentInvoice BillingStripePaymentInvoice? @relation("InitialSeatPayment", fields: [initialSeatInvoiceId], references: [id], onDelete: Restrict)
   id                   String                 @id @default(cuid())
@@ -5073,6 +5075,8 @@ model BillingManualCreditNote {
 // Verified cash payment and its existing Stripe legal invoice. Financial
 // provenance is immutable; incomplete legal documents remain pending.
 model BillingStripePaymentInvoice {
+  paidSeatPeriods BillingSeatPaymentPeriod[]
+  recoveredSeatRenewals BillingSeatRenewalRecovery[] @relation("SeatRenewalPayment")
   initialSeatSubscription BillingStripeSubscription? @relation("InitialSeatPayment")
   id                     String   @id @default(cuid())
   accountId              String   @map("account_id")
@@ -6357,4 +6361,48 @@ model BillingNessieSeatTransition {
   endedAt DateTime? @map("ended_at") @db.Timestamptz(3)
   org Organisation @relation(fields: [orgId], references: [id], onDelete: Restrict)
   @@map("billing_nessie_seat_transitions")
+}
+
+// Collected coverage, independent of a provider subscription's mutable status.
+model BillingSeatPaymentPeriod {
+  id String @id @default(cuid())
+  subscriptionId String @map("subscription_id")
+  invoiceId String @map("invoice_id")
+  stripeLineId String @map("stripe_line_id")
+  startsAt DateTime @map("starts_at") @db.Timestamptz(3)
+  endsAt DateTime @map("ends_at") @db.Timestamptz(3)
+  quantity Int
+  subscription BillingStripeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  invoice BillingStripePaymentInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  @@unique([invoiceId, stripeLineId])
+  @@index([subscriptionId, startsAt, endsAt])
+  @@map("billing_seat_payment_periods")
+}
+
+model BillingSeatRenewalRecovery {
+  id String @id @default(cuid())
+  accountId String @map("account_id")
+  subscriptionId String @map("subscription_id")
+  stripeInvoiceId String @map("stripe_invoice_id")
+  failedAt DateTime @map("failed_at") @db.Timestamptz(3)
+  graceEndsAt DateTime @map("grace_ends_at") @db.Timestamptz(3)
+  reason String
+  paymentInvoiceId String? @map("payment_invoice_id")
+  recoveredAt DateTime? @map("recovered_at") @db.Timestamptz(3)
+  subscription BillingStripeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  paymentInvoice BillingStripePaymentInvoice? @relation("SeatRenewalPayment", fields: [paymentInvoiceId], references: [id], onDelete: Restrict)
+  @@unique([accountId, stripeInvoiceId])
+  @@index([subscriptionId, recoveredAt, graceEndsAt])
+  @@map("billing_seat_renewal_recovery")
+}
+
+model BillingSeatFailureHistory {
+  accountId String @map("account_id")
+  stripeInvoiceId String @map("stripe_invoice_id")
+  earliestFailureAt DateTime @map("earliest_failure_at") @db.Timestamptz(3)
+  cursor String?
+  complete Boolean @default(false)
+  generation Int @default(0)
+  @@id([accountId, stripeInvoiceId])
+  @@map("billing_seat_failure_history")
 }

@@ -123,7 +123,7 @@ export async function reservePrepaidDispatch(
       originInvocationId: input.jobCompute?.originInvocationId ?? null });
     const tariff = await resolveDispatchFundingTariff(tx, {
       serviceId: key.serviceId, organisationId: input.organisationId,
-      teamId: input.teamId, billingMonth,
+      teamId: input.teamId, userId: input.userId, billingMonth,
     }, input.product);
     const previous = await tx.billingLedgerDispatchDecision.findUnique({
       where: { dispatchId: input.dispatchId }, include: { release: true },
@@ -247,7 +247,7 @@ export async function reservePrepaidDispatch(
     if (cancelled) throw new AppError('BAD_REQUEST', 409, 'PREPAID_DISPATCH_CONFLICT');
     const tariff = await resolveDispatchFundingTariff(tx, {
       serviceId: key.serviceId, organisationId: input.organisationId,
-      teamId: input.teamId, billingMonth,
+      teamId: input.teamId, userId: input.userId, billingMonth,
     }, input.product);
     const existing = await tx.billingPrepaidReservation.findUnique({
       where: { dispatchId: input.dispatchId },

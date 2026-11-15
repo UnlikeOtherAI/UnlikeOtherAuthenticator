@@ -1,4 +1,5 @@
 import { recognizeInitialSeatPayment } from './billing-initial-seat-payment.service.js';
+import { recognizeSeatPaymentPeriod } from './billing-seat-payment-period.service.js';
 import { createHash } from 'node:crypto';
 
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -135,7 +136,7 @@ export async function prepareStripePaymentInvoice(
   const { stripePaymentIntentIds: _intents, paymentEvidence: _payments,
     paidAt: _paidAt, paidAmountMinor: _paidAmount, ...financialFacts } = facts;
   const sourceDigest = createHash('sha256').update(JSON.stringify({ facts: financialFacts,
-    lines: lines.map(({ label: _label, ...line }) => line) },
+    lines: lines.map(({ label: _label, seatPeriod: _period, ...line }) => line) },
     (_key, value) => typeof value === 'bigint' ? value.toString() : value)).digest('hex');
   return { facts, lines, sourceDigest, invoice };
 }
@@ -149,7 +150,7 @@ export async function persistStripePaymentInvoice(
   } };
   const row = await tx.billingStripePaymentInvoice.upsert({ where: key,
     create: { ...prepared.facts, sourceDigest: prepared.sourceDigest,
-      lines: { create: prepared.lines } }, update: {}, include: { lines: true } });
+      lines: { create: prepared.lines.map(({ seatPeriod: _period, ...line }) => line) } }, update: {}, include: { lines: true } });
   if (row.sourceDigest !== prepared.sourceDigest || row.lines.length !== prepared.lines.length) {
     throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_INVOICE_SOURCE_CHANGED');
   }
@@ -177,5 +178,6 @@ export async function persistStripePaymentInvoice(
     }
   }
   await recognizeInitialSeatPayment(tx, prepared.invoice, row);
+  await recognizeSeatPaymentPeriod(tx, prepared.invoice, row, prepared.lines);
   return row;
 }
