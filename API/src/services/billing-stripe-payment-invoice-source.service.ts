@@ -177,7 +177,8 @@ export async function persistStripePaymentInvoice(
       throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_PAYMENT_HISTORY_CHANGED');
     }
   }
-  await recognizeInitialSeatPayment(tx, prepared.invoice, row);
+  // Coverage must exist before initial activation queues invitations received during checkout.
   await recognizeSeatPaymentPeriod(tx, prepared.invoice, row, prepared.lines);
+  await recognizeInitialSeatPayment(tx, prepared.invoice, row);
   return row;
 }
