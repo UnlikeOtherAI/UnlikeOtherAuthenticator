@@ -49,6 +49,10 @@ exit "\${FAKE_MIGRATION_EXIT:-0}"
     join(bin, 'node'),
     `#!/bin/sh
 set -eu
+if [ "$1" = "API/dist/cli/recover-invitation-migration.js" ]; then
+  printf '%s' "$DATABASE_URL" > "$CAPTURE_DIR/recovery-database-url"
+  exit "\${FAKE_RECOVERY_EXIT:-0}"
+fi
 printf '%s' "$DATABASE_URL" > "$CAPTURE_DIR/runtime-database-url"
 printf '%s' "\${DATABASE_ADMIN_URL:-}" > "$CAPTURE_DIR/runtime-admin-url"
 printf '%s' "\${migration_database_url:-}" > "$CAPTURE_DIR/runtime-migration-shadow"
@@ -103,6 +107,7 @@ describe('production container startup database boundary', () => {
     });
 
     expect(result.code).toBe(0);
+    await expect(readFile(join(runtime.capture, 'recovery-database-url'), 'utf8')).resolves.toBe(adminUrl);
     await expect(readFile(join(runtime.capture, 'migration-database-url'), 'utf8')).resolves.toBe(
       adminUrl,
     );
@@ -188,6 +193,18 @@ describe('production container startup database boundary', () => {
     await expect(access(join(runtime.capture, 'runtime-database-url'))).rejects.toBeDefined();
     expect(`${result.stdout}\n${result.stderr}`).not.toContain('runtime-secret');
     expect(`${result.stdout}\n${result.stderr}`).not.toContain('admin-secret');
+  });
+
+  it('stops before Prisma and the API when recovery cannot prove a safe retry', async () => {
+    const runtime = await fakeRuntime();
+    const result = await runStartup(runtime, {
+      DATABASE_ADMIN_URL: 'postgresql://uoa_admin:admin-secret@db/auth',
+      DATABASE_URL: 'postgresql://uoa_app:runtime-secret@db/auth',
+      FAKE_RECOVERY_EXIT: '1', NODE_ENV: 'production',
+    });
+    expect(result.code).toBe(1);
+    await expect(access(join(runtime.capture, 'migration-database-url'))).rejects.toBeDefined();
+    await expect(access(join(runtime.capture, 'runtime-database-url'))).rejects.toBeDefined();
   });
 
   // P3009 means a PREVIOUS migration is half-recorded, so every boot fails the

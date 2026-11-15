@@ -27,6 +27,10 @@ else
   esac
 fi
 
+# A reviewed, checksum-pinned repair handles the rolled-back invitation migration.
+# The admin DSN remains scoped to this command, just like Prisma below.
+DATABASE_URL="$migration_database_url" node API/dist/cli/recover-invitation-migration.js
+
 # The command-scoped assignment is the trust boundary: Prisma may migrate with
 # the admin principal, but this shell's DATABASE_URL remains the runtime DSN.
 #
@@ -34,7 +38,7 @@ fi
 # is right: refusing to serve on an unknown schema beats serving on one. P3009 is
 # different. It means a PREVIOUS migration died half-applied and left
 # `_prisma_migrations` with `finished_at NULL, rolled_back_at NULL`; the schema
-# itself rolled back, but the bookkeeping is wedged and EVERY subsequent boot
+# may have rolled back, but the bookkeeping is wedged and EVERY subsequent boot
 # fails the same way. A bare non-zero exit turns that into an unexplained
 # crash-loop and a total auth outage until somebody thinks to read the container
 # log. So catch it and say exactly what to run.
@@ -58,7 +62,7 @@ if [ "$migrate_status" -ne 0 ]; then
     echo "=======================================================================" >&2
     echo "MIGRATION BOOKKEEPING IS WEDGED (P3009) — this will crash-loop." >&2
     echo "" >&2
-    echo "A previous migration failed part-way. Its schema changes rolled back," >&2
+    echo "A previous migration failed. Verify whether its SQL transaction rolled back;" >&2
     echo "but _prisma_migrations still shows it unfinished, so every boot from" >&2
     echo "now on fails here." >&2
     echo "" >&2
@@ -68,7 +72,8 @@ if [ "$migrate_status" -ne 0 ]; then
     echo "  2. Fix whatever the 'logs' column reports (for" >&2
     echo "     20260730180000 that is pre-existing one-active-org-per-domain" >&2
     echo "     violations — the error names every offending user)." >&2
-    echo "  3. npx prisma migrate resolve --rolled-back <migration_name>" >&2
+    echo "  3. After proving rollback, ship a scoped recovery using:" >&2
+    echo "     npx prisma migrate resolve --rolled-back <migration_name>" >&2
     echo "  4. Redeploy." >&2
     echo "" >&2
     echo "See Docs/deploy.md, 'Recovering from a failed migration'." >&2

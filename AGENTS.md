@@ -55,3 +55,5 @@ profile-free tickets and live domain-authenticated revocation checks follow
 never widen silently; app scope edits require fresh registration and consent.
 
 Embedded Kelpie uses the host product's original independent UOA proof and distinct short-lived token classes; follow [host sessions](Docs/Auth/embedded-kelpie.md). It never impersonates the standalone native registration or copies refresh credentials.
+
+Migration-role upgrade tests and the checksum-pinned invitation migration startup recovery follow [deployment recovery](Docs/deploy.md#recovering-from-a-failed-migration); never rewrite published migrations or delete failed-attempt history.
