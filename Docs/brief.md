@@ -3561,3 +3561,8 @@ Nessie absorbs the fixed monthly fee. Browser runtime credentials are purpose-bo
 organisation/team administrators cannot publish tariffs. Unusual receipts use the
 existing operator exception review with auditable capped charges and waivers.
 See [browser billing](Auth/browser-billing.md) for setup, recovery and verification.
+
+Seat migration upgrades must run under the production owner's non-superuser
+privileges. The invitation trigger privilege correction and narrowly verified
+startup retry preserve the original SQL and failed-attempt history; see
+[deployment recovery](deploy.md#recovering-from-a-failed-migration).
