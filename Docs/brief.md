@@ -3566,3 +3566,8 @@ Seat migration upgrades must run under the production owner's non-superuser
 privileges. The invitation trigger privilege correction and narrowly verified
 startup retry preserve the original SQL and failed-attempt history; see
 [deployment recovery](deploy.md#recovering-from-a-failed-migration).
+
+Cloud Run rollout must recover from an older failed desired traffic target by
+verifying and promoting the exact new revision and merged-commit image digest.
+Service health from the previous revision is not rollout evidence; see
+[deployment](deploy.md#github-actions-configuration).

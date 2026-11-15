@@ -37,7 +37,11 @@ describe('main deployment workflow billing runtime', () => {
     const workflow = await readFile(workflowUrl, 'utf8');
 
     expect(workflow).toContain('id: deploy');
-    expect(workflow).toContain("--format='value(status.latestCreatedRevisionName)'");
+    expect(workflow).toContain('revision_suffix="r${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"');
+    expect(workflow).toContain('--revision-suffix "$revision_suffix"');
+    expect(workflow).toContain('--async');
+    expect(workflow).toContain('name: Verify candidate revision');
+    expect(workflow).toContain('"$actual_image" != "$expected_image"');
     expect(workflow).toContain('echo "revision=$deployed_revision" >> "$GITHUB_OUTPUT"');
     expect(workflow).toContain('--to-revisions "$deployed_revision=100"');
     expect(workflow).toContain("--format='value(status.latestReadyRevisionName)'");
