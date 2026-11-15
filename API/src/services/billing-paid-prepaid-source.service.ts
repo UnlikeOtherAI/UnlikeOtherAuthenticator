@@ -7,7 +7,10 @@ export async function assertCapturedPrepaidSource(tx:Prisma.TransactionClient,
   hold:BillingCreditBudgetDispatch,creditAccountId:string,receiptId:string) {
   const wallet=await tx.billingCreditAccount.findUnique({where:{id:creditAccountId},select:{accountId:true,orgId:true}});
   let source:{creditAccountId:string;orgId:string;teamId:string;userId:string;serviceId:string}|null=null;
-  if(hold.providerServiceId==='twilio-voice') {
+  if(hold.providerServiceId==='browserbase') {
+    const row=await tx.billingBrowserReservation.findUnique({where:{dispatchId:hold.dispatchId}});
+    if(row&&hold.tariffId===`browser-policy:${row.policyId}`&&(!row.providerSessionId||row.providerSessionId===receiptId))source=row;
+  } else if(hold.providerServiceId==='twilio-voice') {
     const row=await tx.billingVoiceReservation.findUnique({where:{dispatchId:hold.dispatchId}});
     if(row&&hold.tariffId===`voice-quote:${row.quoteId}`&&(!row.callSid||row.callSid===receiptId))source=row;
   } else if(hold.providerServiceId==='twilio-sms'&&hold.dispatchId.startsWith('sms-inbound:')) {

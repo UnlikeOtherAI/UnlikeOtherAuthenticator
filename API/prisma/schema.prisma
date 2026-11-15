@@ -268,6 +268,7 @@ enum BillingAppKeyPurpose {
   CUSTOMER_LIFECYCLE
   SMS_RUNTIME
   VOICE_RUNTIME
+  BROWSER_RUNTIME
 }
 
 enum BillingAdjustmentKind {
@@ -331,6 +332,7 @@ enum BillingCreditEntryKind {
   PREPAID_USAGE
   SMS_PREPAID_USAGE
   VOICE_PREPAID_USAGE
+  BROWSER_PREPAID_USAGE
 }
 
 enum BillingCreditPaymentAdjustmentKind {
@@ -1897,6 +1899,7 @@ model AdminApiKey {
 // Canonical commercial control plane. Tariffs live in UOA; products and Ledger consume
 // signed content-free snapshots and keep raw provider usage separate from price multipliers.
 model BillingService {
+  browserReservations BillingBrowserReservation[]
   id         String   @id @default(cuid())
   identifier String   @unique @db.VarChar(100)
   name       String   @db.VarChar(120)
@@ -2103,6 +2106,7 @@ model BillingOrgResponsibilityTransition {
 }
 
 model BillingAppKey {
+  paidUsageExceptions BillingPaidUsageException[]
   id                    String               @id @default(cuid())
   serviceId             String               @map("service_id")
   purpose               BillingAppKeyPurpose @default(ENTITLEMENT)
@@ -3670,7 +3674,8 @@ model BillingPaidUsageLiability {
 model BillingPaidUsageException {
   dispatchId String @id @map("dispatch_id") @db.VarChar(160)
   receiptId String @unique @map("receipt_id") @db.VarChar(160)
-  runtimeKeyId String @map("runtime_key_id")
+  runtimeKeyId String? @map("runtime_key_id")
+  appKeyId String? @map("app_key_id")
   evidenceDigest String @map("evidence_digest") @db.Char(64)
   rawCostActual Decimal @map("raw_cost_actual") @db.Decimal(38, 18)
   currency String @db.Char(3)
@@ -3685,10 +3690,12 @@ model BillingPaidUsageException {
   terminalAt DateTime? @map("terminal_at")
 
   dispatch BillingCreditBudgetDispatch @relation(fields: [dispatchId], references: [dispatchId], onDelete: Restrict)
-  runtimeKey BillingLedgerRuntimeKey @relation(fields: [runtimeKeyId], references: [id], onDelete: Restrict)
+  runtimeKey BillingLedgerRuntimeKey? @relation(fields: [runtimeKeyId], references: [id], onDelete: Restrict)
 
   @@index([status, createdAt])
   @@map("billing_paid_usage_exceptions")
+  appKey BillingAppKey? @relation(fields: [appKeyId], references: [id], onDelete: Restrict)
+
 }
 
 // Pre-cutover customer credits are imported only from existing frozen UOA
@@ -3853,6 +3860,8 @@ model BillingCreditEntry {
   ledgerRuntimeKeyId       String?                     @map("ledger_runtime_key_id")
   prepaidReservationId     String?                     @unique @map("prepaid_reservation_id")
   voiceReservationId       String? @unique @map("voice_reservation_id")
+  browserReservationId     String? @unique @map("browser_reservation_id")
+  browserReservation BillingBrowserReservation? @relation(fields: [browserReservationId], references: [id], onDelete: Restrict)
   smsReservationId         String?                     @unique @map("sms_reservation_id")
   smsInboundReceiptId      String?                     @unique @map("sms_inbound_receipt_id")
   attributedUserId         String?                     @map("attributed_user_id")
@@ -6299,4 +6308,71 @@ model MachineBrowserSession {
   finalizedAt DateTime? @map("finalized_at") @db.Timestamptz
   expiresAt DateTime @map("expires_at") @db.Timestamptz
   @@map("machine_browser_sessions")
+}
+
+/// Immutable provider rate evidence. Only platform operators publish a new version.
+model BillingBrowserPolicy {
+  reservations BillingBrowserReservation[]
+  id String @id @default(cuid())
+  serviceId String @map("service_id")
+  projectId String @map("project_id") @db.Uuid
+  providerUsdPerHour Decimal @map("provider_usd_per_hour") @db.Decimal(38,18)
+  markupBps Int @default(1000) @map("markup_bps")
+  minimumSeconds Int @default(60) @map("minimum_seconds")
+  roundingSeconds Int @map("rounding_seconds")
+  sourceUrl String @map("source_url") @db.VarChar(1000)
+  validUntil DateTime @map("valid_until")
+  retiredAt DateTime? @map("retired_at")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([serviceId, projectId, createdAt])
+  @@map("billing_browser_policies")
+}
+
+/// One physical browser, charged once to its immutable original payer.
+model BillingBrowserReservation {
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  policy BillingBrowserPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  creditEntry BillingCreditEntry?
+  id String @id @default(cuid())
+  dispatchId String @unique @map("dispatch_id") @db.Uuid
+  bindingDigest String @map("binding_digest") @db.Char(64)
+  serviceId String @map("service_id")
+  appKeyId String @map("app_key_id")
+  orgId String @map("org_id")
+  teamId String @map("team_id")
+  userId String @map("user_id")
+  actorTokenVersion Int @map("actor_token_version")
+  creditAccountId String @map("credit_account_id")
+  policyId String @map("policy_id")
+  projectId String @map("project_id") @db.Uuid
+  maxDurationSeconds Int @map("max_duration_seconds")
+  reservedMicrocredits BigInt @map("reserved_microcredits")
+  debitedMicrocredits BigInt? @map("debited_microcredits")
+  actualAmount Decimal? @map("actual_amount") @db.Decimal(38,18)
+  actualDurationMilliseconds BigInt? @map("actual_duration_milliseconds")
+  providerSessionId String? @unique @map("provider_session_id") @db.Uuid
+  providerStartedAt DateTime? @map("provider_started_at")
+  providerEndedAt DateTime? @map("provider_ended_at")
+  providerStatus String? @map("provider_status") @db.VarChar(32)
+  proxyBytes BigInt? @map("proxy_bytes")
+  dispatchClaimedAt DateTime? @map("dispatch_claimed_at")
+  claimExpiresAt DateTime @map("claim_expires_at")
+  state String @default("reserved") @db.VarChar(32)
+  billingMonth String @map("billing_month") @db.Char(7)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([creditAccountId, state])
+  @@index([orgId, teamId, billingMonth])
+  @@map("billing_browser_reservations")
+}
+
+/// Cancel-before-create fence. A delayed reserve may never recreate a released hold.
+model BillingBrowserCancellation {
+  dispatchId String @id @map("dispatch_id") @db.Uuid
+  serviceId String @map("service_id")
+  proof String
+  providerHttpStatus Int? @map("provider_http_status")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("billing_browser_cancellations")
 }

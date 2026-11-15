@@ -356,3 +356,8 @@ conditional tab mounting clear reveals on product/tab changes and auth-shell tea
 The shared Modal supplies pending dismissal, dirty form and focus guards. Existing
 server roles/endpoints remain authoritative. Browser checks use isolated synthetic
 responses, not production credentials or proof of deployed issuance.
+
+
+Browser tariffs live in Billing → product → Cloud browsers; unusual receipts reuse
+Paid usage exceptions. Both require the platform superuser boundary. See
+[browser billing](../Auth/browser-billing.md).

@@ -46,7 +46,7 @@ function creditsData() {
     regionPolicy: null,
     catalogs: [],
     settlements: [],
-    prepaidReservations: [],
+    prepaidReservations: [], browserReservations: [],
     activeReservedMicrocredits: 0n,
     allocations: [],
     entries: [],

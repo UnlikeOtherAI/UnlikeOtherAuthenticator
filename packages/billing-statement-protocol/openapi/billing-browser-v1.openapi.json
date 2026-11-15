@@ -1,0 +1,966 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UOA prepaid cloud browsers",
+    "version": "1.0.0"
+  },
+  "components": {
+    "securitySchemes": {
+      "appKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-UOA-App-Key"
+      },
+      "actor": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-UOA-Actor"
+      }
+    }
+  },
+  "paths": {
+    "/billing/v1/browser/tariff": {
+      "post": {
+        "operationId": "browser_tariff",
+        "description": "Requires BROWSER_RUNTIME. Actor assertions name this exact endpoint. Receipt and cancellation calls use the original reservation, without renewing human authority.",
+        "security": [
+          {
+            "appKey": [],
+            "actor": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "product",
+                  "organisation_id",
+                  "team_id",
+                  "user_id",
+                  "project_id"
+                ],
+                "properties": {
+                  "product": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "user_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Content-free usage and prepaid billing result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "policy_id",
+                    "project_id",
+                    "currency",
+                    "provider_price_per_hour",
+                    "customer_price_per_minute",
+                    "markup_bps",
+                    "minimum_seconds",
+                    "rounding_seconds",
+                    "valid_until"
+                  ],
+                  "properties": {
+                    "policy_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "currency": {
+                      "const": "USD"
+                    },
+                    "provider_price_per_hour": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                      "maxLength": 80
+                    },
+                    "customer_price_per_minute": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                      "maxLength": 80
+                    },
+                    "markup_bps": {
+                      "const": 1000
+                    },
+                    "minimum_seconds": {
+                      "const": 60
+                    },
+                    "rounding_seconds": {
+                      "const": 60
+                    },
+                    "valid_until": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient prepaid credits or budget; do not start a provider session."
+          },
+          "409": {
+            "description": "Conflicting attribution or evidence; do not retry provider creation."
+          },
+          "503": {
+            "description": "Billing or current provider pricing is unavailable; do not start a provider session."
+          }
+        }
+      }
+    },
+    "/billing/v1/browser/reservations": {
+      "post": {
+        "operationId": "browser_reserve",
+        "description": "Requires BROWSER_RUNTIME. Actor assertions name this exact endpoint. Receipt and cancellation calls use the original reservation, without renewing human authority.",
+        "security": [
+          {
+            "appKey": [],
+            "actor": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "product",
+                  "organisation_id",
+                  "team_id",
+                  "user_id",
+                  "project_id",
+                  "dispatch_id",
+                  "max_duration_seconds",
+                  "budget_context"
+                ],
+                "properties": {
+                  "product": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "organisation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "team_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "user_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "dispatch_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "max_duration_seconds": {
+                    "type": "integer",
+                    "minimum": 60,
+                    "maximum": 1800
+                  },
+                  "budget_context": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "project_id",
+                          "run_id",
+                          "run_started_at",
+                          "run_owner_sub",
+                          "budget_run_id",
+                          "budget_run_started_at",
+                          "budget_run_owner_sub"
+                        ],
+                        "properties": {
+                          "project_id": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "run_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "run_started_at": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "run_owner_sub": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "budget_run_id": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "budget_run_started_at": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "budget_run_owner_sub": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Content-free usage and prepaid billing result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "reservation_id",
+                    "dispatch_id",
+                    "policy_id",
+                    "state",
+                    "can_dispatch",
+                    "reserved_credits",
+                    "consumed_credits",
+                    "session_id",
+                    "max_duration_seconds",
+                    "claim_expires_at"
+                  ],
+                  "properties": {
+                    "reservation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "dispatch_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "policy_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "state": {
+                      "enum": [
+                        "reserved",
+                        "dispatching",
+                        "settled",
+                        "released",
+                        "reconciliation"
+                      ]
+                    },
+                    "can_dispatch": {
+                      "type": "boolean"
+                    },
+                    "reserved_credits": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                      "maxLength": 80
+                    },
+                    "consumed_credits": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                          "maxLength": 80
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "session_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "max_duration_seconds": {
+                      "type": "integer",
+                      "minimum": 60,
+                      "maximum": 1800
+                    },
+                    "claim_expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient prepaid credits or budget; do not start a provider session."
+          },
+          "409": {
+            "description": "Conflicting attribution or evidence; do not retry provider creation."
+          },
+          "503": {
+            "description": "Billing or current provider pricing is unavailable; do not start a provider session."
+          }
+        }
+      }
+    },
+    "/billing/v1/browser/reservations/read": {
+      "post": {
+        "operationId": "browser_read",
+        "description": "Requires BROWSER_RUNTIME. Actor assertions name this exact endpoint. Receipt and cancellation calls use the original reservation, without renewing human authority.",
+        "security": [
+          {
+            "appKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "product",
+                  "dispatch_id"
+                ],
+                "properties": {
+                  "product": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "dispatch_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Content-free usage and prepaid billing result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "reservation_id",
+                    "dispatch_id",
+                    "policy_id",
+                    "state",
+                    "can_dispatch",
+                    "reserved_credits",
+                    "consumed_credits",
+                    "session_id",
+                    "max_duration_seconds",
+                    "claim_expires_at"
+                  ],
+                  "properties": {
+                    "reservation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "dispatch_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "policy_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "state": {
+                      "enum": [
+                        "reserved",
+                        "dispatching",
+                        "settled",
+                        "released",
+                        "reconciliation"
+                      ]
+                    },
+                    "can_dispatch": {
+                      "type": "boolean"
+                    },
+                    "reserved_credits": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                      "maxLength": 80
+                    },
+                    "consumed_credits": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                          "maxLength": 80
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "session_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "max_duration_seconds": {
+                      "type": "integer",
+                      "minimum": 60,
+                      "maximum": 1800
+                    },
+                    "claim_expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient prepaid credits or budget; do not start a provider session."
+          },
+          "409": {
+            "description": "Conflicting attribution or evidence; do not retry provider creation."
+          },
+          "503": {
+            "description": "Billing or current provider pricing is unavailable; do not start a provider session."
+          }
+        }
+      }
+    },
+    "/billing/v1/browser/reservations/claim": {
+      "post": {
+        "operationId": "browser_claim",
+        "description": "Requires BROWSER_RUNTIME. Actor assertions name this exact endpoint. Receipt and cancellation calls use the original reservation, without renewing human authority.",
+        "security": [
+          {
+            "appKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "product",
+                  "dispatch_id"
+                ],
+                "properties": {
+                  "product": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "dispatch_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Content-free usage and prepaid billing result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "reservation_id",
+                    "dispatch_id",
+                    "policy_id",
+                    "state",
+                    "can_dispatch",
+                    "reserved_credits",
+                    "consumed_credits",
+                    "session_id",
+                    "max_duration_seconds",
+                    "claim_expires_at"
+                  ],
+                  "properties": {
+                    "reservation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "dispatch_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "policy_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "state": {
+                      "enum": [
+                        "reserved",
+                        "dispatching",
+                        "settled",
+                        "released",
+                        "reconciliation"
+                      ]
+                    },
+                    "can_dispatch": {
+                      "type": "boolean"
+                    },
+                    "reserved_credits": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                      "maxLength": 80
+                    },
+                    "consumed_credits": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                          "maxLength": 80
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "session_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "max_duration_seconds": {
+                      "type": "integer",
+                      "minimum": 60,
+                      "maximum": 1800
+                    },
+                    "claim_expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient prepaid credits or budget; do not start a provider session."
+          },
+          "409": {
+            "description": "Conflicting attribution or evidence; do not retry provider creation."
+          },
+          "503": {
+            "description": "Billing or current provider pricing is unavailable; do not start a provider session."
+          }
+        }
+      }
+    },
+    "/billing/v1/browser/reservations/receipt": {
+      "post": {
+        "operationId": "browser_receipt",
+        "description": "Requires BROWSER_RUNTIME. Actor assertions name this exact endpoint. Receipt and cancellation calls use the original reservation, without renewing human authority.",
+        "security": [
+          {
+            "appKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "product",
+                  "dispatch_id",
+                  "project_id",
+                  "session_id",
+                  "status",
+                  "started_at",
+                  "ended_at",
+                  "proxy_bytes"
+                ],
+                "properties": {
+                  "product": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "dispatch_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "session_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "status": {
+                    "enum": [
+                      "COMPLETED",
+                      "ERROR",
+                      "TIMED_OUT"
+                    ]
+                  },
+                  "started_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "ended_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "proxy_bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Content-free usage and prepaid billing result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "reservation_id",
+                    "dispatch_id",
+                    "policy_id",
+                    "state",
+                    "can_dispatch",
+                    "reserved_credits",
+                    "consumed_credits",
+                    "session_id",
+                    "max_duration_seconds",
+                    "claim_expires_at"
+                  ],
+                  "properties": {
+                    "reservation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "dispatch_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "policy_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "state": {
+                      "enum": [
+                        "reserved",
+                        "dispatching",
+                        "settled",
+                        "released",
+                        "reconciliation"
+                      ]
+                    },
+                    "can_dispatch": {
+                      "type": "boolean"
+                    },
+                    "reserved_credits": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                      "maxLength": 80
+                    },
+                    "consumed_credits": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                          "maxLength": 80
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "session_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "max_duration_seconds": {
+                      "type": "integer",
+                      "minimum": 60,
+                      "maximum": 1800
+                    },
+                    "claim_expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient prepaid credits or budget; do not start a provider session."
+          },
+          "409": {
+            "description": "Conflicting attribution or evidence; do not retry provider creation."
+          },
+          "503": {
+            "description": "Billing or current provider pricing is unavailable; do not start a provider session."
+          }
+        }
+      }
+    },
+    "/billing/v1/browser/reservations/release": {
+      "post": {
+        "operationId": "browser_release",
+        "description": "Requires BROWSER_RUNTIME. Actor assertions name this exact endpoint. Receipt and cancellation calls use the original reservation, without renewing human authority.",
+        "security": [
+          {
+            "appKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "product",
+                      "dispatch_id",
+                      "proof"
+                    ],
+                    "properties": {
+                      "product": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "dispatch_id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "proof": {
+                        "const": "no_provider_dispatch"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "product",
+                      "dispatch_id",
+                      "proof",
+                      "provider_http_status"
+                    ],
+                    "properties": {
+                      "product": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "dispatch_id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "proof": {
+                        "const": "provider_rejected"
+                      },
+                      "provider_http_status": {
+                        "enum": [
+                          400,
+                          401,
+                          403,
+                          404,
+                          422,
+                          429
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Content-free usage and prepaid billing result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "dispatch_id",
+                    "released"
+                  ],
+                  "properties": {
+                    "dispatch_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "released": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient prepaid credits or budget; do not start a provider session."
+          },
+          "409": {
+            "description": "Conflicting attribution or evidence; do not retry provider creation."
+          },
+          "503": {
+            "description": "Billing or current provider pricing is unavailable; do not start a provider session."
+          }
+        }
+      }
+    }
+  }
+}

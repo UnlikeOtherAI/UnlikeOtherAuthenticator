@@ -17,6 +17,7 @@ import { llmRegistrationMarkdown } from './llm-registration.js';
 import { llmAvatarsMarkdown } from './llm-avatars.js';
 import { llmBillingMarkdown } from './llm-billing.js';
 import { llmBillingSmsMarkdown } from './llm-billing-sms.js';
+import { llmBillingBrowserMarkdown } from './llm-billing-browser.js';
 import { llmBillingRegionMarkdown } from './llm-billing-region.js';
 import { llmBillingFundingRequestMarkdown } from './llm-billing-funding-request.js';
 import { llmIntegrationMarkdown } from './llm-integration.js';
@@ -63,7 +64,7 @@ ${llmIntroMarkdown}\n## Admin activity and directory reads\nGET /internal/admin/
 Organisation labels reserve one global namespace across founding domains. Existing ambiguous labels remain blocked without renames. Availability is advisory; database admission also covers concurrent creation and explicit address changes. Team labels remain scoped to their organisation.
 
 ## Directory change notifications\nUOA delivers reference-only person.changed webhooks using a dedicated per-product HMAC secret. Resolve affected ids through the existing GET /org/organisations/:orgId/teams/:teamId/members?subject_ids=<comma-separated-subjects>&status=all&limit=100 API and original-assurance actor proof. GET /org/organisations/:orgId/teams/:teamId/people/:userId/avatar uses the same authority for the exact person picture, including people new to the product. See Docs/Auth/directory-webhooks.md.\n\n## Ledger runtime-key operators\nCurrent admin-domain SUPERUSER operators use Admin Billing > Product billing > selected product > Ledger runtime keys. GET /internal/admin/billing/ledger-runtime-keys returns only product/source/audience/prefix/id/time/revocation metadata. POST the same path with {product,source_domain,ledger_audience} issues a one-time secret bound to an active product, original config hostname and exact HTTPS Ledger origin. POST /internal/admin/billing/ledger-runtime-keys/:keyId/revoke revokes that exact key. All responses are no-store. The UI keeps plaintext only in the mounted dialog, outside storage, URLs and query caches, and clears it on close/navigation/sign-out. It never installs the key, creates a bootstrap credential or expands delegation permissions. Lost-response issuance may still have committed: inspect metadata and revoke unused keys before retrying.\n${llmBillingModesMarkdown}
-${llmBillingMarkdown}\n${llmBillingRegionMarkdown}\n${llmBillingSmsMarkdown}\n${llmBillingVoiceMarkdown}\n${llmTelephoneAdmissionMarkdown}\n${llmTelephoneSmsMarkdown}\n${llmBillingFundingRequestMarkdown}\n${llmSignaturesMarkdown}\n${llmAvatarsMarkdown}\n${llmSettingsMarkdown}\n${llmNativeAppsMarkdown}`;
+${llmBillingMarkdown}\n${llmBillingRegionMarkdown}\n${llmBillingSmsMarkdown}\n${llmBillingBrowserMarkdown}\n${llmBillingVoiceMarkdown}\n${llmTelephoneAdmissionMarkdown}\n${llmTelephoneSmsMarkdown}\n${llmBillingFundingRequestMarkdown}\n${llmSignaturesMarkdown}\n${llmAvatarsMarkdown}\n${llmSettingsMarkdown}\n${llmNativeAppsMarkdown}`;
 }
 
 export function registerLlmRoute(app: FastifyInstance): void {

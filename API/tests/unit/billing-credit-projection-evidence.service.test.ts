@@ -70,6 +70,23 @@ describe('privacy-safe shared credit projection',()=>{
   });
 
 
+  it('shows browser minutes and ten-percent markup in customer history without exposing another payer', () => {
+    const data = projectionData();
+    data.browserReservations = [{ service, userId: 'user_2', debitedMicrocredits: 2_200_000n }];
+    data.entries = [{ id: 'browser-debit', occurredAt: now, service, attributedUserId: 'user_2',
+      attributedUser: { id: 'user_2', name: 'Secret colleague' }, kind: BillingCreditEntryKind.BROWSER_PREPAID_USAGE,
+      direction: BillingCreditEntryDirection.DEBIT, amountMicrocredits: 2_200_000n, balanceAfterMicrocredits: 2_000_000_000n,
+      browserReservation: { actualDurationMilliseconds: 1n, policy: { minimumSeconds: 60, roundingSeconds: 1 } },
+    }] as BillingCreditProjectionData['entries'];
+    const result = buildBillingCreditsProjection({ credential, collection, viewer: viewer(false), period, data, now });
+    expect(() => assertBillingCreditsContract(result)).not.toThrow();
+    expect(result.credit_summary.credits_consumed.credits).toBe('502.2');
+    expect(result.recent_entries[0]).toMatchObject({ kind: 'usage_settlement', attribution: 'other_team_members' });
+    const text = JSON.stringify(result);
+    expect(text).toContain('browser'); expect(text).toContain('10%');
+    expect(text).not.toContain('Secret colleague');
+  });
+
   it('pauses projected automatic top-up when the remaining limit cannot cover one refill', () => {
     const data = projectionData();
     data.creditAccount.autoTopUpOptionId = 'option_1';

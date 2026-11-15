@@ -52,6 +52,7 @@ export async function loadBillingCreditProjectionData(
     catalogs,
     settlements,
     prepaidReservations,
+    browserReservations,
     activeReserved,
     entries,
     pendingCheckouts,
@@ -110,6 +111,10 @@ export async function loadBillingCreditProjectionData(
       include: { tariff: { select: { service: { select: { id: true,
         identifier: true, name: true } } } } },
     }),
+    prisma.billingBrowserReservation.findMany({ where: { creditAccountId: params.creditAccountId,
+      billingMonth: params.period.key, state: 'settled' },
+      select: { userId: true, debitedMicrocredits: true, service: { select: { id: true, identifier: true, name: true } } },
+    }),
     billingReservedMicrocredits(prisma, params.creditAccountId),
     prisma.billingCreditEntry.findMany({
       where: { creditAccountId: params.creditAccountId },
@@ -118,6 +123,8 @@ export async function loadBillingCreditProjectionData(
       include: {
         service: { select: { id: true, identifier: true, name: true } },
         attributedUser: { select: { id: true, name: true } },
+        browserReservation: { select: { actualDurationMilliseconds: true,
+          policy: { select: { minimumSeconds: true, roundingSeconds: true } } } },
       },
     }),
     prisma.billingCreditTopUpCheckout.findMany({
@@ -259,6 +266,7 @@ export async function loadBillingCreditProjectionData(
     catalogs,
     settlements,
     prepaidReservations,
+    browserReservations,
     activeReservedMicrocredits: activeReserved,
     allocations,
     entries,
