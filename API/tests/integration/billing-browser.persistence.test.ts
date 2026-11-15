@@ -311,6 +311,7 @@ describe.skipIf(!process.env.DATABASE_URL)('central browser prepaid billing', ()
       open = resolve;
     });
     const stripe = {
+      ...fixture.stripe,
       accounts: {
         ...fixture.stripe.accounts,
         retrieveCurrent: async () => {

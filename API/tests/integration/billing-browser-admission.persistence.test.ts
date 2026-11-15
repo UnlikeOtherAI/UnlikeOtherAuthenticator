@@ -39,7 +39,7 @@ describe.skipIf(!process.env.DATABASE_URL)('browser payment admission', () => {
     const p = db.prisma;
     const tariff = await p.billingTariff.create({ data: { serviceId: smsIds.service,
       key: 'regular-browser-seats', version: 1, name: 'Regular seats', currency: 'USD',
-      mode: 'STANDARD', collectionMode: 'STRIPE', monthlyAmountMinor: 399n,
+      mode: 'STANDARD', collectionMode: 'STRIPE', monthlyAmountMinor: 399n, markupBps: 3000,
       monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'AUTOMATIC', seatChargeTiming: 'PRORATED',
       anniversarySeats: true, usagePaymentMode: 'PREPAID' } });
     const assignment = await p.billingTariffAssignment.findFirstOrThrow({ where: {
