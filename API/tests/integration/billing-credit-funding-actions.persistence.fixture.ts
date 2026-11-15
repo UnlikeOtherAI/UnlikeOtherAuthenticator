@@ -75,7 +75,7 @@ export const optionSelection = {
 };
 
 export let fundingScopeEpoch:Date;
-export async function seedFundingRace(prisma: PrismaClient,historicalTeam=false): Promise<void> {
+export async function seedFundingRace(prisma: PrismaClient,historicalTeam=false, offerKey = 'five-dollar-refill'): Promise<void> {
   fundingScopeEpoch=(await prisma.billingOrganisationScopeCutover.findUniqueOrThrow({where:{id:1}})).activatedAt;
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
@@ -174,7 +174,7 @@ export async function seedFundingRace(prisma: PrismaClient,historicalTeam=false)
         id: ids.offer,
         policyId: ids.policy,
         serviceId: ids.service,
-        key: 'five-dollar-refill',
+        key: offerKey,
         version: 1,
         catalogKey: 'funding-race',
         catalogVersion: 1,

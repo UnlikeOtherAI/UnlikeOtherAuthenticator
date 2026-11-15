@@ -26,6 +26,7 @@ function tariffBody(input: BillingTariffFormValues | BillingServiceFormValues) {
     collection_mode: input.collectionMode,
     markup_percent: input.markupPercent,
     usage_payment_mode: input.usagePaymentMode,
+    usage_currency: input.usageCurrency ?? input.currency,
     monthly_subscription: {
       amount_minor: billingMajorToMinor(input.monthlyAmount, input.currency),
       currency: input.currency,

@@ -1,5 +1,60 @@
 # Billing Tariffs and Product Entitlements
 
+Customer Stripe invoice lists select cash by its UTC payment month, independent
+of the database session time zone. Month bounds and pagination cursors normalize
+their timestamp parameters to the UTC representation stored in the cash table.
+A payment at 00:00 UTC on the first belongs to that new month only. The PostgreSQL
+invoice persistence evaluation exercises UTC, London, New York and Kathmandu
+sessions, plus partial payments spanning months and single-row pagination.
+
+Wallet opening/closing balances and credit-budget windows use the same explicit
+UTC timestamp boundary. Entries at the start are included; entries exactly at
+the end belong to the next window. Database session timezone must not change
+either the financial statement or how much budget is held. Persistence evals
+cover both offset directions and a fractional-hour timezone. Missing signed
+Ledger history remains a denial even when the local totals are available.
+
+Closed-month discovery compares UTC wall-clock source timestamps without
+promoting them through the session timezone. It must not invent an earlier
+month for an organisation created at midnight. Watch scheduling uses the
+watch table's native `timestamptz` columns. Credit-invoice retry claims instead
+normalize parameters to the invoice table's UTC `timestamp` columns, so the
+subsequent Prisma update matches the exact lease and persists its backoff.
+The database evaluations cover all four timezones, concurrent workers, exact
+retry delays and recovery after an expired watch lease.
+Claimed watches retain their priority order after the database update;
+`UPDATE ... RETURNING` alone does not promise the due queue's order.
+
+Final credit app-key, historical-provenance, automatic-reload disable and
+recurring-add-on cancellation guards interpret their UTC expiry fields in UTC.
+The additive expiry migration scopes the database timezone to those four
+functions and restores the caller's timezone afterward. It neither rewrites
+financial rows nor weakens revocation, scope, consent or transition rules.
+The database evals exercise valid/expired keys, reload disable, cancellation
+and actor expiry after lock contention in UTC, London, New York and Kathmandu.
+
+Nessie's exception evaluation covers standard, custom-price, waived-seat and
+explicitly free usage terms at both organisation and team scope. A zero seat
+amount with prepaid usage still rates provider usage and requires funding;
+it is not the `FREE` tariff mode. These evaluations verify tariff decisions
+and rating, not hosted assignment, invitation or collection flows.
+
+New Nessie credit-purchase Checkouts request `setup_future_usage=off_session`.
+Stripe discloses that the payment card will be retained for future payments
+and attaches the successfully paid method to the same scoped Stripe customer.
+This does not create UOA automatic-reload consent, change its generation,
+populate its card pointer or authorize a later credit purchase. Other products
+retain their existing Checkout policy. Recovery reuses an existing Checkout
+without rewriting the terms the customer already started.
+
+The requested purchase matrix exercises 5, 10, 20, 100 and 500 in USD, EUR
+and GBP against real PostgreSQL. It creates fixture offers, selects them
+through UOA, opens each Checkout, rejects a one-minor-unit short payment,
+then delivers the correct payment twice. The balance must change exactly
+once, the invoice source must retain the purchase currency, and existing
+reload consent must stay unchanged. Stripe, actor and FX inputs are fixtures;
+this evaluation neither publishes those offers nor verifies a hosted webhook.
+
 ## Status and ownership
 
 UOA is the canonical commercial control plane and customer billing system of
@@ -295,8 +350,7 @@ Admission holds the live user, organisation, and team membership rows through
 its final transaction so credential-epoch and membership revocations serialize
 with the decision. The runtime key is rechecked and locked at final admission;
 revocation between account resolution and reservation creation refuses the call.
-A free tariff remains customer-free even when its raw
-provider receipt records a positive cost.
+With free AI usage the customer owes zero for inference, even when the provider receipt records a cost. Any separately agreed monthly seat price still applies.
 
 `GET /billing/v1/ledger/reservations/:dispatchId` lets the product-bound
 runtime key recover a committed decision after a lost HTTP response. If
@@ -1618,6 +1672,21 @@ balance change:
   (every earlier purchase was USD), consumed oldest-first by what was spent;
   credits no grant explains open one USD lot, and a negative balance is debt.
 
+For an internal organisation or team, operators can choose **Free AI usage**
+with a positive per-seat price and Stripe or manual collection. Set usage to
+pay as you go and markup to zero. Usage records retain their quantities and
+rate to zero. To waive seats alone, give the automatic seat tariff a zero
+monthly amount and keep the chosen paid usage mode.
+
+For Nessie's one-time storefront, run `billing:provision-stripe-catalog` with
+`--nessie-top-ups` and the existing account, mode and dry-run/apply arguments.
+The operation verifies the bound shared-credit product against Stripe and
+publishes amounts of 5, 10, 20, 100 and 500 in USD, EUR and GBP. It needs
+one active top-up policy per currency. The 25, 50 and 1,000 standard offers
+remain available to existing reload agreements and open Checkout Sessions.
+Only a fresh manual purchase uses the new selection. Repeating an apply
+reuses the same lookup keys, Prices and offer versions.
+
 The available balance is valued in the organisation's region currency
 (`readCreditBalanceValue`): holds come out of the oldest lots, a lot in the
 region currency is worth what was paid for its remaining credits at its own
@@ -1790,6 +1859,24 @@ additive 20261005103000 migration corrects the reservation guard's zero-held
 case; active held funds, verified adjustment provenance, immutable ledger
 entries, and the prohibition on unfunded usage debits remain enforced.
 
+## Nessie signup and automatic seat collection
+
+New Nessie Stripe tariff versions with automatic prorated seats and prepaid or waived AI usage charge the active roster at Checkout. The creator occupies a paid seat. Checkout saves its roster under the organisation lock and starts a monthly subscription on payment. The licensed subscription item renews on that anniversary. The existing UTC-month contracts keep their original terms.
+
+Publish regional versions with `billing:provision-stripe-catalog --nessie-seats`, selecting the expected Stripe account, mode and dry run or confirmed apply. The command preserves the current regional prices and markup. On the first billing-region choice for a new Nessie organisation, UOA assigns the matching published standard tariff unless the organisation already has an explicit arrangement. Publishing a new version does not rewrite an existing organisation's assignment.
+
+Sending an invitation takes no payment. An accepted membership enters an ordered collection queue in the same database transaction as its seat interval. Stripe invoices an increase immediately for the remaining portion of the current period. Removal reduces the renewal quantity without a credit. A rejoin is a separate increase. A pending new seat has no Nessie entitlement until Stripe confirms the payment. The owner can recover a refused card through Billing. Each event records its frozen time, old and new quantity, attempt version and invoice. An uncertain provider result retries with the same key. A quantity changed outside UOA needs payment evidence before recovery.
+
+A classic Stripe quantity change can have a negative line for the previous quantity and a positive replacement line. UOA retains both references and records their net seat charge. When Stripe carries a small charge, the next cash invoice includes it only after UOA verifies the customer balance transactions and original same-subscription invoice lines. AI top-ups issue separate purchase invoices.
+
+Seat collection verifies the exact Stripe Price bound to the immutable tariff before changing quantity. A past-due or unpaid renewal still permits a departing member's quantity reduction with proration disabled. The unpaid invoice remains owed and the next renewal uses the reduced quantity. Additions require an active subscription. Pending-seat access restrictions survive billing-key expiry, revocation and product deactivation. The retained integration binding identifies the relying product and grants no authorization.
+
+The PostgreSQL journey is `API/tests/integration/billing-anniversary-seats.persistence.test.ts`. It covers simultaneous joins, row-level permissions, refusal, recovery, removal and rejoin. An unapplied seat reduction can retry after a day-long provider outage with its original operation identity. The bound quantity must still match and proration remains disabled. Additions retain the payment idempotency cutoff. Operator assignments follow their effective billing month. `billing-nessie-seat-exceptions.persistence.test.ts` exercises six seat/usage combinations at both scopes. The signup assignment takes effect in the current month.
+
+Stripe's Events API keeps the original snapshot version. For credit purchases, UOA also recognises a successful `2025-12-15.clover` PaymentIntent bearing UOA's funding metadata. UOA rereads the PaymentIntent under its pinned API version and verifies the amount, currency, customer and original purchase before recording the credit and its invoice. The original event version remains on the immutable receipt.
+
+The opt-in `API/tests/manual/stripe-seat-checkout.ts` and `stripe-credit-checkout.ts` submit sandbox Checkouts and compare provider outcomes with an isolated PostgreSQL database. The receipt replay evaluations use previously paid test objects. See Stripe's [event version reference](https://docs.stripe.com/api/events/object).
+
 ## Organisation billing region (2026-10-12)
 
 Every organisation has one top-level billing region: **UK**, **US** or
@@ -1860,3 +1947,43 @@ See [Team billing modes](../Billing/team-billing-modes.md) for eligibility,
 original-click protocol 5.9.0, exact credentials/webhook configuration, catalog
 provisioning, unsupported account replacement and the reviewed activation order.
 The webhook API version and exact lifecycle event set above remain authoritative.
+
+
+## Nessie prepaid admission and collection proof (15 November 2026)
+
+Nessie rejects uncollected PAYG and nonregular service defaults at the Ledger
+reservation interface with HTTP 402 `NESSIE_PREPAID_SETUP_REQUIRED`, before
+new decisions and before replaying an old decision. Regular defaults require
+STANDARD, STRIPE, PER_SEAT, a positive monthly price and PREPAID usage. Service
+creation, tariff version creation and default selection reject other Nessie
+defaults with `NESSIE_REGULAR_DEFAULT_REQUIRED`. Explicit organisation/team
+FREE usage assignments remain separate; other products retain their terms.
+A valid tariff still needs the atomic funded-balance reservation. Settlement
+and release of already dispatched work remain available.
+
+An anniversary seat addition is completed only after verified InvoicePayment,
+PaymentIntent and captured Charge evidence. An invoice merely marked paid is
+insufficient. A below-minimum invoice stays held; the collector can recover it
+when a later fully captured invoice proves the exact source through the
+customer balance transaction chain. This recovery never repeats the charge.
+Provider outages retain the pending operation. Source:
+[Stripe invoice amounts](https://docs.stripe.com/api/invoices/object).
+
+The coordinated Nessie cutover publishes approved regional anniversary-seat
+versions prospectively, preserves historical usage terms, and refuses to proceed
+while an existing default-plan subscription lacks an explicit agreement. New
+organisations use the regular plan; the original cohort receives 14 days of seat
+access. Issuing an additional invitation ends that allowance and requires all
+seats to be collected. No usable invitation token or email is released before
+payment. Acceptance consumes its funded seat without a second charge.
+
+Nessie-origin delegated research retains its origin through the verified job
+context. It needs Nessie's seat admission and prepaid child usage, even when the
+performing product has a different name. A direct customer of that product keeps
+its own terms. Explicit usage subsidies are separate from free seat agreements.
+
+[Access and payment admission](../Billing/nessie-payment-admission.md) describes
+the member-safe projection, immutable deadlines, rollout and verification.
+The implementation is an unmerged candidate, not a deployed billing change.
+Provider collection remains unverified because the original Stripe test key
+has expired. Synthetic receipt tests are not provider evidence.

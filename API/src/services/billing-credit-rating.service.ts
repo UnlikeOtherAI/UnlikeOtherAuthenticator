@@ -14,6 +14,7 @@ export type CreditRatingService = {
     mode: BillingTariffMode;
     markupBps: number;
     currency: string;
+    usageCurrency: string;
     usagePaymentMode?: BillingUsagePaymentMode;
   };
 };
@@ -77,7 +78,7 @@ function selectedCost(line: NormalizedMeteringPortfolio['lines'][number]): strin
 }
 
 function ratedMicroMinor(baseCost: string, service: CreditRatingService): bigint {
-  if (service.tariff.currency !== 'USD') {
+  if (service.tariff.usageCurrency !== 'USD') {
     throw new AppError('INTERNAL', 409, 'BILLING_CREDIT_TARIFF_CURRENCY_INVALID');
   }
   if (service.tariff.mode === BillingTariffMode.FREE) return 0n;

@@ -42,7 +42,7 @@ export function compareOrganisationInvoiceCursor(a:OrganisationInvoiceCursor,b:O
 export function organisationInvoiceAfterSql(cursor:OrganisationInvoiceCursor|null,
   kind:OrganisationInvoiceCursor['kind'],at:Prisma.Sql,id:Prisma.Sql) {
   if(!cursor)return Prisma.sql`TRUE`;
-  const time=new Date(cursor.at);
+  const time=Prisma.sql`(${new Date(cursor.at)}::timestamptz AT TIME ZONE 'UTC')`;
   const tied=kind===cursor.kind?Prisma.sql`${id} COLLATE "C"<${cursor.id} COLLATE "C"`:
     kind>cursor.kind?Prisma.sql`TRUE`:Prisma.sql`FALSE`;
   return Prisma.sql`(${at}<${time} OR ${at}=${time} AND ${tied})`;

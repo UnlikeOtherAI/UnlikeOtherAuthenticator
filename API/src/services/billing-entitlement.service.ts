@@ -12,6 +12,7 @@ import {
   Prisma,
   type PrismaClient,
 } from '@prisma/client';
+import { resolveCurrentBillingTariff } from './billing-current-tariff.service.js';
 import { randomUUID } from 'node:crypto';
 
 import { getAdminPrisma } from '../db/prisma.js';
@@ -24,7 +25,7 @@ import {
   billingModeToPublic,
 } from './billing-tariff-serialization.service.js';
 import { normalizeBillingServiceIdentifier } from './billing-tariff.service.js';
-import { resolveBillingTariffForMonth, utcBillingMonth } from './billing-tariff-history.service.js';
+import { utcBillingMonth } from './billing-tariff-history.service.js';
 import {
   assertEffectiveTariffPayloadBinding,
   signEffectiveTariffSnapshot,
@@ -62,6 +63,7 @@ export type EffectiveTariffPayload<TeamId extends string | null = string> = {
     };
     usage_billing_enabled: boolean;
     usage_payment_mode: 'prepaid' | 'pay_as_you_go';
+    usage_currency: string;
     payment_collection_enabled: boolean;
     raw_usage_preserved: true;
   };
@@ -92,6 +94,7 @@ type TariffRow = {
   seatPolicy: BillingSeatPolicy | null;
   seatChargeTiming: BillingSeatChargeTiming | null;
   usagePaymentMode: BillingUsagePaymentMode;
+  usageCurrency: string;
   currency: string;
 };
 
@@ -159,6 +162,7 @@ function payloadFor<TeamId extends string | null>(params: {
     },
     tariff: {
       id: params.tariff.id,
+      usage_currency: params.tariff.usageCurrency,
       mode: billingModeToPublic(params.tariff.mode),
       collection_mode: billingCollectionModeToPublic(params.tariff.collectionMode),
       monthly_subscription: {
@@ -269,7 +273,7 @@ export async function resolveEffectiveTariffContext(
     throw new AppError('FORBIDDEN', 403, 'BILLING_SUBJECT_NOT_ENTITLED');
   }
 
-  const effective = await resolveBillingTariffForMonth(prisma, {
+  const effective = await resolveCurrentBillingTariff(prisma, {
     serviceId: params.credential.service.id,
     organisationId: request.organisationId,
     teamId: request.teamId,
@@ -277,7 +281,7 @@ export async function resolveEffectiveTariffContext(
     ...((ORGANISATION_FINANCIAL_ENDPOINTS.has(params.endpoint)||
       ['/billing/v1/credits','/billing/v1/customer-statement','/billing/v2/customer-statement'].includes(params.endpoint))
       ? { financialScope: 'organisation' as const } : {}),
-  });
+  }, product);
   const tariff = effective.tariff;
 
   const now = deps?.now?.() ?? Math.floor(Date.now() / 1000);
@@ -316,9 +320,9 @@ export async function resolveFinancialTariffContext(params: {
   const actor = await (deps?.verifyActor ?? verifyBillingActor)({token:params.actorToken,
     credential:params.credential,endpoint:params.endpoint,request:params.request},{prisma:deps?.prisma});
   const now=deps?.now?.() ?? Math.floor(Date.now()/1000);
-  const effective=await resolveBillingTariffForMonth(client(deps),{serviceId:params.credential.service.id,
+  const effective=await resolveCurrentBillingTariff(client(deps),{serviceId:params.credential.service.id,
     organisationId:params.request.organisationId,teamId:null,financialScope:'organisation',
-    billingMonth:utcBillingMonth(new Date(now*1000))});
+    billingMonth:utcBillingMonth(new Date(now*1000))},params.request.product);
   return {actor,payload:payloadFor({request:params.request,credential:params.credential,
     tariff:effective.tariff,assignment:{id:effective.assignmentId,scope:effective.source},nowEpochSeconds:now})};
 }

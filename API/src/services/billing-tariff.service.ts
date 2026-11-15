@@ -10,6 +10,8 @@ import { normalizeBillingServiceIdentifier, normalizeTariffInput, type TariffInp
 export { normalizeBillingServiceIdentifier, normalizeTariffInput, DEFAULT_STANDARD_MARKUP_BPS } from './billing-tariff-input.service.js';
 export type { TariffInput, PublicTariffMode, PublicBillingCollectionMode } from './billing-tariff-input.service.js';
 import { AppError } from '../utils/errors.js';
+import { assertNessieDefaultTariff } from './billing-nessie-usage-admission.service.js';
+import { usesAnniversarySeats } from './billing-nessie-onboarding.service.js';
 import {
   assertContractAssignmentRemovalAllowed,
   assertContractAssignmentWriteAllowed,
@@ -55,6 +57,7 @@ export async function createBillingService(
   const identifier = normalizeBillingServiceIdentifier(params.identifier);
   const name = params.name.trim();
   const tariff = normalizeTariffInput(params.defaultTariff);
+  assertNessieDefaultTariff(identifier, tariff);
   if (!name || name.length > 120) {
     throw new AppError('BAD_REQUEST', 400, 'INVALID_BILLING_SERVICE_NAME');
   }
@@ -78,6 +81,7 @@ export async function createBillingService(
           version: 1,
           isDefault: true,
           ...tariff,
+          anniversarySeats: usesAnniversarySeats(identifier, tariff),
           ...auditActor(params.actor),
         },
       });
@@ -135,6 +139,7 @@ export async function createBillingTariffVersion(
           if (!service?.active) {
             throw new AppError('NOT_FOUND', 404, 'BILLING_SERVICE_NOT_FOUND');
           }
+          if (params.setAsDefault) assertNessieDefaultTariff(service.identifier, tariff);
           await lockTariffHistoryService(tx, service.id);
           const latest = await tx.billingTariff.findFirst({
             where: { serviceId: service.id, key: tariff.key },
@@ -154,6 +159,7 @@ export async function createBillingTariffVersion(
               version: (latest?.version ?? 0) + 1,
               isDefault: params.setAsDefault,
               ...tariff,
+              anniversarySeats: usesAnniversarySeats(service.identifier, tariff),
               ...auditActor(params.actor),
             },
           });
@@ -209,6 +215,9 @@ export async function setDefaultBillingTariff(
             where: { id: params.tariffId, serviceId: params.serviceId },
           });
           if (!tariff) throw new AppError('NOT_FOUND', 404, 'BILLING_TARIFF_NOT_FOUND');
+          const service = await tx.billingService.findUniqueOrThrow({ where: { id: params.serviceId },
+            select: { identifier: true } });
+          assertNessieDefaultTariff(service.identifier, tariff);
           if (tariff.isDefault) return tariff;
           await lockTariffHistoryService(tx, params.serviceId);
           await assertDefaultTariffChangeAllowed(tx, params.serviceId, tariff.id);

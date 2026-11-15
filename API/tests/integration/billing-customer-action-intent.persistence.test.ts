@@ -3,7 +3,7 @@ import {
 } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createTestDb } from '../helpers/test-db.js';
+import { createBillingTimezoneDb } from '../helpers/billing-timezone-db.js';
 import { holdFinancialTransaction, startFinancialTransaction, waitForFinancialLock }
   from '../helpers/billing-financial-authority-race.js';
 import { getAdminAuthDomain } from '../../src/config/env.js';
@@ -12,11 +12,12 @@ import { lockBillingAdminEffectAuthority } from '../../src/services/billing-admi
 const databaseTestsEnabled =
   process.env.BILLING_FUNDING_DATABASE_TESTS === 'true' && Boolean(process.env.DATABASE_URL);
 
-describe.skipIf(!databaseTestsEnabled)('customer billing action intent authority races', () => {
-  let handle: Awaited<ReturnType<typeof createTestDb>>;
+describe.skipIf(!databaseTestsEnabled).each(['UTC', 'Europe/London', 'America/New_York', 'Asia/Kathmandu'])(
+  'customer billing action intent authority races in %s', (zone) => {
+  let handle: Awaited<ReturnType<typeof createBillingTimezoneDb>>;
   let ids: { actor: string; appKey: string; org: string; service: string; team: string };
   beforeAll(async () => {
-    handle = await createTestDb();
+    handle = await createBillingTimezoneDb(zone);
     if (!handle) throw new Error('DATABASE_URL is required for DB-backed tests');
     const owner = await handle.prisma.user.create({
       data: { email: 'billing-intent-owner@example.com', userKey: 'billing-intent-owner' },

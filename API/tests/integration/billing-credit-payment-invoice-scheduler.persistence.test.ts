@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { runCreditPaymentInvoiceCycle } from '../../src/services/billing-credit-payment-invoice-scheduler.service.js';
 import type { issueCreditPaymentInvoice } from '../../src/services/billing-credit-payment-invoice-issue.service.js';
-import { createTestDb } from '../helpers/test-db.js';
+import { createBillingTimezoneDb } from '../helpers/billing-timezone-db.js';
 import {
   fundingRaceIds as ids, seedFundingRace,
 } from './billing-credit-funding-actions.persistence.fixture.js';
@@ -17,12 +17,13 @@ import {
 const prefix = randomUUID().slice(0, 8);
 const now = new Date('2026-10-04T18:00:00.000Z');
 
-describe.skipIf(!process.env.DATABASE_URL)('prepaid invoice retry queue PostgreSQL fairness', () => {
-  let handle: Awaited<ReturnType<typeof createTestDb>>;
+describe.skipIf(!process.env.DATABASE_URL).each([
+  'UTC', 'Europe/London', 'America/New_York', 'Asia/Kathmandu',
+])('prepaid invoice retry queue PostgreSQL fairness in %s', (zone) => {
+  let handle: Awaited<ReturnType<typeof createBillingTimezoneDb>>;
 
   beforeAll(async () => {
-    handle = await createTestDb();
-    if (!handle) throw new Error('DATABASE_URL required');
+    handle = await createBillingTimezoneDb(zone);
     await seedFundingRace(handle.prisma);
     // The fixture supplies already-accepted payment obligations so this test
     // isolates the real PostgreSQL due/claim schedule from funding provenance.
@@ -83,7 +84,7 @@ describe.skipIf(!process.env.DATABASE_URL)('prepaid invoice retry queue PostgreS
     });
     expect(remaining).toHaveLength(51);
     expect(remaining.slice(0, 50).every((row) => row.issueAttemptCount === 1 &&
-      row.nextIssueAttemptAt > now && row.lastIssueError ===
+      row.nextIssueAttemptAt.getTime() === now.getTime() + 5 * 60_000 && row.lastIssueError ===
         'BILLING_CREDIT_INVOICE_ISSUE_FAILED')).toBe(true);
     expect(remaining[50]?.issueAttemptCount).toBe(0);
 

@@ -1,3 +1,5 @@
+import { recognizeInitialSeatPayment } from './billing-initial-seat-payment.service.js';
+import { recognizeSeatPaymentPeriod } from './billing-seat-payment-period.service.js';
 import { createHash } from 'node:crypto';
 
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -13,7 +15,9 @@ import { verifyStripePaymentInvoiceLines } from './billing-stripe-payment-lines.
 import { prepareAddonPaymentInvoice } from './billing-addon-payment-invoice-source.service.js';
 import { hasRecurringAddonMarker } from './billing-recurring-addon-stripe-binding.service.js';
 
-type Provider = StripeInvoiceCashClient & Pick<Stripe, 'subscriptions'>;
+import { seatBalanceSources } from './billing-anniversary-balance.service.js';
+
+type Provider = StripeInvoiceCashClient & Pick<Stripe, 'subscriptions' | 'customers'>;
 export type PreparedStripePaymentInvoice = NonNullable<Awaited<ReturnType<typeof prepareStripePaymentInvoice>>>;
 
 export async function prepareStripePaymentInvoice(
@@ -56,7 +60,7 @@ export async function prepareStripePaymentInvoice(
   if (!stripeSubscriptionId) return null;
   let subscription = await prisma.billingStripeSubscription.findUnique({
     where: { accountId_stripeSubscriptionId: { accountId: account.id, stripeSubscriptionId } },
-    include: { customer: true, tariff: { select: { currency: true } } },
+    include: { customer: true, tariff: { select: { currency: true, anniversarySeats: true } } },
   });
   if (!subscription) {
     const remote = await stripe.subscriptions.retrieve(stripeSubscriptionId);
@@ -70,7 +74,7 @@ export async function prepareStripePaymentInvoice(
     await prisma.$transaction((tx) => syncBaseStripeSubscription(tx, remote, account));
     subscription = await prisma.billingStripeSubscription.findUniqueOrThrow({
       where: { accountId_stripeSubscriptionId: { accountId: account.id, stripeSubscriptionId } },
-      include: { customer: true, tariff: { select: { currency: true } } },
+      include: { customer: true, tariff: { select: { currency: true, anniversarySeats: true } } },
     });
   }
   if (subscription.livemode !== account.livemode ||
@@ -105,19 +109,25 @@ export async function prepareStripePaymentInvoice(
   if (prepaidIntent) {
     throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_INVOICE_PREPAID_DUPLICATE');
   }
-  const lines = await verifyStripePaymentInvoiceLines({ invoice,
-    accountId: account.id, subscriptionId: subscription.id,
-    orgId: subscription.orgId, stripeCustomerId: subscription.customer.stripeCustomerId ?? '',
-  }, prisma, stripe);
+  const carried = subscription.tariff.anniversarySeats && invoice.amount_due > invoice.total
+    ? await seatBalanceSources(invoice, stripeSubscriptionId, stripe) : [];
+  const scope = { accountId: account.id, subscriptionId: subscription.id, orgId: subscription.orgId,
+    stripeCustomerId: subscription.customer.stripeCustomerId ?? '', beforeVerifiedBalanceTransfer: carried.length > 0 };
+  const lines = await verifyStripePaymentInvoiceLines({ ...scope, invoice }, prisma, stripe);
+  for (const source of carried) {
+    const prior = await verifyStripePaymentInvoiceLines({ ...scope, invoice: source }, prisma, stripe);
+    lines.push(...prior.map(line => ({ ...line, carriedFromStripeInvoiceId: source.id })));
+  }
+  const gross = lines.reduce((sum, line) => sum + line.grossMinor, 0n);
   const facts = {
     accountId: account.id, subscriptionId: subscription.id, livemode: account.livemode,
     stripeInvoiceId: invoice.id, stripeCustomerId: subscription.customer.stripeCustomerId ?? '',
     stripePaymentIntentIds: cash.payments.map((row) => row.payment_intent_id),
     paymentEvidence: cash.payments, orgId: subscription.orgId, teamId: subscription.teamId,
     paidAt: cash.paidAt, currency: invoice.currency.toUpperCase(),
-    grossAmountMinor: stripeInvoiceMinor(invoice.total),
+    grossAmountMinor: gross,
     taxAmountMinor: lines.reduce((sum, row) => sum + row.taxMinor, 0n),
-    creditAmountMinor: stripeInvoiceMinor(invoice.total) - stripeInvoiceMinor(invoice.amount_due),
+    creditAmountMinor: gross - stripeInvoiceMinor(invoice.amount_due),
     dueAmountMinor: stripeInvoiceMinor(invoice.amount_due),
     paidAmountMinor: stripeInvoiceMinor(invoice.amount_paid),
   };
@@ -126,7 +136,7 @@ export async function prepareStripePaymentInvoice(
   const { stripePaymentIntentIds: _intents, paymentEvidence: _payments,
     paidAt: _paidAt, paidAmountMinor: _paidAmount, ...financialFacts } = facts;
   const sourceDigest = createHash('sha256').update(JSON.stringify({ facts: financialFacts,
-    lines: lines.map(({ label: _label, ...line }) => line) },
+    lines: lines.map(({ label: _label, seatPeriod: _period, ...line }) => line) },
     (_key, value) => typeof value === 'bigint' ? value.toString() : value)).digest('hex');
   return { facts, lines, sourceDigest, invoice };
 }
@@ -140,7 +150,7 @@ export async function persistStripePaymentInvoice(
   } };
   const row = await tx.billingStripePaymentInvoice.upsert({ where: key,
     create: { ...prepared.facts, sourceDigest: prepared.sourceDigest,
-      lines: { create: prepared.lines } }, update: {}, include: { lines: true } });
+      lines: { create: prepared.lines.map(({ seatPeriod: _period, ...line }) => line) } }, update: {}, include: { lines: true } });
   if (row.sourceDigest !== prepared.sourceDigest || row.lines.length !== prepared.lines.length) {
     throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_INVOICE_SOURCE_CHANGED');
   }
@@ -167,5 +177,8 @@ export async function persistStripePaymentInvoice(
       throw new AppError('INTERNAL', 409, 'STRIPE_SUBSCRIPTION_PAYMENT_HISTORY_CHANGED');
     }
   }
+  // Coverage must exist before initial activation queues invitations received during checkout.
+  await recognizeSeatPaymentPeriod(tx, prepared.invoice, row, prepared.lines);
+  await recognizeInitialSeatPayment(tx, prepared.invoice, row);
   return row;
 }

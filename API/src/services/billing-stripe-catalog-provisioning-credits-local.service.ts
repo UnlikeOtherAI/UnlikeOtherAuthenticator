@@ -10,6 +10,7 @@ import {
   CREDIT_AUTO_TOP_UP_OPTION_SPECS,
   CREDIT_PURCHASE_CURRENCIES,
   CREDIT_TOP_UP_SPECS,
+  NESSIE_MANUAL_TOP_UP_SPECS,
   creditFundingPolicySpec,
   type CreditPurchaseCurrency,
   type CreditTopUpSpec,
@@ -46,12 +47,13 @@ function assertCreditCatalogTerms(
 export async function ensureProvisionedCreditCatalogs(params: {
   db: CatalogDb;
   accountId: string | null;
-  catalog: ValidatedStripeCommercialCatalog;
+  catalog: Pick<ValidatedStripeCommercialCatalog, 'creditPrices'>;
+  specs?: readonly CreditTopUpSpec[];
   write: boolean;
   actions: CatalogProvisioningAction[];
 }): Promise<void> {
   if (!params.accountId) {
-    for (const spec of CREDIT_TOP_UP_SPECS) {
+    for (const spec of params.specs ?? CREDIT_TOP_UP_SPECS) {
       addCatalogAction(
         params.actions,
         'credit_catalog',
@@ -64,7 +66,7 @@ export async function ensureProvisionedCreditCatalogs(params: {
   const rows = await params.db.billingCreditTopUpCatalog.findMany({
     where: { accountId: params.accountId },
   });
-  for (const spec of CREDIT_TOP_UP_SPECS) {
+  for (const spec of params.specs ?? CREDIT_TOP_UP_SPECS) {
     const remote = params.catalog.creditPrices.find(
       (price) => price.key === spec.catalogKey && price.version === spec.catalogVersion,
     );
@@ -208,7 +210,10 @@ async function ensureCreditOffersAndOption(params: {
   const offers = await params.db.billingCreditTopUpOffer.findMany({
     where: { policyId: params.policy.id },
   });
-  const unknown = offers.filter((offer) => offer.active && !specs.some((s) => s.key === offer.key));
+  const known = params.service.identifier === 'nessie'
+    ? [...specs, ...NESSIE_MANUAL_TOP_UP_SPECS.filter((spec) => spec.currency === params.currency)]
+    : specs;
+  const unknown = offers.filter((offer) => offer.active && !known.some((s) => s.key === offer.key));
   if (unknown.length > 0) {
     localCatalogDrift('credit_offer_unknown_active', { service: params.service.identifier,
       policy_id: params.policy.id, offer_ids: unknown.map((offer) => offer.id) });

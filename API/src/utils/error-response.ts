@@ -242,6 +242,9 @@ function explainKnownCode(
         summary: 'The requested team is not available to this session.',
         hints: ['Refresh the team directory or complete interactive authorization again.'],
       };
+    case 'SEAT_PAYMENT_REQUIRED':
+      return { summary: 'A billing manager must complete the seat payment.',
+        hints: ['Open billing to register a card or resolve the outstanding payment, then retry.'] };
     case 'SEAT_CAPACITY_EXCEEDED':
       return {
         summary: 'The selected team or organisation has reached its purchased seat capacity.',

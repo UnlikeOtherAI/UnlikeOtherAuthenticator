@@ -35,7 +35,8 @@ export async function listOrganisationInvoices(context:BillingCycleContext,
   await assertNoUnboundManualHistory(db,context.request.organisationId,{start,end});
   const prepaidKeys=await db.$queryRaw<Array<{id:string}>>(Prisma.sql`SELECT id FROM billing_credit_payment_invoices
     WHERE org_id=${context.request.organisationId} AND account_id=${account.id} AND livemode=${account.livemode}
-      AND paid_at>=${start} AND paid_at<${end} AND ${organisationInvoiceAfterSql(cursor,'prepaid',Prisma.sql`paid_at`,Prisma.sql`id`)}
+      AND paid_at>=(${start}::timestamptz AT TIME ZONE 'UTC')
+      AND paid_at<(${end}::timestamptz AT TIME ZONE 'UTC') AND ${organisationInvoiceAfterSql(cursor,'prepaid',Prisma.sql`paid_at`,Prisma.sql`id`)}
     ORDER BY paid_at DESC,id COLLATE "C" DESC LIMIT ${limit+1}`);
   const prepaid=await db.billingCreditPaymentInvoice.findMany({where:{id:{in:prepaidKeys.map(key=>key.id)},orgId:context.request.organisationId,
     accountId:account.id,livemode:account.livemode},
@@ -44,7 +45,8 @@ export async function listOrganisationInvoices(context:BillingCycleContext,
     SELECT invoice.id,MAX(cash.paid_at) AS at FROM billing_stripe_payment_invoices invoice
     JOIN billing_stripe_payment_invoice_cash_payments cash ON cash.invoice_id=invoice.id
     WHERE invoice.org_id=${context.request.organisationId} AND invoice.account_id=${account.id}
-      AND invoice.livemode=${account.livemode} AND cash.paid_at>=${start} AND cash.paid_at<${end}
+      AND invoice.livemode=${account.livemode} AND cash.paid_at>=(${start}::timestamptz AT TIME ZONE 'UTC')
+      AND cash.paid_at<(${end}::timestamptz AT TIME ZONE 'UTC')
     GROUP BY invoice.id HAVING ${organisationInvoiceAfterSql(cursor,'stripe',Prisma.sql`MAX(cash.paid_at)`,Prisma.sql`invoice.id`)}
     ORDER BY MAX(cash.paid_at) DESC,invoice.id COLLATE "C" DESC LIMIT ${limit+1}`);
   const stripe=await db.billingStripePaymentInvoice.findMany({where:{id:{in:stripeKeys.map(row=>row.id)},

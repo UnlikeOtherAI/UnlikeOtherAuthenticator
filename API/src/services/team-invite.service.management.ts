@@ -181,41 +181,45 @@ export async function createTeamInvites(
       select: TEAM_INVITE_SELECT,
     });
 
-    const token = await issueInviteToken({
-      prisma,
-      inviteId: invite.id,
-      existingUser,
-      email,
-      userKey: identity.userKey,
-      domain: identity.domain,
-      config: params.config,
-      configUrl: params.configUrl,
-      now,
-      sharedSecret: deps?.sharedSecret,
-      generateEmailTokenFn: deps?.generateEmailToken,
-      hashEmailTokenFn: deps?.hashEmailToken ?? hashEmailToken,
-    });
-
-    const link = buildTeamInviteLink({
-      baseUrl,
-      token,
-      configUrl: params.configUrl,
-      redirectUrl,
-    });
-
-    await sendInviteEmail({
-      to: email,
-      link,
-      trackingPixelUrl: buildTeamInviteTrackingPixelUrl({
-        baseUrl,
+    const deliver = async (prisma: InvitePrisma) => {
+      const token = await issueInviteToken({
+        prisma,
         inviteId: invite.id,
-      }),
-      organisationName: org.name,
-      teamName: team.name,
-      inviteeName: inviteName ?? undefined,
-      inviterName,
-      theme,
-    });
+        existingUser,
+        email,
+        userKey: identity.userKey,
+        domain: identity.domain,
+        config: params.config,
+        configUrl: params.configUrl,
+        now,
+        sharedSecret: deps?.sharedSecret,
+        generateEmailTokenFn: deps?.generateEmailToken,
+        hashEmailTokenFn: deps?.hashEmailToken ?? hashEmailToken,
+      });
+
+      const link = buildTeamInviteLink({
+        baseUrl,
+        token,
+        configUrl: params.configUrl,
+        redirectUrl,
+      });
+
+      await sendInviteEmail({
+        to: email,
+        link,
+        trackingPixelUrl: buildTeamInviteTrackingPixelUrl({
+          baseUrl,
+          inviteId: invite.id,
+        }),
+        organisationName: org.name,
+        teamName: team.name,
+        inviteeName: inviteName ?? undefined,
+        inviterName,
+        theme,
+      });
+    };
+    if (deps?.afterCommit) deps.afterCommit(invite.id, deliver);
+    else await deliver(prisma);
 
     results.push({
       email,
