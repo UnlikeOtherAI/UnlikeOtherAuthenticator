@@ -16,6 +16,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie seat and usage exceptions', (
     const handle = await createTestDb(); if (!handle) throw new Error('DATABASE_URL_REQUIRED'); db = handle;
     serviceId = (await db.prisma.billingService.create({ data: { identifier: 'nessie', name: 'Seats', tariffHistoryFromMonth: '2026-01' } })).id;
     ownerId = (await db.prisma.user.create({ data: { email: 'owner@example.test', userKey: 'owner' } })).id;
+    await createBillingTariffVersion({ serviceId, actor, setAsDefault: true, tariff: {
+      key: 'standard-usd', name: 'Regular seats', mode: 'standard', collectionMode: 'stripe',
+      monthlyAmountMinor: '399', currency: 'USD', monthlyChargeBasis: 'per_seat',
+      seatPolicy: 'automatic', seatChargeTiming: 'prorated', markupBps: 3000, usagePaymentMode: 'prepaid',
+    } }, { prisma: db.prisma });
   });
   afterAll(async () => { if (db) await db.cleanup(); });
   describe.each(['team', 'organisation'])('%s operator agreement', scope => {
@@ -38,9 +43,21 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie seat and usage exceptions', (
       expect(terms.tariff).toMatchObject({ monthlyAmountMinor: BigInt(seat), anniversarySeats: seat > 0,
         seatPolicy: 'AUTOMATIC', usagePaymentMode: paidUsage ? 'PREPAID' : 'PAY_AS_YOU_GO' });
       expect(rateProviderCost('1', 'USD', { mode, markupBps: terms.tariff.markupBps }).total).toBe(paidUsage ? '1.3' : '0');
-      // A prospective paid assignment cannot block invitations before Checkout can use those terms.
-      await p.teamInvite.create({ data: { orgId: org.id, teamId: team.id, email: 'invitee@example.test', lastSentAt: new Date() } });
-      expect(await p.billingAutomaticSeatChange.count()).toBe(0);
+      const send = () => p.teamInvite.create({ data: { orgId: org.id, teamId: team.id,
+        email: 'invitee@example.test', lastSentAt: new Date() } });
+      // Future exceptions never waive payment under the current regular default.
+      await expect(send()).rejects.toThrow('complete the seat payment');
+      expect(await p.teamInvite.count({ where: { orgId: org.id } })).toBe(0);
+      await p.billingTariffTermEvent.create({ data: { serviceId, source: scope === 'team' ? 'TEAM' : 'ORGANISATION',
+        scopeKey: assignment.scopeKey, effectiveFromMonth: new Date().toISOString().slice(0, 7),
+        tariffId: tariff.id, assignmentId: assignment.id, reason: 'effective-exception-test' } });
+      if (seat > 0) {
+        await expect(send()).rejects.toThrow('complete the seat payment');
+        const held = await p.teamInvite.create({ data: { orgId: org.id, teamId: team.id, email: 'held@example.test' } });
+        expect(held).toMatchObject({ billingSeatRequired: true, billingSeatFundedAt: null, lastSentAt: null });
+      } else {
+        expect(await send()).toMatchObject({ billingSeatRequired: false, billingSeatFundedAt: null });
+      }
     });
   });
 });
