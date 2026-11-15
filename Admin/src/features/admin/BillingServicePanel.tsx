@@ -1,3 +1,4 @@
+import { BillingBrowserPolicyPanel } from './BillingBrowserPolicyPanel';
 import { Link } from 'react-router';
 import { useBillingNavigation } from './billing-navigation';
 import { billingMoney } from './billing-money';
@@ -20,7 +21,7 @@ import {
   useSetDefaultBillingTariffMutation,
 } from './billing-admin-queries';
 
-type BillingTab = 'tariffs' | 'assignments' | 'adjustments' | 'app-keys' | 'subscriptions' | 'runtime-keys';
+type BillingTab = 'tariffs' | 'assignments' | 'adjustments' | 'app-keys' | 'subscriptions' | 'runtime-keys' | 'browser';
 
 function date(value: string | null): string {
   return value ? new Date(value).toLocaleString() : '—';
@@ -63,6 +64,7 @@ export function BillingServicePanel({
     'app-keys',
     'subscriptions',
     'runtime-keys',
+    'browser',
   ].includes(requestedTab)
     ? (requestedTab as BillingTab)
     : 'tariffs';
@@ -85,10 +87,10 @@ export function BillingServicePanel({
               {service.identifier}
             </code>
           </div>
-          <p className="mt-1 text-xs text-gray-500">
+          {tab !== 'browser' ? <p className="mt-1 text-xs text-gray-500">
             Team overrides organisation, which overrides the service default. Default and assignment
             changes take effect next UTC month; earlier usage keeps its effective terms.
-          </p>
+          </p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           {tab === 'tariffs' ? (
@@ -126,6 +128,7 @@ export function BillingServicePanel({
               count: service.adjustments.length,
             },
             { label: 'App keys', value: 'app-keys', count: service.app_keys.length },
+            { label: 'Cloud browsers', value: 'browser' },
             { label: 'Ledger runtime keys', value: 'runtime-keys' },
             {
               label: 'Subscriptions',
@@ -135,6 +138,7 @@ export function BillingServicePanel({
           ]}
         />
       </div>
+      {tab === 'browser' ? <BillingBrowserPolicyPanel service={service} /> : null}
       {tab === 'tariffs' ? (
         <DataTable
           headers={['Tariff', 'Mode', 'Collection', 'Markup', 'Usage', 'Monthly', 'Created', 'Default']}
@@ -329,7 +333,9 @@ export function BillingServicePanel({
                     onClick={() =>
                       confirm(
                         `Revoke ${key.name}?`,
-                        key.purpose === 'voice_runtime'
+                        key.purpose === 'browser_runtime'
+                          ? 'This deployment loses cloud browser admission and usage settlement immediately. Replace the runtime key before revoking it while charges are pending.'
+                          : key.purpose === 'voice_runtime'
                           ? 'This deployment loses Voice call admission and settlement access immediately. This cannot be undone.'
                           : key.purpose === 'sms_runtime'
                           ? 'This deployment loses SMS dispatch and provider recovery access immediately. This cannot be undone.'

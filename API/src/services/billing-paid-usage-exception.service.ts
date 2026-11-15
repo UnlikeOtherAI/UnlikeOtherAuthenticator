@@ -6,6 +6,8 @@ import {
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { browserProviderCost } from './billing-browser-policy.service.js';
+import { lockBrowserDispatch } from './billing-browser-reservation.service.js';
 import { lockCreditBalance } from './billing-credit-balance-lock.service.js';
 import { lockBudgetOrganisation } from './billing-credit-budget-dispatch.service.js';
 import { verifyLedgerRuntimeKey } from './billing-ledger-runtime-key.service.js';
@@ -143,11 +145,11 @@ export async function listPaidUsageExceptions(deps?: { prisma?: PrismaClient }) 
     where: { status: 'HELD' }, orderBy: [{ createdAt: 'asc' }, { dispatchId: 'asc' }],
     take: 101, include: { runtimeKey: { include: { service: {
       select: { identifier: true },
-    } } } },
+    } } }, appKey: { include: { service: { select: { identifier: true } } } } },
   });
   const visible = rows.slice(0, 100);
   const dispatchIds = visible.map((row) => row.dispatchId);
-  const [holds, reservations, decisions] = await Promise.all([
+  const [holds, reservations, decisions, browsers] = await Promise.all([
     prisma.billingCreditBudgetDispatch.findMany({ where: {
       dispatchId: { in: dispatchIds },
     } }),
@@ -157,18 +159,24 @@ export async function listPaidUsageExceptions(deps?: { prisma?: PrismaClient }) 
     prisma.billingLedgerDispatchDecision.findMany({ where: {
       dispatchId: { in: dispatchIds },
     } }),
+    prisma.billingBrowserReservation.findMany({ where: { dispatchId: { in: dispatchIds } }, include: { policy: true } }),
   ]);
+  const browserById = new Map(browsers.map((row) => [row.dispatchId,
+    browserProviderCost(row.policy, (row.maxDurationSeconds + 60) * 1000)]));
   const holdById = new Map(holds.map((row) => [row.dispatchId, row]));
   const reservationById = new Map(reservations.map((row) => [row.dispatchId, row]));
   const decisionById = new Map(decisions.map((row) => [row.dispatchId, row]));
-  return { exceptions: visible.map((row) => ({ ...serialize(row),
-    product: row.runtimeKey.service.identifier,
+  return { exceptions: visible.map((row) => {
+    const product = row.runtimeKey?.service.identifier ?? row.appKey?.service.identifier;
+    if (!product) throw new AppError('INTERNAL', 500, 'PAID_EXCEPTION_PRODUCT_MISSING');
+    return { ...serialize(row), product,
     raw_cost_actual: row.rawCostActual.toFixed(18), currency: row.currency,
     raw_cost_bound: (reservationById.get(row.dispatchId)?.rawCostBound
-      ?? decisionById.get(row.dispatchId)?.rawCostBound)?.toFixed(18) ?? null,
+      ?? decisionById.get(row.dispatchId)?.rawCostBound
+      ?? browserById.get(row.dispatchId))?.toFixed(18) ?? null,
     max_collectible_microcredits:
       holdById.get(row.dispatchId)?.reservedMicrocredits?.toString() ?? null,
-    created_at: row.createdAt.toISOString() })), has_more: rows.length > 100 };
+    created_at: row.createdAt.toISOString() }; }), has_more: rows.length > 100 };
 }
 
 export async function writeOffPaidUsageException(params: {
@@ -183,6 +191,7 @@ export async function writeOffPaidUsageException(params: {
   const prisma = deps?.prisma ?? getAdminPrisma();
   return runBillingSerializableTransaction(prisma, async (tx) => {
     await lockDispatch(tx, params.dispatchId);
+    await lockBrowserDispatch(tx, params.dispatchId);
     const exception = await tx.billingPaidUsageException.findUnique({
       where: { dispatchId: params.dispatchId },
     });
@@ -216,21 +225,27 @@ export async function writeOffPaidUsageException(params: {
     const reservation = await tx.billingPrepaidReservation.findUnique({
       where: { dispatchId: params.dispatchId },
     });
-    const decision = reservation ? null : await tx.billingLedgerDispatchDecision.findUnique({
+    const browser = exception.appKeyId ? await tx.billingBrowserReservation.findUnique({
+      where: { dispatchId: params.dispatchId },
+    }) : null;
+    const decision = reservation || browser ? null : await tx.billingLedgerDispatchDecision.findUnique({
       where: { dispatchId: params.dispatchId },
     });
     if ((reservation && (reservation.status !== BillingPrepaidReservationStatus.ACTIVE
       || reservation.appKeyId !== exception.runtimeKeyId))
       || (decision && (decision.status !== 'PAY_AS_YOU_GO'
         || decision.runtimeKeyId !== exception.runtimeKeyId))
-      || (!reservation && !decision)) {
+      || (browser && (browser.state !== 'reconciliation' || browser.appKeyId !== exception.appKeyId
+        || browser.providerSessionId !== exception.receiptId || !browser.actualAmount?.eq(exception.rawCostActual)))
+      || (!reservation && !decision && !browser)) {
       throw new AppError('BAD_REQUEST', 409, 'PAID_EXCEPTION_NOT_ELIGIBLE');
     }
-    const balance = reservation ? await lockCreditBalance(tx, reservation.creditAccountId) : null;
+    const funded = reservation ?? browser;
+    const balance = funded ? await lockCreditBalance(tx, funded.creditAccountId) : null;
     const liability = await recordPaidUsageLiability(tx, {
       dispatchId: params.dispatchId, receiptId: exception.receiptId,
       actual: exception.rawCostActual,
-      ...(reservation ? { creditAccountId: reservation.creditAccountId } : {}),
+      ...(funded ? { creditAccountId: funded.creditAccountId } : {}),
       operatorWaiver: true,
     });
     const gross = liability.ratedMicrocredits;
@@ -270,6 +285,19 @@ export async function writeOffPaidUsageException(params: {
         idempotencyKey: params.idempotencyKey, terminalAt: new Date(),
       },
     });
+    if (browser && balance !== null) {
+      await tx.billingBrowserReservation.update({ where: { id: browser.id }, data: {
+        state: 'settled', debitedMicrocredits: collectible,
+      } });
+      if (collectible > 0n) await tx.billingCreditEntry.create({ data: {
+        creditAccountId: browser.creditAccountId, serviceId: browser.serviceId,
+        appKeyId: browser.appKeyId, browserReservationId: browser.id,
+        attributedUserId: browser.userId, direction: 'DEBIT', kind: 'BROWSER_PREPAID_USAGE',
+        amountMicrocredits: collectible, balanceAfterMicrocredits: balance - collectible,
+        currency: 'USD', idempotencyKey: `browser-receipt:${browser.providerSessionId}`,
+        sourceType: 'browser_provider_receipt', sourceId: browser.id, occurredAt: browser.createdAt,
+      } });
+    }
     await tx.adminAuditLog.create({ data: {
       actorEmail: params.actorUserId, action: 'billing.paid_usage_exception_written_off',
       metadata: { dispatch_id: params.dispatchId, receipt_id: exception.receiptId,

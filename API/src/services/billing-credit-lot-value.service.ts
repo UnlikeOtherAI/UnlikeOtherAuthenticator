@@ -118,7 +118,7 @@ export function creditMovementValue(movements: Array<{ deltaMicrocredits: bigint
 }
 
 type ValueDb = Pick<PrismaClient, 'billingCreditLot' | 'billingCreditLotMovement' | 'billingOrganisationRegion'
-  | 'billingPrepaidReservation' | 'billingSmsReservation' | 'billingSmsStandingHold' | 'billingVoiceReservation' | 'billingSmsFxSnapshot'>;
+  | 'billingPrepaidReservation' | 'billingSmsReservation' | 'billingSmsStandingHold' | 'billingVoiceReservation' | 'billingBrowserReservation' | 'billingSmsFxSnapshot'>;
 
 /**
  * The region an organisation's credits are valued in and its captured rate.

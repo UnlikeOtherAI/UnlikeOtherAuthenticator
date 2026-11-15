@@ -106,6 +106,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,
       endpoints: [...endpoints, jobComputeContinuationEndpoint, publicTeamLookupEndpoint],
+      browser_billing: 'Server-only BROWSER_RUNTIME reserves and settles original-payer browser minutes at provider cost plus 10%; Nessie absorbs the fixed provider subscription. Platform superusers manage dated policies in Billing > Nessie > Cloud browsers. See /api endpoint schemas and /llm.',
       customer_invoices: 'Actual prepaid payment and monthly service charge invoices use the /billing/v1/invoices/* endpoints; their canonical JSON Schema and examples are at /schemas/billing-customer-invoices-v1.json.',
       // Includes explicit TEAM-only deletion and preserved empty-org recovery authority.
       lifecycle: lifecycleDocumentation,

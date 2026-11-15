@@ -22,3 +22,6 @@ dist-ssr/
 
 # Disposable local billing-mode PostgreSQL verification
 .billing-mode-qa/
+
+# Local verification outputs
+.artifacts/

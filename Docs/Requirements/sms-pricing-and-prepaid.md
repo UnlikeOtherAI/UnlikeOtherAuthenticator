@@ -174,6 +174,12 @@ availability projection include outbound uncertain/reconciliation funds and reti
 inbound standing funds. These changes still need isolated migration/race tests;
 SMS debit provenance and public runtime handlers remain pending.
 
+The shared-balance concurrency regression pauses a completed hold admission
+inside its transaction and observes the exact competing PostgreSQL backend
+waiting on it before allowing commit. The loser must fail for insufficient
+credits. The fixture does not pre-lock the wallet ahead of organisation-mode
+guards, which would introduce a lock-order inversion of its own.
+
 Number end uses the purpose-bound machine credential with `product`, `resource_id`
 and `reason`. UOA must verify provider absence in the original account before
 release cancellation; acquisition-unavailable recovery retains the exact paid

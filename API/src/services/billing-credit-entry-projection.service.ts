@@ -29,9 +29,9 @@ function commonEntry(
     service: entry.service
       ? { id: entry.service.id, identifier: entry.service.identifier, name: entry.service.name }
       : null,
-    kind: (entry.kind === BillingCreditEntryKind.PREPAID_USAGE || entry.kind === BillingCreditEntryKind.SMS_PREPAID_USAGE || entry.kind === BillingCreditEntryKind.VOICE_PREPAID_USAGE
+    kind: (entry.kind === BillingCreditEntryKind.PREPAID_USAGE || entry.kind === BillingCreditEntryKind.SMS_PREPAID_USAGE || entry.kind === BillingCreditEntryKind.VOICE_PREPAID_USAGE || entry.kind === BillingCreditEntryKind.BROWSER_PREPAID_USAGE
       ? 'usage_settlement' : entry.kind.toLowerCase()) as Exclude<
-        Lowercase<BillingCreditEntryKind>, 'prepaid_usage' | 'sms_prepaid_usage' | 'voice_prepaid_usage'>,
+        Lowercase<BillingCreditEntryKind>, 'prepaid_usage' | 'sms_prepaid_usage' | 'voice_prepaid_usage' | 'browser_prepaid_usage'>,
     direction:
       entry.direction === BillingCreditEntryDirection.CREDIT
         ? ('credit' as const)
@@ -39,6 +39,10 @@ function commonEntry(
     ...formatBillingCreditEntryCopy(entry.kind, locale, {
       product: entry.service?.name ?? billingCreditCopy(locale).teamName,
       credits: billingLocalizedCreditDisplay(amount.credits, locale),
+      ...(entry.browserReservation ? { minutes: new Intl.NumberFormat(locale ?? 'en-US', { maximumFractionDigits: 6 })
+        .format(Math.max(entry.browserReservation.policy.minimumSeconds,
+          Math.ceil(Number(entry.browserReservation.actualDurationMilliseconds) / (entry.browserReservation.policy.roundingSeconds * 1000))
+            * entry.browserReservation.policy.roundingSeconds) / 60) } : {}),
     }),
     credits: { ...amount, display: billingLocalizedCreditDisplay(amount.credits, locale) },
     credit_balance_after: {
