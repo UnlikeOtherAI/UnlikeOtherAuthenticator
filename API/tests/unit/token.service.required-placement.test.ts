@@ -43,8 +43,11 @@ describe('required team placement during token exchange', () => {
       enterpriseProductReadiness: { findUnique: vi.fn().mockResolvedValue(null) },
       orgSsoPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
       $executeRawUnsafe: vi.fn().mockResolvedValue(0),
-      $queryRaw: vi.fn().mockImplementation(async (query: { text: string }) =>
-        query.text.includes('uoa_organisation_slug_taken') ? [{ taken: false }] : [{ id: 'user-new' }]),
+      $queryRaw: vi.fn().mockImplementation(async (query: { text: string } | TemplateStringsArray) => {
+        const sql = 'text' in query ? query.text : query.join('?');
+        if (sql.includes('billing_pending_product_seats')) return [];
+        return sql.includes('uoa_organisation_slug_taken') ? [{ taken: false }] : [{ id: 'user-new' }];
+      }),
       authorizationCode: {
         findUnique: vi.fn().mockResolvedValue({
           id: 'code-row',
