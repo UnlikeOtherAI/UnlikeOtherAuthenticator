@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 CREATE OR REPLACE FUNCTION billing_anniversary_interval_change() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE initial_members text[]; funded boolean;
 BEGIN

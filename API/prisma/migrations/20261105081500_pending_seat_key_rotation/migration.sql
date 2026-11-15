@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 
 -- A billing credential's lifetime cannot erase a person's outstanding seat payment.
 -- Historical integration bindings identify the product only and grant no authority.

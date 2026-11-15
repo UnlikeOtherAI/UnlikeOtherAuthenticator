@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 CREATE TABLE billing_seat_payment_periods (
   id text PRIMARY KEY,
   subscription_id text NOT NULL REFERENCES billing_stripe_subscriptions(id) ON DELETE RESTRICT,

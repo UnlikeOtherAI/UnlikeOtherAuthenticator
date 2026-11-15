@@ -71,6 +71,11 @@ It ran against deployed source `6c5eecf963604cb2253613051f3473dc7fa9fd36` in job
 still AT_COST/NONE/PAYG. This verifies the cutover inputs, not migration completion
 or Stripe collection.
 
+A second read-only execution, `mvkvb`, confirmed none of this PR's migrations
+had been applied in production. The pending billing migrations use five-second
+lock waits and two-minute statement limits so migration lock contention cannot
+leave live authentication waiting without a bound.
+
 Fresh-database tests cover migration execution, invitation holds and collection,
 cohort immutability, concurrent quantities, acceptance without double charging,
 prepaid exhaustion, renewal deadlines and paid recovery. A seeded upgrade with

@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 ALTER TABLE team_invites
   ADD COLUMN billing_seat_required boolean NOT NULL DEFAULT false,
   ADD COLUMN billing_seat_source_invite_id text REFERENCES team_invites(id) ON DELETE RESTRICT,

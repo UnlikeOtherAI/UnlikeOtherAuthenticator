@@ -1,3 +1,7 @@
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
+
 ALTER TABLE "billing_credit_top_up_offers"
   ADD COLUMN "manual_purchase_enabled" BOOLEAN NOT NULL DEFAULT TRUE;
 
@@ -21,3 +25,5 @@ DROP TRIGGER "billing_credit_top_up_offers_versioned_terms" ON "billing_credit_t
 CREATE TRIGGER "billing_credit_top_up_offers_versioned_terms"
   BEFORE UPDATE OR DELETE ON "billing_credit_top_up_offers"
   FOR EACH ROW EXECUTE FUNCTION "billing_guard_versioned_terms"('manual_purchase_enabled');
+
+COMMIT;

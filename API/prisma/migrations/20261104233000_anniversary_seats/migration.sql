@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 
 -- Keep both Stripe source line references when a positive seat proration nets two quantity lines.
 ALTER TABLE billing_stripe_payment_invoice_lines ADD COLUMN offset_stripe_line_id varchar(255),

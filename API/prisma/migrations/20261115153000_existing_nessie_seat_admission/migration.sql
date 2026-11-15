@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 CREATE OR REPLACE FUNCTION billing_anniversary_admission() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE target_org text; target_team text; subject text; selected record; region_currency text;
 BEGIN

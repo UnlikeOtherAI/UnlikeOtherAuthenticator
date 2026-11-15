@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 ALTER TABLE billing_stripe_subscriptions ADD COLUMN initial_seat_invoice_id text UNIQUE
   REFERENCES billing_stripe_payment_invoices(id) ON DELETE RESTRICT;
 

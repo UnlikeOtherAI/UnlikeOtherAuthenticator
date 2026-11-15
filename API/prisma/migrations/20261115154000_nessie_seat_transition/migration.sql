@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
 CREATE TABLE billing_nessie_admission_cutover (
   singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton),
   applied_at timestamptz(3) NOT NULL DEFAULT clock_timestamp()
