@@ -1,6 +1,6 @@
 BEGIN;
 CREATE OR REPLACE FUNCTION billing_anniversary_admission() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE target_org text; target_team text; subject text; selected record;
+DECLARE target_org text; target_team text; subject text; selected record; region_currency text;
 BEGIN
   IF TG_TABLE_NAME='team_invites' THEN
     IF NEW.declined_at IS NOT NULL OR NEW.revoked_at IS NOT NULL THEN RETURN NEW; END IF;
@@ -40,10 +40,14 @@ BEGIN
     FROM effective e JOIN billing_tariffs t ON t.id=e.tariff_id
     ORDER BY (e.source='TEAM') DESC LIMIT 1;
   IF NOT FOUND THEN
+    SELECT currency INTO region_currency FROM billing_organisation_regions WHERE org_id=target_org;
     SELECT t.anniversary_seats,t.id AS tariff_id,NULL::text AS team_id INTO selected
-      FROM billing_services svc JOIN billing_tariffs t ON t.service_id=svc.id AND t.is_default
+      FROM billing_services svc JOIN billing_tariffs t ON t.service_id=svc.id
+        AND ((region_currency IS NULL AND t.is_default) OR
+          (region_currency IS NOT NULL AND t.key='standard-'||lower(region_currency) AND t.currency=region_currency))
       WHERE svc.identifier='nessie' AND svc.active AND t.mode='STANDARD' AND t.collection_mode='STRIPE'
-        AND t.usage_payment_mode='PREPAID' AND t.monthly_charge_basis='PER_SEAT' AND t.monthly_amount_minor>0;
+        AND t.usage_payment_mode='PREPAID' AND t.monthly_charge_basis='PER_SEAT' AND t.monthly_amount_minor>0
+      ORDER BY t.version DESC LIMIT 1;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'A billing manager must complete the seat payment' USING ERRCODE='PZ002';
     END IF;

@@ -2533,8 +2533,7 @@ model BillingStripeCheckoutSession {
 
 model BillingStripeSubscription {
   initialSeatInvoiceId String? @unique @map("initial_seat_invoice_id")
-  initialSeatPaymentInvoice BillingStripePaymentInvoice? @relation("InitialSeatPayment",
-    fields: [initialSeatInvoiceId], references: [id], onDelete: Restrict)
+  initialSeatPaymentInvoice BillingStripePaymentInvoice? @relation("InitialSeatPayment", fields: [initialSeatInvoiceId], references: [id], onDelete: Restrict)
   id                   String                 @id @default(cuid())
   accountId            String                 @map("account_id")
   checkoutId           String                 @unique @map("checkout_id")
