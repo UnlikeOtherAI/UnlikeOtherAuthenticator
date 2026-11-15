@@ -51,6 +51,7 @@ const defaultTariff = {
   seatChargeTiming: null,
   usagePaymentMode: BillingUsagePaymentMode.PAY_AS_YOU_GO,
   currency: 'USD',
+  usageCurrency: 'USD',
   isDefault: true,
   createdByUserId: null,
   createdByEmail: null,

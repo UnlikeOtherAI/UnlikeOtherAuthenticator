@@ -4,6 +4,7 @@ import { runAnniversarySeatCycle } from '../../src/services/billing-anniversary-
 import { assignNewNessieOrganisation } from '../../src/services/billing-nessie-onboarding.service.js';
 import { createBillingTariffVersion } from '../../src/services/billing-tariff.service.js';
 import { syncBaseStripeSubscription } from '../../src/services/billing-stripe-subscription-projection.service.js';
+import { persistStripePaymentInvoice } from '../../src/services/billing-stripe-payment-invoice-source.service.js';
 import { getActiveUserOrgContext } from '../../src/services/org-context.service.js';
 import { createTestSandboxOrganisationPolicy } from '../helpers/organisation-financial-binding.js';
 import { configureSyntheticStripeMode } from '../helpers/stripe-mode-config.js';
@@ -74,6 +75,20 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     await p.$transaction(tx => syncBaseStripeSubscription(tx, remote as never, acct));
     await p.$transaction(tx => syncBaseStripeSubscription(tx, remote as never, acct));
     expect(await p.billingAutomaticSeatChange.count()).toBe(0);
+    // Subscription status precedes the cash webhook. It must not admit anyone in that interval.
+    await expect(invite()).rejects.toThrow('complete the seat payment');
+    const initialSubscription = await p.billingStripeSubscription.findFirstOrThrow();
+    await p.$transaction(tx => persistStripePaymentInvoice(tx, {
+      facts: { accountId: acct.id, subscriptionId: initialSubscription.id, livemode: false,
+        stripeInvoiceId: 'in_initial', stripeCustomerId: 'cus_seat', stripePaymentIntentIds: ['pi_initial'],
+        paymentEvidence: [{ invoice_payment_id: 'inpay_initial', payment_intent_id: 'pi_initial',
+          charge_id: 'ch_initial', amount_minor: '299', paid_at: now.toISOString() }],
+        orgId: org.id, teamId: null, paidAt: now, currency: 'EUR', grossAmountMinor: 299n,
+        taxAmountMinor: 0n, creditAmountMinor: 0n, dueAmountMinor: 299n, paidAmountMinor: 299n },
+      lines: [], sourceDigest: 'c'.repeat(64), invoice: { billing_reason: 'subscription_create', status: 'paid',
+        total: 299, amount_due: 299, amount_paid: 299, amount_remaining: 0, ending_balance: 0 },
+    } as never));
+    expect((await p.billingStripeSubscription.findFirstOrThrow()).initialSeatInvoiceId).not.toBeNull();
     const invitation = await invite();
     expect(await p.billingAutomaticSeatChange.count()).toBe(0);
     await p.$transaction(async tx => {
