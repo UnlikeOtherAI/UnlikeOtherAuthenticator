@@ -71,6 +71,7 @@ describe('Cloud Run recovery from a failed older desired route', () => {
     expect(result.status, result.stdout + result.stderr).toBe(0);
     expect(result.output.trim()).toBe('revision=test-service-r101-2');
     expect(result.trace).toContain('--revision-suffix r101-2 --async');
+    expect(result.trace).toContain('--no-traffic');
     expect(result.trace).toContain('run revisions describe test-service-r101-2');
     expect(result.trace).toContain('--to-revisions test-service-r101-2=100');
     expect(result.trace).not.toContain('latestCreatedRevisionName');

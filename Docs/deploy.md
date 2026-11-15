@@ -147,7 +147,7 @@ Configured as GitHub repository variables:
 The workload identity provider is restricted to GitHub repository `UnlikeOtherAI/UnlikeOtherAuthenticator`.
 
 Every main-branch deployment names its candidate revision from the GitHub run ID
-and attempt, submits creation asynchronously, and checks that exact revision's
+and attempt, submits creation asynchronously without assigning traffic, and checks that exact revision's
 Ready condition and image digest against the image tagged with the merged SHA.
 The check is bounded to 30 attempts with four-second delays. It does not wait
 for service-wide readiness: that can still refer to a failed older traffic target,

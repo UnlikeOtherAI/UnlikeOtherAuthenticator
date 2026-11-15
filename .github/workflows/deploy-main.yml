@@ -297,6 +297,7 @@ jobs:
             --image "$IMAGE" \
             --revision-suffix "$revision_suffix" \
             --async \
+            --no-traffic \
             --add-cloudsql-instances "gen-lang-client-0561071620:europe-west1:uoa-auth-db" \
             --max-instances 3 \
             "${scaling_args[@]}" \
