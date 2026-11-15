@@ -147,7 +147,8 @@ export async function reservePrepaidDispatch(
       const settled = await tx.billingPaidUsageLiability.findUnique({
         where: { dispatchId: input.dispatchId }, select: { dispatchId: true },
       });
-      if (previous.release || settled || previous.status !== 'PAY_AS_YOU_GO' ||
+      if ((tariff.mode !== BillingTariffMode.FREE && tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID) ||
+        previous.release || settled || previous.status !== 'PAY_AS_YOU_GO' ||
         previous.runtimeKeyId !== key.id ||
         previous.requestFingerprint !== input.requestFingerprint ||
         previous.serviceId !== key.serviceId ||

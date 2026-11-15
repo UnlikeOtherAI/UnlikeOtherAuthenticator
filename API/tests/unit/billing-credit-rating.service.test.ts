@@ -16,6 +16,7 @@ const deepwater: CreditRatingService = {
     mode: BillingTariffMode.STANDARD,
     markupBps: 0,
     currency: 'USD',
+    usageCurrency: 'USD',
   },
 };
 const nessie: CreditRatingService = {
@@ -27,6 +28,7 @@ const nessie: CreditRatingService = {
     mode: BillingTariffMode.STANDARD,
     markupBps: 0,
     currency: 'USD',
+    usageCurrency: 'USD',
   },
 };
 

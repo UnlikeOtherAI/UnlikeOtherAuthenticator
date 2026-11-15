@@ -57,5 +57,6 @@ describe.skipIf(!enabled)('Nessie payment gate at the real reservation interface
     await expect(reserve('insufficient-funds', '1')).rejects.toMatchObject({ statusCode: 402, message: 'PREPAID_CREDIT_EXHAUSTED' });
     expect(await prisma.billingLedgerDispatchDecision.count({ where: { dispatchId: 'insufficient-funds' } })).toBe(0);
     await expect(reserve('funded-dispatch')).resolves.toMatchObject({ payment_mode: 'prepaid' });
+    await expect(reserve('legacy-payg')).rejects.toMatchObject({ statusCode: 409, message: 'PREPAID_DISPATCH_CONFLICT' });
   });
 });

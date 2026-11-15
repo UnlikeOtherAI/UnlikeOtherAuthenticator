@@ -1,5 +1,6 @@
 import type { BillingTariff } from '@prisma/client';
-import { resolveBillingTariffForMonth, type EffectiveTariff } from './billing-tariff-history.service.js';
+import { type EffectiveTariff } from './billing-tariff-history.service.js';
+import { resolveCurrentBillingTariff } from './billing-current-tariff.service.js';
 import { AppError } from '../utils/errors.js';
 
 type DefaultTerms = Pick<BillingTariff, 'mode' | 'usagePaymentMode' | 'collectionMode' |
@@ -32,10 +33,10 @@ export function assertNessieUsageAdmission(product: string, effective: Effective
 
 /** Keep the tariff read and admission decision together in both reservation transactions. */
 export async function resolveDispatchFundingTariff(
-  reader: Parameters<typeof resolveBillingTariffForMonth>[0],
-  scope: Parameters<typeof resolveBillingTariffForMonth>[1], product: string,
+  reader: Parameters<typeof resolveCurrentBillingTariff>[0],
+  scope: Parameters<typeof resolveCurrentBillingTariff>[1], product: string,
 ) {
-  const effective = await resolveBillingTariffForMonth(reader, scope);
+  const effective = await resolveCurrentBillingTariff(reader, scope, product);
   assertNessieUsageAdmission(product, effective);
   return effective.tariff;
 }
