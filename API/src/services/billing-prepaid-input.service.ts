@@ -17,4 +17,3 @@ export function rawCost(value: string): Prisma.Decimal {
   }
   return decimal;
 }
-

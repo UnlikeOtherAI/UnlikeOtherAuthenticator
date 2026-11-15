@@ -8,6 +8,12 @@ DECLARE target_service text; prior billing_tariffs%ROWTYPE; chosen_id text; bill
 BEGIN
   SELECT id INTO target_service FROM billing_services WHERE identifier='nessie' AND active FOR UPDATE;
   IF target_service IS NULL THEN RETURN; END IF;
+  -- An existing paid agreement must keep its captured tariff. Resolve its assignment
+  -- before cutover rather than silently replacing the subscription's commercial terms.
+  IF EXISTS(SELECT 1 FROM billing_stripe_subscriptions b WHERE b.service_id=target_service
+    AND b.tariff_source='SERVICE_DEFAULT' AND b.status NOT IN ('canceled','incomplete_expired')) THEN
+    RAISE EXCEPTION 'Bind existing default-plan subscriptions to their agreed tariff before the Nessie cutover';
+  END IF;
   FOREACH billing_currency IN ARRAY ARRAY['USD','EUR','GBP'] LOOP
     SELECT * INTO prior FROM billing_tariffs t WHERE t.service_id=target_service
       AND t.key='standard-'||lower(billing_currency) ORDER BY version DESC LIMIT 1;

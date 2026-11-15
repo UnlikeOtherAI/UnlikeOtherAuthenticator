@@ -24,12 +24,26 @@ function makeConfig(): ClientConfig {
   } as ClientConfig;
 }
 
+it('does not mint or invalidate a token while its invitation payment is held', async () => {
+  const updateMany = vi.fn();
+  const create = vi.fn();
+  await expect(issueInviteToken({
+    prisma: { $queryRaw: vi.fn().mockResolvedValue([{ ready: false }]),
+      verificationToken: { updateMany, create } } as never,
+    inviteId: 'held', existingUser: null, email: 'invitee@example.test', userKey: 'invitee@example.test',
+    domain: null, config: makeConfig(), configUrl: 'https://client.example.com/auth-config', now: new Date(),
+  })).rejects.toMatchObject({ statusCode: 402 });
+  expect(create).not.toHaveBeenCalled();
+  expect(updateMany).not.toHaveBeenCalled();
+});
+
 it('binds an existing-user invite token to its issue-time credential epoch', async () => {
   const updateMany = vi.fn().mockResolvedValue({ count: 0 });
   const create = vi.fn().mockResolvedValue({ id: 'token-row-1' });
 
   await issueInviteToken({
     prisma: {
+      $queryRaw: vi.fn().mockResolvedValue([{ ready: true }]),
       verificationToken: { updateMany, create },
     } as never,
     inviteId: 'invite-1',

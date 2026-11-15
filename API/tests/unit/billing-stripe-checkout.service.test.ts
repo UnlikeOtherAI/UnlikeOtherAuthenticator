@@ -37,7 +37,7 @@ type MutableCheckout = {
   updatedAt: Date;
 };
 
-function setup(orgRole = 'admin', initialSeatMembers: string[] = []) {
+function setup(orgRole = 'admin', initialSeatMembers: string[] = [], initialSeatInvites: string[] = []) {
   let customer = {
     id: 'customer_1',
     accountId: account.id,
@@ -84,6 +84,7 @@ function setup(orgRole = 'admin', initialSeatMembers: string[] = []) {
       const row = {
         id: `checkout_${checkoutCounter}`,
         initialSeatMembers,
+        initialSeatInvites,
         stripeCheckoutSessionId: null,
         status: 'creating',
         expiresAt: null,
@@ -338,6 +339,16 @@ describe('Stripe Checkout authorization, recovery, and account binding', () => {
     expect(input.subscription_data.billing_mode).toEqual({ type: 'classic' });
     expect(input.subscription_data.billing_cycle_anchor).toBeUndefined();
     expect(input.payment_method_collection).toBe('always');
+  });
+
+  it('collects every existing seat and the held invitation when ending the seat transition', async () => {
+    const state = setup('owner', ['founder', 'colleague'], ['held-invitation']);
+    state.prisma.billingTariff.findFirst.mockResolvedValue({ ...tariff, anniversarySeats: true,
+      monthlyChargeBasis: 'PER_SEAT', seatPolicy: 'AUTOMATIC', seatChargeTiming: 'PRORATED', usagePaymentMode: 'PREPAID' });
+    await createStripeCheckoutSession({ request, actorToken: 'signed-actor', credential }, deps(state));
+    expect(state.checkoutCreate.mock.calls[0]?.[0].line_items).toEqual([
+      { price: 'price_monthly_1', quantity: 3 }, { price: 'price_usage_1' },
+    ]);
   });
 
   it('freezes the initial language when a lost response retries with another locale', async () => {

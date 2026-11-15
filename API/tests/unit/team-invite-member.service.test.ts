@@ -62,6 +62,7 @@ const USER_NAMES: Record<string, string> = { 'admin-1': 'Ada Admin', 'member-1':
 
 function makePrisma(memberInvites = 'allowed') {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([{ ready: true }]),
     organisation: {
       findFirst: vi.fn().mockResolvedValue({
         id: 'org-1',
