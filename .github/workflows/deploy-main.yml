@@ -305,10 +305,10 @@ jobs:
 
           echo "revision=$deployed_revision" >> "$GITHUB_OUTPUT"
 
-      # Service readiness can still refer to a failed older traffic target.
-      # Verify this run's exact candidate before replacing that desired route.
       - name: Verify candidate revision
         run: |
+          # Service readiness can still refer to a failed older traffic target.
+          # Verify this run's exact candidate before replacing that desired route.
           deployed_revision="${{ steps.deploy.outputs.revision }}"
           expected_image="$(gcloud artifacts docker images describe "$IMAGE" \
             --project "$GCP_PROJECT_ID" --format='value(image_summary.fully_qualified_digest)')"
