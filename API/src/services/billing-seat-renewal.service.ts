@@ -18,12 +18,13 @@ export async function firstSeatRenewalFailure(invoice: Stripe.Invoice, event: St
   const key = { accountId_stripeInvoiceId: { accountId, stripeInvoiceId: invoice.id } };
   const existing = await prisma.billingSeatRenewalRecovery.findUnique({ where: key });
   if (existing) return existing.failedAt;
+  const probe = await prisma.billingSeatFailureHistory.upsert({ where: key,
+    create: { ...key.accountId_stripeInvoiceId, earliestFailureAt: new Date(event.created * 1000) }, update: {} });
+  // A completed retained proof survives the provider's history window and a later transaction retry.
+  if (probe.complete) return probe.earliestFailureAt;
   if (invoice.created * 1000 < Date.now() - 30 * 86400_000) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_FAILURE_HISTORY_EXPIRED');
   }
-  const probe = await prisma.billingSeatFailureHistory.upsert({ where: key,
-    create: { ...key.accountId_stripeInvoiceId, earliestFailureAt: new Date(event.created * 1000) }, update: {} });
-  if (probe.complete) return probe.earliestFailureAt;
   const page = await stripe.events.list({ types: ['invoice.payment_failed', 'invoice.payment_action_required'],
     limit: 100, created: { gte: invoice.created }, ...(probe.cursor ? { starting_after: probe.cursor } : {}) });
   let earliest = probe.earliestFailureAt.getTime();

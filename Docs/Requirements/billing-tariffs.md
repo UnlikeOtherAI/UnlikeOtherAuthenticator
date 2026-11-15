@@ -1969,11 +1969,21 @@ customer balance transaction chain. This recovery never repeats the charge.
 Provider outages retain the pending operation. Source:
 [Stripe invoice amounts](https://docs.stripe.com/api/invoices/object).
 
-These changes do not activate a hosted default, rewrite historical terms,
-implement invitation-time collection or start the new 14-day seat transition.
-The recovered acceptance-time collector and signup UI are integration work,
-not fulfilment of the newer invitation-time policy. The required transition,
-login gate and employee/manager notices are specified in Nessie's
-`docs/standards/payment-admission.md`. Manual provider verification remains
-blocked by the expired original test account key; synthetic receipts are not
-provider evidence.
+The coordinated Nessie cutover publishes approved regional anniversary-seat
+versions prospectively, preserves historical usage terms, and refuses to proceed
+while an existing default-plan subscription lacks an explicit agreement. New
+organisations use the regular plan; the original cohort receives 14 days of seat
+access. Issuing an additional invitation ends that allowance and requires all
+seats to be collected. No usable invitation token or email is released before
+payment. Acceptance consumes its funded seat without a second charge.
+
+Nessie-origin delegated research retains its origin through the verified job
+context. It needs Nessie's seat admission and prepaid child usage, even when the
+performing product has a different name. A direct customer of that product keeps
+its own terms. Explicit usage subsidies are separate from free seat agreements.
+
+[Access and payment admission](../Billing/nessie-payment-admission.md) describes
+the member-safe projection, immutable deadlines, rollout and verification.
+The implementation is an unmerged candidate, not a deployed billing change.
+Provider collection remains unverified because the original Stripe test key
+has expired. Synthetic receipt tests are not provider evidence.

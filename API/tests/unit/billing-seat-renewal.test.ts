@@ -34,6 +34,8 @@ describe('seat renewal recovery', () => {
     expect(first.toISOString()).toBe('2026-11-13T11:00:00.000Z');
     expect(stripe.events.list.mock.calls[1][0]).toMatchObject({ starting_after: 'latest' });
     expect(await firstSeatRenewalFailure(invoice as never, event as never, 'acct', prisma as never, stripe as never)).toEqual(first);
+    vi.setSystemTime(new Date('2027-01-15T12:00:00Z'));
+    expect(await firstSeatRenewalFailure(invoice as never, event as never, 'acct', prisma as never, stripe as never)).toEqual(first);
     expect(stripe.events.list).toHaveBeenCalledTimes(2);
   });
   it('does not reopen debt when a failure arrives after its payment', async () => {
