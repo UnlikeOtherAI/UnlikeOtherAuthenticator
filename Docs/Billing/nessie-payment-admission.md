@@ -107,3 +107,11 @@ cutover. Due term writes capture the roster immediately; a scheduled term also
 captures it before the first later membership mutation. Members added through
 a still-free organisation cannot become part of a paid team’s original cohort.
 A later login, team switch or repeated term does not rewrite an existing allowance.
+## Deployment recovery
+
+The 15 November invitation-seat deployment failed because the migration role
+lacked `TRIGGER` on `billing_automatic_seat_changes`. The role-specific upgrade
+test and checksum-pinned startup recovery are documented in
+[deployment](../deploy.md#recovering-from-a-failed-migration). Recovery preserves
+the failed migration attempt and reuses the original SQL. The seat, card and
+browser admission contracts do not change.

@@ -68,13 +68,38 @@ are easy to miss:
 
 ### Recovering from a failed migration
 
-Prisma runs each migration in one transaction, so the *schema* rolls back
-cleanly. The **bookkeeping does not**: `_prisma_migrations` is left with
+For migrations that explicitly wrap their SQL in `BEGIN` / `COMMIT`, the schema
+rolls back on failure. Prisma does not wrap every PostgreSQL migration in a
+transaction automatically. The **bookkeeping does not roll back**: `_prisma_migrations` is left with
 `finished_at NULL, rolled_back_at NULL`, and every subsequent boot then fails
 with **P3009**. `start-production.sh` runs under `set -eu`, so the container
 exits — a crash loop and a total auth outage until an operator intervenes. The
 script detects P3009 specifically and prints this runbook to the container log
 rather than dying silently.
+
+The invitation-seat rollout has a narrowly scoped automatic recovery before
+Prisma starts. Migration `20261104233000_anniversary_seats` revoked `TRIGGER`
+from `uoa_admin`, including when that role owns the table. This prevented
+`20261115155000_invitation_seat_funding` from creating its payment trigger in
+production on 15 November 2026; superuser fixtures did not expose it.
+
+The additive `20261115154500_invitation_trigger_privilege` migration restores
+only `TRIGGER` on `billing_automatic_seat_changes` to the existing migration
+role before the invitation migration runs. All published migration bytes stay
+unchanged. For the already failed attempt, startup verifies the exact shipped
+SHA-256, a single matching unfinished row, ownership and absence of the new
+columns, functions and indexes. It takes Prisma's migration lock while checking
+rollback state, restores the missing privilege, then uses Prisma's supported
+`migrate resolve --rolled-back` command. The failed attempt remains recorded;
+the following deploy applies the original SQL and records its successful attempt.
+Recovery replicas serialize separately and unknown or partial states stop startup.
+No customer rows, balances, invoices or runtime-role privileges change.
+
+`invitation-migration-recovery.test.ts` reproduces the failure with a non-superuser
+member of the table-owning role, exercises refusal and concurrent recovery, then
+applies the remaining migrations through the real Prisma CLI. It also verifies
+an upgrade that has not failed yet. CI runs this suite separately because it
+deliberately exercises the database-wide migration lock.
 
 Recover, connected as `DATABASE_ADMIN_URL`:
 
@@ -92,8 +117,9 @@ SELECT migration_name, started_at, finished_at, rolled_back_at, logs
 #    migration's pre-flight names every offending (user, domain) pair and gives
 #    the remediation query in its HINT.
 
-# 3. Clear the wedged row. The schema already rolled back, so `--rolled-back`
-#    (never `--applied`) is correct.
+# 3. Only after proving transactional rollback, preserve the failed attempt with
+#    Prisma's rollback marker (never `--applied`). Ship a diagnosed automatic
+#    recovery when one is required; do not hand-edit or delete the row.
 DATABASE_URL="$DATABASE_ADMIN_URL" \
   npx prisma migrate resolve --rolled-back <migration_name>
 
