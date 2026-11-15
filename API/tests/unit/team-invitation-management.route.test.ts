@@ -7,6 +7,7 @@ import { AppError } from '../../src/utils/errors.js';
 const mocks = vi.hoisted(() => ({
   access: vi.fn(), assertion: vi.fn(), context: vi.fn(), epoch: vi.fn(),
   list: vi.fn(), get: vi.fn(), resend: vi.fn(), tenant: vi.fn(),
+  funding: vi.fn(), collect: vi.fn(), send: vi.fn(),
   prisma: {
     organisation: { findFirst: vi.fn() },
     orgMember: { findFirst: vi.fn() },
@@ -64,6 +65,11 @@ vi.mock('../../src/plugins/tenant-context.plugin.js', () => ({
   setTenantContextFromRequest: (...args: unknown[]) => mocks.tenant(...args),
 }));
 
+vi.mock('../../src/services/billing-invitation-seat.service.js', () => ({
+  invitationFundingRequest: (...args: unknown[]) => mocks.funding(...args),
+  collectInvitationPayment: (...args: unknown[]) => mocks.collect(...args),
+}));
+
 const endpoints = [
   { method: 'GET', suffix: '', service: mocks.list },
   { method: 'GET', suffix: '/invite-1', service: mocks.get },
@@ -116,8 +122,24 @@ describe.each(endpoints)('$method invitations$suffix authorization', (endpoint) 
       userId: 'actor-1', domain: config.domain,
       org: { org_id: 'org-1', org_role: 'owner' },
     });
-    endpoint.service.mockResolvedValue({ ok: true });
+    endpoint.service.mockReset().mockResolvedValue({ ok: true });
+    mocks.funding.mockReset().mockResolvedValue({ inviteId: 'invite-1' });
+    mocks.collect.mockReset().mockResolvedValue(undefined);
   });
+
+  it.runIf(endpoint.method === 'POST').each(['before collection', 'after collection'])(
+    'rechecks a sender demoted %s before sending a paid invitation', async phase => {
+      const demote = () => mocks.prisma.teamMember.findFirst.mockResolvedValue({ teamRole: 'member' });
+      mocks.resend.mockImplementation(async (_params, deps) => {
+        deps.afterCommit('invite-1', mocks.send);
+        if (phase === 'before collection') demote();
+        return { ok: true };
+      });
+      if (phase === 'after collection') mocks.collect.mockImplementation(async () => { demote(); });
+      expect((await call(endpoint)).statusCode).toBe(403);
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.collect).toHaveBeenCalledTimes(phase === 'before collection' ? 0 : 1);
+    });
 
   it('authorizes a subject assertion against the target team, independent of session team', async () => {
     expect((await call(endpoint)).statusCode).toBe(200);

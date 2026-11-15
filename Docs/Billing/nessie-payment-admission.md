@@ -88,3 +88,10 @@ minimum-charge carry. A fully paid base invoice cannot hide a refund or dispute
 on another current seat. A dispute reversal can restore coverage. Carried
 coverage does not clear the receiving invoice’s renewal failure without its
 own non-carried seat-period proof.
+
+A first free-to-paid change starts its allowance at the term’s effective time,
+including an explicit team plan and organisations created after the billing
+cutover. Due term writes capture the roster immediately; a scheduled term also
+captures it before the first later membership mutation. Members added through
+a still-free organisation cannot become part of a paid team’s original cohort.
+A later login, team switch or repeated term does not rewrite an existing allowance.
