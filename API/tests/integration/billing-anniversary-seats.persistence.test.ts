@@ -24,7 +24,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     const user = (name: string) => p.user.create({ data: { email: name + '@example.test', userKey: name } });
     const founder = await user('seat-owner');
     const member = await user('seat-member');
-    const service = await p.billingService.create({ data: { identifier: 'nessie', name: 'Nessie' } });
+    const service = await p.billingService.create({ data: { identifier: 'nessie', name: 'Nessie', tariffHistoryFromMonth: new Date().toISOString().slice(0, 7) } });
     const tariff = await createBillingTariffVersion({ serviceId: service.id, tariff: {
       key: 'standard-eur', name: 'EUR seats', currency: 'EUR', mode: 'standard', collectionMode: 'stripe',
       monthlyAmountMinor: '299', monthlyChargeBasis: 'per_seat', seatPolicy: 'automatic',
