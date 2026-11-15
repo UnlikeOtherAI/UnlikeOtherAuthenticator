@@ -13,7 +13,7 @@ import { resolveCreditAccount, resolveCreditCollectionContext } from './billing-
 import { lockCreditBalance } from './billing-credit-balance-lock.service.js';
 import { verifyChainedSubjectAccessToken } from './confidential-chained-token-exchange.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
-import { resolveBillingTariffForMonth, utcBillingMonth } from './billing-tariff-history.service.js';
+import { utcBillingMonth } from './billing-tariff-history.service.js';
 import { verifyLedgerRuntimeKey } from './billing-ledger-runtime-key.service.js';
 import { assertLiveJobComputeDispatch, originalIdentityDomain,
   type JobComputeDispatchIdentity } from './billing-job-compute-renewal.service.js';
