@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
+import type { VerifiedStripeInvoiceLine } from './billing-stripe-payment-lines.service.js';
 import { AppError } from '../utils/errors.js';
 import { assertStripeObjectLivemode,type StripeAccountContext } from './billing-stripe-client.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
@@ -44,7 +45,7 @@ export async function prepareAddonPaymentInvoice(invoice:Stripe.Invoice,account:
     orgId:local.orgId,teamId:local.customer.teamId,paidAt:cash.paidAt,currency:local.catalog.currency,
     grossAmountMinor:stripeInvoiceMinor(invoice.total),taxAmountMinor:0n,creditAmountMinor:0n,
     dueAmountMinor:stripeInvoiceMinor(invoice.amount_due),paidAmountMinor:stripeInvoiceMinor(invoice.amount_paid)};
-  const lines=[{stripeLineId:line.id,serviceId:local.serviceId,serviceIdentifier:local.service.identifier,
+  const lines:VerifiedStripeInvoiceLine[]=[{stripeLineId:line.id,serviceId:local.serviceId,serviceIdentifier:local.service.identifier,
     billingMonth:new Date(line.period.start*1000).toISOString().slice(0,7),label:local.offer.name,
     subscriptionMinor:stripeInvoiceMinor(line.amount),usageMinor:0n,taxMinor:0n,creditMinor:0n,
     grossMinor:stripeInvoiceMinor(line.amount),dueMinor:stripeInvoiceMinor(line.amount)}];

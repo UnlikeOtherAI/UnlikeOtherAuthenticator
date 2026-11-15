@@ -45,6 +45,18 @@ export async function seedSmsFinance(prisma: PrismaClient, createNumber = true):
       VALUES (${id.credit},${id.account},${id.customer},${id.org},NULL,'ORGANISATION',${id.org},
         'USD',100000000,CURRENT_TIMESTAMP)`);
   });
+  // Known opening terms: waived seats, with every message and call still prepaid.
+  const month = new Date().toISOString().slice(0, 7);
+  await prisma.billingService.update({ where: { id: id.service }, data: { tariffHistoryFromMonth: month } });
+  const tariff = await prisma.billingTariff.create({ data: { serviceId: id.service,
+    key: 'sms-fixture-prepaid', version: 1, name: 'Prepaid communication fixture', mode: 'STANDARD',
+    collectionMode: 'STRIPE', usagePaymentMode: 'PREPAID', markupBps: 2700,
+    monthlyAmountMinor: 0n, monthlyChargeBasis: 'FLAT', currency: 'USD' } });
+  const assignment = await prisma.billingTariffAssignment.create({ data: { serviceId: id.service,
+    orgId: id.org, scope: 'ORGANISATION', scopeKey: id.org, tariffId: tariff.id } });
+  await prisma.billingTariffTermEvent.create({ data: { serviceId: id.service, source: 'ORGANISATION',
+    scopeKey: id.org, tariffId: tariff.id, assignmentId: assignment.id,
+    effectiveFromMonth: month, reason: 'prepaid-communication-fixture' } });
   for (const [key, purpose] of [[id.runtime, 'SMS_RUNTIME'], [id.lifecycle, 'CUSTOMER_LIFECYCLE']] as const) {
     await prisma.billingAppKey.create({ data: { id: key, serviceId: id.service, purpose,
       name: 'Synthetic SMS test', keyPrefix: key, secretDigest: key,

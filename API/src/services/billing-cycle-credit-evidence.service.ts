@@ -52,7 +52,7 @@ export async function readCycleCreditEvidence(
     payer: BillingAssignmentScope; tariff: BillingTariff; ratedAmount: string;
     rawLines: RawMeteringLine[] },
 ): Promise<CycleCreditEvidence> {
-  if (params.tariff.currency !== 'USD') {
+  if (params.tariff.usageCurrency !== 'USD') {
     return evidence(params.teamId, 'settlement', null, null, [], { reason: 'currency' });
   }
   const expectedRated = stripeMeterQuantityFromMajorAmount(params.ratedAmount, 'USD');

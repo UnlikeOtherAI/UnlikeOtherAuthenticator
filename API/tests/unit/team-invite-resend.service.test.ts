@@ -34,6 +34,7 @@ function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
 
 function makeInvitePrisma() {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([{ ready: true }]),
     organisation: { findFirst: vi.fn() },
     team: { findFirst: vi.fn() },
     teamInvite: {

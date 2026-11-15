@@ -121,41 +121,45 @@ export async function resendTeamInvite(
     select: TEAM_INVITE_SELECT,
   });
 
-  const token = await issueInviteToken({
-    prisma,
-    inviteId: resentInvite.id,
-    existingUser,
-    email: resentInvite.email,
-    userKey: identity.userKey,
-    domain: identity.domain,
-    config: params.config,
-    configUrl: params.configUrl,
-    now,
-    sharedSecret: deps?.sharedSecret,
-    generateEmailTokenFn: deps?.generateEmailToken,
-    hashEmailTokenFn: deps?.hashEmailToken ?? hashEmailToken,
-  });
-
-  const link = buildTeamInviteLink({
-    baseUrl: resolveBaseUrl(env),
-    token,
-    configUrl: params.configUrl,
-    redirectUrl: resentInvite.redirectUrl ?? undefined,
-  });
-
-  await sendInviteEmail({
-    to: resentInvite.email,
-    link,
-    trackingPixelUrl: buildTeamInviteTrackingPixelUrl({
-      baseUrl: resolveBaseUrl(env),
+  const deliver = async (prisma: InvitePrisma) => {
+    const token = await issueInviteToken({
+      prisma,
       inviteId: resentInvite.id,
-    }),
-    organisationName: org.name,
-    teamName: team.name,
-    inviteeName: resentInvite.inviteName ?? undefined,
-    inviterName: (await resolveInviterName(resentInvite, { prisma: deps?.inviterPrisma })) ?? undefined,
-    theme: extractEmailTheme(params.config),
-  });
+      existingUser,
+      email: resentInvite.email,
+      userKey: identity.userKey,
+      domain: identity.domain,
+      config: params.config,
+      configUrl: params.configUrl,
+      now,
+      sharedSecret: deps?.sharedSecret,
+      generateEmailTokenFn: deps?.generateEmailToken,
+      hashEmailTokenFn: deps?.hashEmailToken ?? hashEmailToken,
+    });
+
+    const link = buildTeamInviteLink({
+      baseUrl: resolveBaseUrl(env),
+      token,
+      configUrl: params.configUrl,
+      redirectUrl: resentInvite.redirectUrl ?? undefined,
+    });
+
+    await sendInviteEmail({
+      to: resentInvite.email,
+      link,
+      trackingPixelUrl: buildTeamInviteTrackingPixelUrl({
+        baseUrl: resolveBaseUrl(env),
+        inviteId: resentInvite.id,
+      }),
+      organisationName: org.name,
+      teamName: team.name,
+      inviteeName: resentInvite.inviteName ?? undefined,
+      inviterName: (await resolveInviterName(resentInvite, { prisma: deps?.inviterPrisma })) ?? undefined,
+      theme: extractEmailTheme(params.config),
+    });
+  };
+  if (deps?.afterCommit) deps.afterCommit(resentInvite.id, deliver);
+  else await deliver(prisma);
 
   return toInviteRecord(resentInvite, now, org.domain);
 }

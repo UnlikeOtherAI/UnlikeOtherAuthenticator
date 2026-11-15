@@ -73,6 +73,7 @@ export function subscriptionFixture() {
       markupBps: 2500,
       monthlyAmountMinor: 2999n,
       currency: 'USD',
+      usageCurrency: 'USD',
       isDefault: false,
       createdByUserId: null,
       createdByEmail: null,

@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { requireFundedInvitation } from './billing-invitation-seat.service.js';
 import type { ClientConfig } from './config.service.js';
 import type { InviterLabelPrisma } from './invite-inviter-label.service.js';
 
@@ -20,7 +21,10 @@ import { normalizeTeamRole } from './team.service.base.js';
 
 export type InvitePrisma = PrismaClient;
 
+export type InviteDeliveryQueue = (inviteId: string, deliver: (prisma: InvitePrisma) => Promise<void>) => void;
+
 export type InviteDeps = {
+  afterCommit?: InviteDeliveryQueue;
   env?: ReturnType<typeof getEnv>;
   prisma?: InvitePrisma;
   /** Reads the inviter's display name for the e-mail; the admin connection when absent. */
@@ -266,6 +270,7 @@ export async function issueInviteToken(params: {
   generateEmailTokenFn?: typeof generateEmailToken;
   hashEmailTokenFn?: typeof hashEmailToken;
 }): Promise<string> {
+  await requireFundedInvitation(params.prisma, params.inviteId);
   const sharedSecret = params.sharedSecret ?? requireEnv('SHARED_SECRET').SHARED_SECRET;
   const generateEmailTokenFn = params.generateEmailTokenFn ?? generateEmailToken;
   const hashEmailTokenFn = params.hashEmailTokenFn ?? hashEmailToken;

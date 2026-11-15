@@ -57,6 +57,7 @@ export async function browserNessieContract() {
     const f = await browserFinancialFixture(db.prisma, 6600000n);
     const runtime = requireStripeBillingEnabled('live');
     vi.spyOn(runtime.client.accounts, 'retrieveCurrent').mockImplementation(() => f.stripe.accounts.retrieveCurrent());
+    vi.spyOn(runtime.client.paymentMethods, 'list').mockImplementation((...args) => f.stripe.paymentMethods.list(...args));
     const domain = 'browser-contract.example.com';
     const issuer = `https://${domain}`;
     const domainKey = await seedDomainSecret(db.prisma, domain, 'synthetic-domain-secret');

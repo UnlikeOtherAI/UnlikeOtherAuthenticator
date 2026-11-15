@@ -59,6 +59,10 @@ export function registerRootRoute(app: FastifyInstance): void {
         'Centralized OAuth and authentication service used by multiple products, including one-time first-hop assertions, audience-bound chained confidential exchange, and paged organisation membership rosters.',
       version,
       machine_enrollment: machineCapabilities,
+      nessie_usage_admission: {
+        failure: '402 NESSIE_PREPAID_SETUP_REQUIRED',
+        requirement: 'Regular paid default and prepaid funded reservation; free usage requires an explicit organisation/team assignment. Applies to new dispatch and replay; settlement remains available.',
+      },
       repository: 'https://github.com/UnlikeOtherAI/UnlikeOtherAuthenticator',
       home: '/',
       docs: '/llm',
@@ -130,7 +134,7 @@ export function registerRootRoute(app: FastifyInstance): void {
         binding: 'Current ACTIVE canonical identity, SUPERUSER admin-domain role, credential epoch, exact config and source family. A new private cookie is set for the independent recipient family; refresh tokens never appear in JSON.',
       },
       product_api_concurrency:
-        'Product data APIs — /org/*, /domain/*, /settings/*, /internal/org/*, /avatar/*, /email/* — share a small per-instance concurrency cap so sign-in always keeps database connections. An excess request waits briefly in FIFO order, then answers 503 with Retry-After: 1 and code PRODUCT_API_BUSY (the request had no effect). Retry after the delay with backoff and never fan out one UOA call per end-user request: resolve /org/me and settings once per session and cache them. /auth/* (including /auth/token), /oauth/*, /2fa/*, /integrations/*, /internal/admin/*, /billing/* and discovery are never limited.',
+        'Product data APIs â€” /org/*, /domain/*, /settings/*, /internal/org/*, /avatar/*, /email/* â€” share a small per-instance concurrency cap so sign-in always keeps database connections. An excess request waits briefly in FIFO order, then answers 503 with Retry-After: 1 and code PRODUCT_API_BUSY (the request had no effect). Retry after the delay with backoff and never fan out one UOA call per end-user request: resolve /org/me and settings once per session and cache them. /auth/* (including /auth/token), /oauth/*, /2fa/*, /integrations/*, /internal/admin/*, /billing/* and discovery are never limited.',
       organisation_financial_history: 'Explicit financial_scope organisation on cycles/invoices reads spans products and teams, remains manager-only, and uses exactly one named account/mode. Preserve source download bodies and opaque scoped cursors. Unknown mode binding returns reconciliation; no historical records move.',
       billing_provider_unavailable:
         'Billing calls that cannot resolve the configured payment-provider account return 503 BILLING_PAYMENT_PROVIDER_UNAVAILABLE. Retain the user session, report billing temporarily unavailable and retry reads with backoff. Do not interpret this as zero credits, insufficient funds or permission to start paid work. Payment mutations retain their existing idempotency and reconciliation requirements.',

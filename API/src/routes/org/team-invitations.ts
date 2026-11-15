@@ -1,3 +1,5 @@
+import { withInvitationDelivery } from './invitation-delivery.js';
+import { memberInvitePermission } from '../../services/team-invite.service.permissions.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -105,7 +107,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
         const body = MemberInviteBodySchema.parse(request.body ?? {});
 
         setTenantContextFromRequest(request, { orgId, userId: caller.actorUserId });
-        const result = await request.withTenantTx((tx) =>
+        const result = await withInvitationDelivery(request, (tx, afterCommit) =>
           createMemberInvite(
             {
               orgId,
@@ -117,8 +119,15 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
               redirectUrl: body.redirectUrl,
               invite: { email: body.email, name: body.name, teamRole: body.teamRole },
             },
-            { prisma: asPrismaClient(tx) },
+            { prisma: asPrismaClient(tx), afterCommit },
           ),
+          async (tx, inviteId) => {
+            const invite = await tx.teamInvite.findUniqueOrThrow({ where: { id: inviteId }, select: { teamRole: true } });
+            const permission = await memberInvitePermission(asPrismaClient(tx), {
+              orgId, teamId, actorUserId: caller.actorUserId, config, teamRole: invite.teamRole,
+            });
+            if (permission.approvalStatus !== 'NOT_REQUIRED') throw new AppError('FORBIDDEN', 403);
+          },
         );
 
         reply.status(200).send(result);
@@ -128,7 +137,7 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       const body = BulkInviteBodySchema.parse(request.body ?? {});
 
       setTenantContextFromRequest(request, { orgId });
-      const result = await request.withTenantTx((tx) =>
+      const result = await withInvitationDelivery(request, (tx, afterCommit) =>
         createTeamInvites(
           {
             orgId,
@@ -140,8 +149,9 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
             invitedBy: body.invitedBy,
             invites: body.invites,
           },
-          { prisma: asPrismaClient(tx) },
+          { prisma: asPrismaClient(tx), afterCommit },
         ),
+        tx => requireInvitationManager(request, asPrismaClient(tx)),
       );
 
       reply.status(200).send(result);
@@ -268,13 +278,13 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       const inviteId = getInviteIdFromParams(request.params);
 
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
-      const invite = await request.withTenantTx(async (tx) => {
+      const invite = await withInvitationDelivery(request, async (tx, afterCommit) => {
         await requireInvitationManager(request, asPrismaClient(tx));
         return resendTeamInvite(
           { orgId, teamId, inviteId, domain, config, configUrl },
-          { prisma: asPrismaClient(tx) },
+          { prisma: asPrismaClient(tx), afterCommit },
         );
-      });
+      }, tx => requireInvitationManager(request, asPrismaClient(tx)));
 
       reply.status(200).send(invite);
     },

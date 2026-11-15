@@ -249,6 +249,10 @@ export async function createBillingCreditTopUpCheckout(
     }
   }
 
+  // Existing Checkout Sessions can finish at their original price after a storefront change.
+  if (selection.offer.manualPurchaseEnabled === false) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_CREDIT_OFFER_UNAVAILABLE');
+  }
   await context.authorizeAction();
   context.customer = await context.ensureCustomer();
   // The rate is read as the checkout is created; the credits it buys are fixed on the row.
@@ -339,7 +343,13 @@ export async function createBillingCreditTopUpCheckout(
       billing_address_collection: 'required',
       line_items: [{ price: selection.catalog.stripePriceId as string, quantity: 1 }],
       metadata,
-      payment_intent_data: { metadata },
+      payment_intent_data: {
+        metadata,
+        // Checkout discloses card retention. UOA's separate reload consent is
+        // still required before any automatic credit purchase can be attempted.
+        ...(params.credential.service.identifier === 'nessie'
+          ? { setup_future_usage: 'off_session' as const } : {}),
+      },
     },
     {
       idempotencyKey: creditCheckoutIdempotencyKey(context.account, 'top_up', checkout.id),

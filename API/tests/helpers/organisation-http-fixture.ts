@@ -25,11 +25,12 @@ export async function seedOrganisationHttpFixture(db:PrismaClient,input:{publicB
   const month=now.toISOString().slice(0,7);
   const seed=await seedOrganisationAddonInvoices(db,{providerSpies:false,product:'nessie',tariffHistoryFromMonth:month,period:{startsAt:now,endsAt:end,paidAt:now}});
   const tariff=await db.billingTariff.create({data:{serviceId:seed.credential.serviceId,key:'standard',version:1,name:'Standard',mode:'STANDARD',
-    collectionMode:'STRIPE',usagePaymentMode:'PREPAID',currency:'EUR',markupBps:3000,monthlyAmountMinor:299n,isDefault:true}});
-  // Known opening terms for this newly created synthetic service, not a
-  // production history backfill or a relaxation of the tariff reader.
-  await db.billingTariffTermEvent.create({data:{serviceId:seed.credential.serviceId,source:'SERVICE_DEFAULT',scopeKey:seed.credential.serviceId,
-    effectiveFromMonth:month,tariffId:tariff.id,reason:'synthetic-known-opening-terms'}});
+    collectionMode:'STRIPE',usagePaymentMode:'PREPAID',currency:'EUR',markupBps:3000,monthlyAmountMinor:299n}});
+  // This org has an explicit flat-rate agreement; it is never the Nessie default.
+  const assignment=await db.billingTariffAssignment.create({data:{serviceId:seed.credential.serviceId,
+    orgId:'control-org',scope:'ORGANISATION',scopeKey:'control-org',tariffId:tariff.id}});
+  await db.billingTariffTermEvent.create({data:{serviceId:seed.credential.serviceId,source:'ORGANISATION',scopeKey:'control-org',
+    effectiveFromMonth:month,tariffId:tariff.id,assignmentId:assignment.id,reason:'synthetic-known-opening-terms'}});
   const domain='control.example.com',issuer=`https://${domain}`,configUrl=`${issuer}/auth/config`,domainSecret=randomBytes(32).toString('base64url');
   const domainBearer=await seedDomainSecret(db,domain,domainSecret);
   await db.enterpriseProductReadiness.create({data:{clientDomain:domain,minimumAssuranceVersion:1}});

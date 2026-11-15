@@ -28,6 +28,13 @@ Only the original physical browser is charged; same-payer joins share its
 remaining window and never extend it. Actor revocation blocks new claims while
 machine receipt delivery can settle costs already incurred.
 
+Every reservation and first dispatch claim also checks Nessie's current seat
+access and a card bound to the organisation's live Stripe account. A funded
+wallet alone does not grant either. Losing eligibility between reservation and
+claim refuses dispatch; read, release and incurred-usage settlement remain
+available. Authenticated browser routes return `402 NESSIE_BILLING_SETUP_REQUIRED`
+for missing card setup and `402 BILLING_SEAT_PAYMENT_REQUIRED` for held seats.
+
 A definite non-creation proof releases the hold. Timeout, an empty provider
 lookup or a 5xx response does not. Terminal provider timing is rounded by the
 frozen policy, rated once with the shared cumulative integer credit ledger,
@@ -57,6 +64,9 @@ contract is packages/billing-statement-protocol/BROWSER-BILLING.md. Test
 billing-browser.persistence.test.ts and billing-paid-usage-exception.persistence.test.ts
 against isolated migrated PostgreSQL; unit tests cannot prove wallet races.
 The protocol is vendored into Nessie from the committed UOA source revision.
+`billing-browser-admission.persistence.test.ts` covers funded wallets without
+card or seat eligibility, eligibility lost before claim, and settlement/release
+after access is held.
 Browser migrations bound lock waits to five seconds and statements to two
 minutes, including changes to the existing paid-usage exception table.
 

@@ -65,10 +65,9 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
     proof.unresolved_paid_attempts !== '0' || !proof.snapshot.immutable) {
     hold('BILLING_CYCLE_PAID_PROOF_SCOPE_INVALID');
   }
-  // Organisation statements separate the frozen USD credit liability from a
-  // EUR/GBP monthly fee. They do not convert either amount or rerate receipts.
+  // Retained organisation receipts already freeze their USD credit liability separately.
   const orgUsd=params.organisationSettlementCurrency==='USD'&&params.payer===BillingAssignmentScope.ORGANISATION&&Boolean(params.accountId);
-  if (tariff.currency !== 'USD'&&!orgUsd) hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
+  if (tariff.usageCurrency !== 'USD'&&!orgUsd) hold('BILLING_CYCLE_FX_RECONCILIATION_REQUIRED');
   if(params.accountId)await assertPaidFinancialSources(reader,scope,params.accountId);
   const matched = await matchUoaPaidReceiptSet(reader, scope, proof);
   const meteredRaw = params.rawLines.filter((line) => line.billingDisposition === 'paid')

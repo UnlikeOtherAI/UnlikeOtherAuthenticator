@@ -1,3 +1,5 @@
+import { assertNessieCardOnFile } from './billing-nessie-card-admission.service.js';
+import { assertNessieSeatUsage } from './billing-nessie-seat-access.service.js';
 import { requireSmsResourceStripe } from './billing-sms-account.service.js';
 import { requireOrganisationStripeBilling, resolveTeamBillingMode } from './billing-team-mode.service.js';
 import { assertBillingActionContext } from './billing-action-context.service.js';
@@ -77,6 +79,10 @@ export async function readSmsNumber(input: { product: string; resource_id: strin
         !current.entitlementDeactivatedAt && current.currentPeriodEnd &&
         current.currentPeriodEnd.getTime() > (deps.now?.() ?? new Date()).getTime());
       if (authorized && refreshed.remote) {
+        await prisma.$transaction(tx => assertNessieSeatUsage(tx, { product: input.product,
+          serviceId: resource.serviceId, organisationId: resource.orgId, teamId: null }));
+        await assertNessieCardOnFile({ product: input.product, organisationId: resource.orgId, teamId: null },
+          prisma, { collection: { account, stripe, stripeCollectionEnabled: true } });
         const latestId = stripeExternalId(refreshed.remote.latest_invoice);
         if (!latestId) authorized = false;
         else {

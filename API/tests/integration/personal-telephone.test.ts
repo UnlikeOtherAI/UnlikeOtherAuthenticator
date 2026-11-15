@@ -44,6 +44,15 @@ describe.skipIf(!process.env.DATABASE_URL)('personal telephone authority', () =>
     await db.prisma.orgMember.create({ data: { userId, orgId, role: 'owner' } });
     await db.prisma.teamMember.create({ data: { userId, teamId, teamRole: 'owner' } });
     const service = await db.prisma.billingService.create({ data: { identifier: 'nessie', name: 'Nessie' } });
+    // Routing authority is exercised under an explicit free-seat agreement.
+    const tariff = await db.prisma.billingTariff.create({ data: { serviceId: service.id,
+      key: 'telephone-fixture-free', version: 1, name: 'Telephone fixture seats', mode: 'FREE',
+      collectionMode: 'NONE', markupBps: 0, monthlyAmountMinor: 0n, monthlyChargeBasis: 'FLAT', currency: 'USD' } });
+    const assignment = await db.prisma.billingTariffAssignment.create({ data: { serviceId: service.id,
+      orgId, scope: 'ORGANISATION', scopeKey: orgId, tariffId: tariff.id } });
+    await db.prisma.billingTariffTermEvent.create({ data: { serviceId: service.id, source: 'ORGANISATION',
+      scopeKey: orgId, tariffId: tariff.id, assignmentId: assignment.id,
+      effectiveFromMonth: new Date().toISOString().slice(0, 7), reason: 'telephone-authority-fixture' } });
     const key = await createBillingAppKey({ serviceId: service.id, purpose: 'customer_lifecycle',
       name: 'Telephone test', actorIssuer: 'https://api.nessie.works',
       actorAudience: `${publicBase}/billing/v1/effective-tariff`, actorPublicJwk: jwk,

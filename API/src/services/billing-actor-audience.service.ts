@@ -37,6 +37,7 @@ export const BILLING_ACTOR_ENDPOINTS = [
   '/billing/v1/service-access/confirm',
   '/billing/v1/customer-statement',
   '/billing/v1/organisation/capabilities',
+  '/billing/v1/organisation/access',
   '/billing/v1/organisation/overview',
   '/billing/v1/organisation/region',
   '/billing/v1/team/overview',

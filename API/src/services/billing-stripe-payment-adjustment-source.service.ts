@@ -11,7 +11,7 @@ import { prepareStripePaymentInvoice, persistStripePaymentInvoice }
 import { stripeInvoiceMinor } from './billing-stripe-payment-evidence.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 
-type Client = Pick<Stripe, 'refunds' | 'disputes' | 'paymentIntents' | 'charges' | 'balanceTransactions' | 'invoicePayments' | 'invoices' | 'subscriptions'>;
+type Client = Pick<Stripe, 'customers' | 'refunds' | 'disputes' | 'paymentIntents' | 'charges' | 'balanceTransactions' | 'invoicePayments' | 'invoices' | 'subscriptions'>;
 type Kind = 'REFUND' | 'DISPUTE' | 'DISPUTE_REVERSAL';
 
 function evidenceTime(value: number): Date {

@@ -55,7 +55,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   'INTERACTION_REQUIRED',
   'TEAM_SWITCH_CONFLICT',
   // Invitation revoke (DELETE .../invitations/:inviteId): products branch on the 409's code, so it
-  // must survive the production generic-body squash. Not an oracle — the caller was already
+  // must survive the production generic-body squash. Not an oracle â€” the caller was already
   // authorized for the exact invite.
   'INVITATION_ALREADY_ACCEPTED',
   // An authenticated platform superuser already knows the exact organisation. This code lets the
@@ -76,17 +76,18 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   'DELETION_CANDIDATE_DEPENDENCY_CHANGED',
   'DELETION_ACK_MISMATCH',
   // Creating an organisation whose address is already held: the person is asked to pick another
-  // name. Not an oracle — `/auth/slug-available` and `/domain/slug-available` already answer
+  // name. Not an oracle â€” `/auth/slug-available` and `/domain/slug-available` already answer
   // "taken" for the same label.
   'ORG_SLUG_TAKEN',
   // Accepting an invitation for a person whose membership in that organisation or team is
   // DEACTIVATED (an administrative suspension an invitation must not lift). Not an oracle: the
   // backend-mode caller can already list `?status=DEACTIVATED`, and the invitee learns only their
-  // own state. The hosted invitation page still renders the generic "This invitation can’t be used".
+  // own state. The hosted invitation page still renders the generic "This invitation canâ€™t be used".
   'MEMBERSHIP_DEACTIVATED',
   // A grant or invitation has already passed its own authorization checks;
   // this only says the purchased shared capacity cannot admit another seat.
   'SEAT_CAPACITY_EXCEEDED',
+  'SEAT_PAYMENT_REQUIRED',
   // Confidential token exchange (`POST /auth/token`, RFC 8693 grant) refusing a subject because of
   // the person's own current state: a moved credential epoch, an unknown user, a lost
   // source-domain role, or a selected organisation/team no longer available to them. The caller
@@ -96,20 +97,20 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // are decided before any subject lookup and stay generic.
   'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN',
   // User settings writes over the per-value cap or the per-user quota (Docs/Auth/user-settings.md
-  // §3): products branch on these to tell the user their storage is full. Not an oracle — the
+  // Â§3): products branch on these to tell the user their storage is full. Not an oracle â€” the
   // caller is already authenticated as the user whose own store it is.
   'SETTING_VALUE_TOO_LARGE',
   'SETTINGS_QUOTA_EXCEEDED',
   // Product data APIs (`/org/*`, `/domain/*`, `/settings/*`, ...) refused by the per-instance
   // concurrency bulkhead (middleware/product-api-bulkhead.ts) after the wait budget or a full
   // queue. Products branch on it to back off and retry after `Retry-After`. Not an oracle: it
-  // says nothing about any user, domain or record — only that this instance is busy.
+  // says nothing about any user, domain or record â€” only that this instance is busy.
   'PRODUCT_API_BUSY',
   // Key retrieval was temporarily unavailable, not a rejected user or signature.
   // Products retry without ending the session; no subject or key details are exposed.
   'INTEGRATION_JWKS_UNAVAILABLE',
-  // Admin › SMS policies › Refresh and accept, reached only by an authenticated platform superuser:
-  // the Admin says which manual review to open instead. Not an oracle — the operator already sees
+  // Admin â€º SMS policies â€º Refresh and accept, reached only by an authenticated platform superuser:
+  // the Admin says which manual review to open instead. Not an oracle â€” the operator already sees
   // the accepted rates these codes compare against.
   'BILLING_SMS_FX_BASELINE_REQUIRED',
   'BILLING_SMS_FX_OUTSIDE_BAND',
@@ -120,6 +121,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // to choose it before SMS pricing, purchase or top-up; IMMUTABLE that it was already chosen. Both
   // follow fresh actor authentication and name nothing beyond the caller's own organisation.
   'BILLING_REGION_REQUIRED',
+  'NESSIE_PREPAID_SETUP_REQUIRED', 'NESSIE_REGULAR_DEFAULT_REQUIRED', 'NESSIE_BILLING_SETUP_REQUIRED',
   'BILLING_REGION_IMMUTABLE',
   // A product's monthly SMS number quote for a country whose provider rental reaches the flat
   // price: the product says numbers there are not offered. It names no cost or margin.
@@ -136,6 +138,7 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
 ]);
 
 const browserRefusalStatuses = new Map<string, number>([
+  ['BILLING_SEAT_PAYMENT_REQUIRED', 402],
   ['BILLING_BROWSER_INSUFFICIENT_CREDITS', 402],
   ['BILLING_BROWSER_TARIFF_UNAVAILABLE', 503],
   ['BILLING_BROWSER_LIVE_CREDITS_REQUIRED', 403],

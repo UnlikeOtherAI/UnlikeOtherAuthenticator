@@ -59,6 +59,7 @@ export function makeAcceptanceTx() {
 
 export function makeInvitePrisma() {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([{ ready: true }]),
     organisation: {
       findFirst: vi.fn(),
     },

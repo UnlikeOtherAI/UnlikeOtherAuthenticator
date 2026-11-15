@@ -196,6 +196,13 @@ export function billingPendingCreditsLabel(count: number, locale?: BillingCustom
 export function billingBuiltInCreditOfferCopy(key: string, locale?: BillingCustomerLocale) {
   const copy = billingCreditCopy(locale);
   // A GBP or EUR offer shares its USD tier's name: credits_eur_25 is named as credits_usd_25.
+  const amount = /^credits_(eur|gbp|usd)_(5|20|500)$/.exec(key);
+  if (amount) {
+    const name = new Intl.NumberFormat(billingLocale(locale), {
+      style: 'currency', currency: amount[1].toUpperCase(), minimumFractionDigits: 0,
+    }).format(Number(amount[2]));
+    return { name, description: copy.oneTimeOfferDescription };
+  }
   const tier = key.replace(/^credits_(eur|gbp)_/, 'credits_usd_');
   if (!Object.prototype.hasOwnProperty.call(copy.creditOfferNames, tier)) return null;
   const offerKey = tier as keyof BillingCreditCopy['creditOfferNames'];

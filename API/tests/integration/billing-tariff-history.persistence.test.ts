@@ -52,6 +52,18 @@ describe.skipIf(!enabled)('effective tariff history with PostgreSQL', () => {
 
   afterAll(async () => { if (cleanup) await cleanup(); });
 
+  it('keeps the operator seat price and a zero AI charge on one immutable tariff', async () => {
+    const data = { serviceId, key: 'free-usage-paid-seat', version: 1, name: 'Staff',
+      mode: 'FREE' as const, collectionMode: 'STRIPE' as const, markupBps: 0, currency: 'EUR',
+      monthlyAmountMinor: 299n, monthlyChargeBasis: 'PER_SEAT' as const,
+      seatPolicy: 'AUTOMATIC' as const, seatChargeTiming: 'PRORATED' as const };
+    const tariff = await prisma.billingTariff.create({ data });
+    expect(tariff.monthlyAmountMinor).toBe(299n);
+    expect(tariff.mode).toBe('FREE');
+    await expect(prisma.billingTariff.create({ data: { ...data, key: 'invalid-staff', markupBps: 200 } }))
+      .rejects.toThrow();
+  });
+
   it('persists immutable prepaid per-seat terms without changing historical tariff defaults', async () => {
     const historical = await prisma.billingTariff.findUniqueOrThrow({ where: { id: 'default' } });
     expect(historical.monthlyChargeBasis).toBe('FLAT');

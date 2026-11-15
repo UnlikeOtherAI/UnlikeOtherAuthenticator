@@ -77,7 +77,8 @@ describe('recurring Stripe usage export scheduler', () => {
         OR: [{ teamId: null }, { team: { lifecycleStatus: { not: 'ARCHIVED' } } }],
         tariff: {
           collectionMode: BillingCollectionMode.STRIPE,
-          mode: { not: BillingTariffMode.FREE },
+          anniversarySeats: false,
+          OR: [{ mode: { not: BillingTariffMode.FREE } }, { monthlyAmountMinor: { gt: 0n } }],
         },
       },
       select: {

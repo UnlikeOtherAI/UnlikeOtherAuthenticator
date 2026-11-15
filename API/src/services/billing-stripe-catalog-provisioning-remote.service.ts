@@ -104,7 +104,7 @@ async function loadProducts(
   return result;
 }
 
-function validateCreditPrice(params: {
+export function validateCreditPrice(params: {
   price: Stripe.Price;
   product: Stripe.Product;
   expectedLivemode: boolean;

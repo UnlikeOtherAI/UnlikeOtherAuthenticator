@@ -16,8 +16,8 @@ import {
 } from './billing-browser-policy.service.js';
 import { lockPrepaidAppSubject, verifyPrepaidAppActor } from './billing-prepaid-app-authority.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
-import { requireTeamStripeBilling } from './billing-team-mode.service.js';
-import { resolveStripeAccountContext } from './billing-stripe-client.service.js';
+import { browserPaidAccount } from './billing-browser-admission.service.js';
+import { assertNessieSeatUsage } from './billing-nessie-seat-access.service.js';
 import { resolveCreditAccount } from './billing-credit-account.service.js';
 import { billingReservedMicrocredits } from './billing-credit-holds.service.js';
 import { lockCreditBalance } from './billing-credit-balance-lock.service.js';
@@ -28,7 +28,7 @@ import { smsMicrocredits } from './billing-sms-money.service.js';
 export type BrowserBillingDependencies = {
   prisma?: PrismaClient;
   now?: () => Date;
-  stripe?: Pick<Stripe, 'accounts'>;
+  stripe?: Pick<Stripe, 'accounts' | 'paymentMethods'>;
 };
 export function publicBrowserReservation(
   row: BillingBrowserReservation,
@@ -115,17 +115,9 @@ export async function reserveBrowser(
     { ...input, subject: body, endpoint: '/billing/v1/browser/reservations' },
     { prisma },
   );
-  const configured = await requireTeamStripeBilling(
-    { organisationId: body.organisation_id, teamId: body.team_id },
-    prisma,
-  );
-  // Test credits must never authorize a real, paid provider session.
-  if (!configured.livemode) throw new AppError('FORBIDDEN', 403, 'BILLING_BROWSER_LIVE_CREDITS_REQUIRED');
-  const account = await resolveStripeAccountContext(
-    deps.stripe ?? configured.client,
-    configured.livemode,
-    prisma,
-  );
+  const scope = { product: body.product, serviceId: input.credential.service.id,
+    organisationId: body.organisation_id, teamId: body.team_id, userId: body.user_id };
+  const account = await browserPaidAccount(scope, prisma, deps.stripe);
   const credits = await resolveCreditAccount(
     { account, organisationId: body.organisation_id, teamId: body.team_id },
     { prisma },
@@ -149,6 +141,7 @@ export async function reserveBrowser(
     prisma,
     async (tx) => {
       await lockPrepaidAppSubject(tx, { subject: body, actor, credential: input.credential });
+      await assertNessieSeatUsage(tx, scope);
       await lockBrowserDispatch(tx, body.dispatch_id);
       if (await tx.billingBrowserCancellation.findUnique({ where: { dispatchId: body.dispatch_id } })) {
         throw new AppError('BAD_REQUEST', 409, 'BILLING_BROWSER_DISPATCH_CANCELLED');
