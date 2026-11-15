@@ -42,6 +42,8 @@ describe.skipIf(process.env.BILLING_FUNDING_DATABASE_TESTS!=='true')('forward fi
       .rejects.toThrow('BILLING_FINANCIAL_SOURCE_BINDING_IMMUTABLE');
     await expect(setOrganisationBillingMode({organisationId:'binding-org',mode:'sandbox',expectedRevision:0,actor},db))
       .rejects.toThrow('BILLING_ORGANISATION_MODE_BLOCKED');
+    await expect(db.billingOrganisationMode.create({data:{orgId:'binding-org',sandbox:true,revision:1}}))
+      .rejects.toThrow('BILLING_ORGANISATION_MODE_BLOCKED');
     await db.billingCreditBudgetDispatch.update({where:{dispatchId:row.dispatchId},data:{status:'RELEASED',terminalAt:new Date()}});
   });
   it('binds new manual contracts/adjustments without changing their history or invoking a provider',async()=>{

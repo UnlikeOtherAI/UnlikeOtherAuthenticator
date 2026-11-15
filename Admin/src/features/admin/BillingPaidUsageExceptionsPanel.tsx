@@ -57,7 +57,7 @@ export function BillingPaidUsageExceptionsPanel() {
     <Card className="p-5">
       <CardHeader><h2 className="font-semibold text-gray-900">Paid usage exceptions</h2></CardHeader>
       <p className="mb-4 text-sm text-gray-500">
-        These provider receipts exceeded the original authorized cost bound. Review the exact
+        These provider receipts exceeded the original cost bound or reported unexpected usage. Review the exact
         receipt before closing an exception. UOA charges at most the original credit hold,
         records the excess as an operator waiver, and retains gross usage for credit budgets.
       </p>
@@ -66,7 +66,7 @@ export function BillingPaidUsageExceptionsPanel() {
         Could not load paid usage exceptions.
       </p> : null}
       {list.data?.exceptions.length === 0 ? <p className="text-sm text-gray-500">
-        No over-bound paid usage needs a decision.
+        No paid usage needs an operator decision.
       </p> : null}
       <div className="space-y-3">
         {list.data?.exceptions.map((item) => (

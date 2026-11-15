@@ -22,6 +22,8 @@ export const BILLING_ACTOR_ENDPOINTS = [
   '/apps/v1/nessie/phone-profile/remove',
   '/apps/v1/nessie/phone-profile/visibility',
   '/apps/v1/deeptest/nessie-inference-access',
+  '/billing/v1/browser/tariff',
+  '/billing/v1/browser/reservations',
   '/billing/v1/voice/grants',
   '/billing/v1/sms/quotes',
   '/billing/v1/sms/quotes/verify',
@@ -104,6 +106,7 @@ export function assertBillingActorAudience(params: {
     params.presented === params.legacyAudience &&
     params.endpoint !== '/apps/v1/deeptest/nessie-inference-access' &&
     !params.endpoint.startsWith('/apps/v1/nessie/phone-profile/') &&
+    !params.endpoint.startsWith('/billing/v1/browser/') &&
     !params.endpoint.startsWith('/billing/v1/voice/') &&
     !params.endpoint.startsWith('/billing/v1/sms/') &&
     params.endpoint !== '/billing/v1/model-prices' &&

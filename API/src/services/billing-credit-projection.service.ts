@@ -100,9 +100,13 @@ function prepaidByService(data: BillingCreditProjectionData) {
     total: bigint;
     users: Map<string, bigint>;
   }>();
-  for (const row of data.prepaidReservations) {
-    if (row.status !== 'SETTLED') continue;
-    const product = row.tariff.service;
+  const reservations = [
+    ...data.prepaidReservations.filter(row => row.status === 'SETTLED')
+      .map(row => ({ service: row.tariff.service, userId: row.userId, debitedMicrocredits: row.debitedMicrocredits })),
+    ...data.browserReservations,
+  ];
+  for (const row of reservations) {
+    const product = row.service;
     const item = grouped.get(product.id) ?? { service: product, total: 0n,
       users: new Map<string, bigint>() };
     const amount = row.debitedMicrocredits ?? 0n;
@@ -244,7 +248,8 @@ export function buildBillingCreditsProjection(params: {
   const creditsConsumed = sum(
     [...data.settlements.map((settlement) => settlement.cumulativeCreditsConsumedMicrocredits),
       ...data.prepaidReservations.filter((row) => row.status === 'SETTLED')
-        .map((row) => row.debitedMicrocredits ?? 0n)],
+        .map((row) => row.debitedMicrocredits ?? 0n),
+      ...data.browserReservations.map(row => row.debitedMicrocredits ?? 0n)],
   );
   const availableBalance = data.creditAccount.balanceMicrocredits -
     data.activeReservedMicrocredits;

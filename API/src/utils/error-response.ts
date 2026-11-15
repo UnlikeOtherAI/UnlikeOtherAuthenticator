@@ -8,9 +8,10 @@ import {
   enrichAuthDebugForAppError,
   formatZodIssues,
 } from '../services/auth-debug-page.service.js';
+import { defaultHttpErrorExplanation, type PublicExplanation } from './error-http-explanations.js';
 import { explainAuthProviderCode } from './error-auth-provider-explanations.js';
 import { isAppError } from './errors.js';
-import { PRODUCTION_PUBLIC_ERROR_CODES } from './public-error-codes.js';
+import { PRODUCTION_PUBLIC_ERROR_CODES, isPublicBrowserBillingRefusal } from './public-error-codes.js';
 
 export type PublicErrorBody = {
   error: string;
@@ -20,50 +21,10 @@ export type PublicErrorBody = {
   hints?: string[];
 };
 
-type PublicExplanation = {
-  summary: string;
-  details?: string[];
-  hints?: string[];
-};
 
 const DEFAULT_HINTS = ['Check the request shape and server logs for more context.'];
 const GENERIC_PUBLIC_ERROR_BODY: PublicErrorBody = { error: PUBLIC_ERROR_MESSAGE };
 
-function defaultExplanation(code: string, statusCode: number): PublicExplanation {
-  if (statusCode === 400) {
-    return {
-      summary: 'The request could not be processed because one or more inputs were invalid.',
-      hints: ['Check required fields, field names, and allowed values.'],
-    };
-  }
-
-  if (statusCode === 401) {
-    return {
-      summary: 'Authentication is required or the supplied credentials were not accepted.',
-      hints: ['Check the supplied tokens, credentials, and auth preconditions for this route.'],
-    };
-  }
-
-  if (statusCode === 403) {
-    return {
-      summary:
-        'The request was understood, but the current identity does not have permission to perform it.',
-      hints: ['Check the caller role, domain scope, and access token claims.'],
-    };
-  }
-
-  if (statusCode === 404) {
-    return {
-      summary: 'The requested route or resource was not found.',
-      hints: ['Check the URL path, identifiers, and whether the target exists.'],
-    };
-  }
-
-  return {
-    summary: 'The server hit an unexpected error while handling this request.',
-    hints: ['Check the server logs for the full error and stack trace.'],
-  };
-}
 
 function deriveCodeFromMessage(message: string): string | null {
   if (message === 'missing request.config' || message === 'missing request.configUrl') {
@@ -408,7 +369,7 @@ function explanationFor(
         }
       : null) ??
     explainKnownCode(code, statusCode, error) ??
-    defaultExplanation(code, statusCode)
+    defaultHttpErrorExplanation(statusCode)
   );
 }
 
@@ -463,7 +424,7 @@ export function buildPublicErrorBody(params: {
   if (!getEnv().DEBUG_ENABLED) {
     const code = deriveErrorCode(params.error, params.statusCode, params.code);
     if (
-      PRODUCTION_PUBLIC_ERROR_CODES.has(code) ||
+      PRODUCTION_PUBLIC_ERROR_CODES.has(code) || isPublicBrowserBillingRefusal(params.request, code, params.statusCode) ||
       (params.exposeInvalidRefreshToken &&
         params.statusCode === 401 &&
         code === 'INVALID_REFRESH_TOKEN')

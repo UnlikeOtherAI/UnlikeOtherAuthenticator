@@ -1,6 +1,6 @@
 {
   "name": "@unlikeotherai/billing-statement-protocol",
-  "version": "6.4.0",
+  "version": "6.5.0",
   "description": "Public UOA billing statement and customer-action consumer contracts",
   "license": "MIT",
   "type": "module",
@@ -21,7 +21,8 @@
     "LICENSE",
     "README.md",
     "BILLING-MODE.md",
-    "ORGANISATION-BILLING.md"
+    "ORGANISATION-BILLING.md",
+    "BROWSER-BILLING.md"
   ],
   "exports": {
     "./schema/billing-authority-v1.json": "./schema/billing-authority-v1.json",
@@ -63,7 +64,9 @@
     "./openapi/billing-recurring-addons-v1.openapi.json": "./openapi/billing-recurring-addons-v1.openapi.json",
     "./schema/billing-organisation-v1.json": "./schema/billing-organisation-v1.json",
     "./fixtures/billing-organisation-v1.example.json": "./fixtures/billing-organisation-v1.example.json",
-    "./openapi/billing-organisation-v1.openapi.json": "./openapi/billing-organisation-v1.openapi.json"
+    "./openapi/billing-organisation-v1.openapi.json": "./openapi/billing-organisation-v1.openapi.json",
+    "./schema/billing-browser-v1.json": "./schema/billing-browser-v1.json",
+    "./openapi/billing-browser-v1.openapi.json": "./openapi/billing-browser-v1.openapi.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/generate-artifacts.mjs --check",

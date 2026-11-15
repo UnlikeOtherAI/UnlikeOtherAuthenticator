@@ -1,3 +1,6 @@
+import type { FastifyRequest } from 'fastify';
+import { BILLING_BROWSER_PATHS } from '@unlikeotherai/billing-statement-protocol';
+
 // The only internal error codes that survive the production generic-body
 // squash (`buildPublicErrorBody` / the error handler's debug gate). Everything
 // else answers with the generic public error body so refusals cannot become an
@@ -131,3 +134,20 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // range. Only the superuser-only /internal/admin/auth-funnel route throws it.
   'INVALID_DATE_RANGE',
 ]);
+
+const browserRefusalStatuses = new Map<string, number>([
+  ['BILLING_BROWSER_INSUFFICIENT_CREDITS', 402],
+  ['BILLING_BROWSER_TARIFF_UNAVAILABLE', 503],
+  ['BILLING_BROWSER_LIVE_CREDITS_REQUIRED', 403],
+  ['BILLING_APP_KEY_PURPOSE_MISMATCH', 403],
+  ['BILLING_APP_CREDENTIAL_REVOKED', 403],
+  ['BUDGET_CREDITS_EXHAUSTED', 402],
+  ['BUDGET_EVIDENCE_INCOMPLETE', 403],
+]);
+const browserRoutes = new Set<string>(Object.values(BILLING_BROWSER_PATHS));
+
+/** Verified browser callers need recovery codes, without changing other auth contracts. */
+export function isPublicBrowserBillingRefusal(request: FastifyRequest | undefined, code: string, status: number): boolean {
+  return request?.method === 'POST' && Boolean(request.billingAppKey)
+    && browserRoutes.has(request.routeOptions.url ?? '') && browserRefusalStatuses.get(code) === status;
+}

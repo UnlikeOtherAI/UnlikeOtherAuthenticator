@@ -60,7 +60,7 @@ function eurData(): BillingCreditProjectionData {
       creditsReceivedMicrocredits: offer.creditsReceivedMicrocredits, stripeLookupKey: offer.stripeLookupKey,
       stripeProductId: 'prod_credits', stripePriceId: `price_${offer.key}`,
     })),
-    settlements: [], prepaidReservations: [], activeReservedMicrocredits: 0n, allocations: [], entries: [],
+    settlements: [], prepaidReservations: [], browserReservations: [], activeReservedMicrocredits: 0n, allocations: [], entries: [],
     periodEntries: [], pending: [], unresolvedTopUpCheckouts: [], unresolvedSetupCheckouts: [],
     unresolvedAttempts: [], autoTopUpChargedMinor: 0n,
   } as unknown as BillingCreditProjectionData;

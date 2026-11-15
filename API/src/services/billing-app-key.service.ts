@@ -114,9 +114,10 @@ function validateActorJwk(input: unknown): PublicRsaJwk {
   return jwk;
 }
 
-export type PublicBillingAppKeyPurpose = 'entitlement' | 'customer_lifecycle' | 'sms_runtime' | 'voice_runtime';
+export type PublicBillingAppKeyPurpose = 'entitlement' | 'customer_lifecycle' | 'sms_runtime' | 'voice_runtime' | 'browser_runtime';
 
 function appKeyPurpose(value: PublicBillingAppKeyPurpose): BillingAppKeyPurpose {
+  if (value === 'browser_runtime') return BillingAppKeyPurpose.BROWSER_RUNTIME;
   if (value === 'voice_runtime') return BillingAppKeyPurpose.VOICE_RUNTIME;
   if (value === 'sms_runtime') return BillingAppKeyPurpose.SMS_RUNTIME;
   return value === 'customer_lifecycle'

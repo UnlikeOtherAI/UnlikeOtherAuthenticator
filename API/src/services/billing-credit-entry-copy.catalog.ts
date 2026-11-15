@@ -15,6 +15,7 @@ type EntryCopyCatalog = Readonly<Record<Exclude<BillingCreditEntryKind,
 
 export const BILLING_CREDIT_ENTRY_COPY = {
   cs: {
+    BROWSER_PREPAID_USAGE: { label: "Cloudový prohlížeč – {product}", detail: "{minutes} účtovaných minut spotřebovalo {credits}. Cena poskytovatele s přirážkou 10 %." },
     TOP_UP: { label: 'Kredity přidané službou {product}', detail: 'Ověřená platba přidala {credits} do sdíleného týmového zůstatku.' },
     AUTOMATIC_TOP_UP: { label: 'Automatické dobití týmových kreditů', detail: 'Ověřená automatická platba přidala {credits} do sdíleného týmového zůstatku.' },
     USAGE_SETTLEMENT: { label: 'Využití služby {product}', detail: 'Ověřené využití služby {product} odečetlo {credits}; podrobnosti najdete v přehledu využití.' },
@@ -26,6 +27,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     ADJUSTMENT: { label: 'Úprava kreditů na účtu', detail: 'Podpora upravila sdílený týmový zůstatek o {credits}.' },
   },
   'en-US': {
+    BROWSER_PREPAID_USAGE: { label: "{product} cloud browser time", detail: "{minutes} billed minutes used {credits}. Provider rate plus 10%." },
     TOP_UP: { label: 'Credits added from {product}', detail: 'A verified payment added {credits} to the shared team balance.' },
     AUTOMATIC_TOP_UP: { label: 'Automatic team credit top-up', detail: 'A verified automatic payment added {credits} to the shared team balance.' },
     USAGE_SETTLEMENT: { label: '{product} usage', detail: 'Verified {product} usage used {credits}. See the usage breakdown for details.' },
@@ -37,6 +39,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     ADJUSTMENT: { label: 'Account credit adjustment', detail: 'Support adjusted the shared team balance by {credits}.' },
   },
   'en-GB': {
+    BROWSER_PREPAID_USAGE: { label: "{product} cloud browser time", detail: "{minutes} billed minutes used {credits}. Provider rate plus 10%." },
     TOP_UP: { label: 'Credits added from {product}', detail: 'A verified payment added {credits} to the shared team balance.' },
     AUTOMATIC_TOP_UP: { label: 'Automatic team credit top-up', detail: 'A verified automatic payment added {credits} to the shared team balance.' },
     USAGE_SETTLEMENT: { label: '{product} usage', detail: 'Verified {product} usage used {credits}. See the usage breakdown for details.' },
@@ -48,6 +51,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     ADJUSTMENT: { label: 'Account credit adjustment', detail: 'Support adjusted the shared team balance by {credits}.' },
   },
   de: {
+    BROWSER_PREPAID_USAGE: { label: "Cloud-Browserzeit von {product}", detail: "{minutes} abgerechnete Minuten haben {credits} verbraucht. Anbieterpreis zuzüglich 10 %." },
     TOP_UP: { label: 'Credits von {product} hinzugefügt', detail: 'Eine bestätigte Zahlung hat {credits} zum gemeinsamen Teamguthaben hinzugefügt.' },
     AUTOMATIC_TOP_UP: { label: 'Automatische Team-Aufladung', detail: 'Eine bestätigte automatische Zahlung hat {credits} zum gemeinsamen Teamguthaben hinzugefügt.' },
     USAGE_SETTLEMENT: { label: 'Nutzung von {product}', detail: 'Die bestätigte Nutzung von {product} hat {credits} verbraucht. Weitere Details finden Sie in der Nutzungsübersicht.' },
@@ -59,6 +63,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     ADJUSTMENT: { label: 'Guthabenkorrektur', detail: 'Der Support hat das gemeinsame Teamguthaben um {credits} angepasst.' },
   },
   es: {
+    BROWSER_PREPAID_USAGE: { label: "Tiempo del navegador en la nube de {product}", detail: "{minutes} minutos facturados consumieron {credits}. Tarifa del proveedor más un 10 %." },
     TOP_UP: { label: 'Créditos añadidos desde {product}', detail: 'Un pago verificado añadió {credits} al saldo compartido del equipo.' },
     AUTOMATIC_TOP_UP: { label: 'Recarga automática de créditos del equipo', detail: 'Un pago automático verificado añadió {credits} al saldo compartido del equipo.' },
     USAGE_SETTLEMENT: { label: 'Uso de {product}', detail: 'El uso verificado de {product} consumió {credits}. Consulta el desglose de uso para ver más detalles.' },
@@ -70,6 +75,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     ADJUSTMENT: { label: 'Ajuste de créditos de la cuenta', detail: 'El equipo de soporte ajustó el saldo compartido en {credits}.' },
   },
   fr: {
+    BROWSER_PREPAID_USAGE: { label: "Temps de navigateur cloud {product}", detail: "{minutes} minutes facturées ont utilisé {credits}. Tarif du fournisseur majoré de 10 %." },
     TOP_UP: { label: 'Crédits ajoutés par {product}', detail: 'Un paiement vérifié a ajouté {credits} au solde partagé de l’équipe.' },
     AUTOMATIC_TOP_UP: { label: 'Recharge automatique des crédits de l’équipe', detail: 'Un paiement automatique vérifié a ajouté {credits} au solde partagé de l’équipe.' },
     USAGE_SETTLEMENT: { label: 'Utilisation de {product}', detail: 'L’utilisation vérifiée de {product} a consommé {credits}. Consultez le détail de l’utilisation pour en savoir plus.' },
@@ -81,6 +87,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     ADJUSTMENT: { label: 'Ajustement des crédits du compte', detail: 'L’assistance a ajusté le solde partagé de {credits}.' },
   },
   it: {
+    BROWSER_PREPAID_USAGE: { label: "Tempo del browser cloud di {product}", detail: "{minutes} minuti fatturati hanno consumato {credits}. Tariffa del fornitore più il 10%." },
     TOP_UP: { label: 'Crediti aggiunti da {product}', detail: 'Un pagamento verificato ha aggiunto {credits} al saldo condiviso del team.' },
     AUTOMATIC_TOP_UP: { label: 'Ricarica automatica dei crediti del team', detail: 'Un pagamento automatico verificato ha aggiunto {credits} al saldo condiviso del team.' },
     USAGE_SETTLEMENT: { label: 'Utilizzo di {product}', detail: 'L’utilizzo verificato di {product} ha consumato {credits}. Consulta il dettaglio dell’utilizzo per saperne di più.' },
@@ -106,11 +113,11 @@ export function billingCreditEntryCopy(
 export function formatBillingCreditEntryCopy(
   kind: BillingCreditEntryKind,
   locale: BillingCustomerLocale | undefined,
-  values: { product: string; credits: string },
+  values: { product: string; credits: string; minutes?: string },
 ): BillingCreditEntryCopy {
   const copy = billingCreditEntryCopy(kind, locale);
   return {
-    label: formatBillingCopy(copy.label, values),
-    detail: formatBillingCopy(copy.detail, values),
+    label: formatBillingCopy(copy.label, { ...values, minutes: values.minutes ?? '—' }),
+    detail: formatBillingCopy(copy.detail, { ...values, minutes: values.minutes ?? '—' }),
   };
 }

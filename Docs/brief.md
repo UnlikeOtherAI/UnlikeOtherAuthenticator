@@ -3550,3 +3550,14 @@ UOA adds public organisation/team references only to an exactly allowlisted
 browser continuation. These references are not credentials. The product keeps
 its PKCE, current membership and exact-team authorization checks. See
 [Invitation return](Auth/invitation-return.md).
+
+
+## Central browser billing — 15 November 2026
+
+Nessie uses one instance-superuser-managed Browserbase account. UOA reserves live
+prepaid funds and budgets before creation, freezes the original payer and tariff,
+and settles provider-reported started minutes at the verified usage rate plus 10%.
+Nessie absorbs the fixed monthly fee. Browser runtime credentials are purpose-bound;
+organisation/team administrators cannot publish tariffs. Unusual receipts use the
+existing operator exception review with auditable capped charges and waivers.
+See [browser billing](Auth/browser-billing.md) for setup, recovery and verification.
