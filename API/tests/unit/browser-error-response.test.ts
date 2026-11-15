@@ -11,6 +11,7 @@ describe('browser billing production refusal boundary', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it.each([
+    [402, 'BILLING_SEAT_PAYMENT_REQUIRED'],
     [402, 'BILLING_BROWSER_INSUFFICIENT_CREDITS'],
     [503, 'BILLING_BROWSER_TARIFF_UNAVAILABLE'],
     [403, 'BILLING_BROWSER_LIVE_CREDITS_REQUIRED'],
@@ -34,4 +35,12 @@ describe('browser billing production refusal boundary', () => {
         .toEqual({ error: 'Request failed' });
     },
   );
+
+  it('preserves the existing billing-setup recovery code on reserve and claim', () => {
+    for (const url of ['/billing/v1/browser/reservations', '/billing/v1/browser/reservations/claim']) {
+      expect(buildPublicErrorBody({ request: { ...request, routeOptions: { url } } as FastifyRequest,
+        statusCode: 402, error: new AppError('FORBIDDEN', 402, 'NESSIE_BILLING_SETUP_REQUIRED') }))
+        .toEqual({ error: 'Request failed', code: 'NESSIE_BILLING_SETUP_REQUIRED' });
+    }
+  });
 });

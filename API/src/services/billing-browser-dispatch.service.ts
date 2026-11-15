@@ -16,6 +16,8 @@ import { lockPrepaidAppCredential, lockPrepaidAppSubject } from './billing-prepa
 import { assertCurrentFinancialSource } from './billing-financial-source-binding.service.js';
 import { releaseBudgetDispatch } from './billing-credit-budget-dispatch.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
+import { browserPaidAccount } from './billing-browser-admission.service.js';
+import { assertNessieSeatUsage } from './billing-nessie-seat-access.service.js';
 
 export async function browserReservationRow(
   tx: Prisma.TransactionClient,
@@ -43,8 +45,15 @@ export async function claimBrowser(
   input: { request: BillingBrowserReadRequestV1; credential: VerifiedBillingAppKey },
   deps: BrowserBillingDependencies = {},
 ) {
+  const prisma = deps.prisma ?? getAdminPrisma();
+  assertBrowserRuntime(input.credential, input.request.product);
+  const pending = await prisma.billingBrowserReservation.findUnique({ where: { dispatchId: input.request.dispatch_id } });
+  if (!pending || pending.serviceId !== input.credential.service.id) throw new AppError('NOT_FOUND', 404);
+  // Provider IO stays outside the transaction; immutable payer and account are rechecked before the grant.
+  const account = pending.state === 'reserved' ? await browserPaidAccount({ product: input.request.product,
+    organisationId: pending.orgId, teamId: pending.teamId }, prisma, deps.stripe) : null;
   return runBillingSerializableTransaction(
-    deps.prisma ?? getAdminPrisma(),
+    prisma,
     async (tx) => {
       const row = await browserReservationRow(tx, input.request, input.credential);
       // The only response that grants dispatch is the one that wins this transition.
@@ -61,6 +70,10 @@ export async function claimBrowser(
         },
         actor: { tv: row.actorTokenVersion, exp: Math.floor(row.claimExpiresAt.getTime() / 1000) },
       });
+      const wallet = await tx.billingCreditAccount.findUniqueOrThrow({ where: { id: row.creditAccountId } });
+      if (!account || account.id !== wallet.accountId) throw new AppError('FORBIDDEN', 403, 'BILLING_BROWSER_LIVE_CREDITS_REQUIRED');
+      await assertNessieSeatUsage(tx, { product: input.request.product, serviceId: row.serviceId,
+        organisationId: row.orgId, teamId: row.teamId, userId: row.userId });
       const hold = await tx.billingCreditBudgetDispatch.findUniqueOrThrow({
         where: { dispatchId: row.dispatchId },
       });

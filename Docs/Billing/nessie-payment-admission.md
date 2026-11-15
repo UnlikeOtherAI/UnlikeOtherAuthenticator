@@ -64,6 +64,13 @@ supported provisioning interface; never fabricate price IDs or payment evidence.
 Check the current account, mode, webhook configuration and credentials separately.
 No migration charges historical usage or implies payment consent.
 
+The read-only production preflight on 15 November 2026 at 21:34 UTC found the
+three approved regional catalogues and no active Nessie Stripe subscriptions.
+It ran against deployed source `6c5eecf963604cb2253613051f3473dc7fa9fd36` in job
+`uoa-seat-preflight-20261115-73934e98`, execution `hnbf9`. The current default was
+still AT_COST/NONE/PAYG. This verifies the cutover inputs, not migration completion
+or Stripe collection.
+
 Fresh-database tests cover migration execution, invitation holds and collection,
 cohort immutability, concurrent quantities, acceptance without double charging,
 prepaid exhaustion, renewal deadlines and paid recovery. A seeded upgrade with

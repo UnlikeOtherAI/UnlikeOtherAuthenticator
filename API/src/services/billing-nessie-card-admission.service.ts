@@ -7,7 +7,8 @@ import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
 
 /** A funded wallet and billing setup are separate admission requirements. Never charges a card. */
 export async function assertNessieCardOnFile(input: { product: string; organisationId: string; teamId: string | null },
-  prisma: PrismaClient, deps: { collection?: CreditCollectionContext } = {}): Promise<void> {
+  prisma: PrismaClient, deps: { collection?: Pick<CreditCollectionContext, 'account' | 'stripeCollectionEnabled'> &
+    { stripe?: Pick<Stripe, 'paymentMethods'> | null } } = {}): Promise<void> {
   if (input.product !== 'nessie') return;
   const collection = deps.collection ?? await resolveCreditCollectionContext(input, { prisma });
   const stripe: Pick<Stripe, 'paymentMethods'> | null | undefined = collection.stripe;

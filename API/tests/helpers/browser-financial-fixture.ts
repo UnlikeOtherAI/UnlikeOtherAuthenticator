@@ -72,6 +72,10 @@ export async function browserFinancialFixture(prisma: PrismaClient, openingMicro
   });
   return {
     ...base,
+    stripe: { ...base.stripe, paymentMethods: { ...base.stripe.paymentMethods,
+      list: vi.fn(async () => ({ has_more: false, data: [{ id: 'pm_browser', customer: 'cus_sms',
+        type: 'card', livemode: true, card: { brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2035 } }] })),
+    } } as typeof base.stripe,
     credential,
     project,
     policy,
