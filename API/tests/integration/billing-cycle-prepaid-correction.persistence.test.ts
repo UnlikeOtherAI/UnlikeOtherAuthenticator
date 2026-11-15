@@ -76,7 +76,7 @@ describe.skipIf(!enabled)('prepaid finalized cycle late receipt', () => {
       mode: BillingTariffMode.STANDARD, collectionMode: BillingCollectionMode.NONE,
       usagePaymentMode: BillingUsagePaymentMode.PREPAID,
       monthlyChargeBasis: BillingMonthlyChargeBasis.FLAT,
-      markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD',
+      markupBps: 3000, monthlyAmountMinor: 0n, currency: 'USD', usageCurrency: 'USD',
     } });
     ids.tariff = tariff.id;
     const account = await fixture.billingStripeAccount.create({ data: {
