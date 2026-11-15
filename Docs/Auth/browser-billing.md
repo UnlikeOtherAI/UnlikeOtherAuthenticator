@@ -38,10 +38,17 @@ Unexpected proxy usage or an overlong session creates an immutable entry in
 Billing → Usage exceptions. The same existing operator review flow caps
 the collectible debit at the original reservation, records any excess as an
 explicit waiver, preserves gross usage for budgets, and logs the decision.
+
 Proxy bytes remain evidence; customers are billed only for browser minutes.
 A stale/revoked operator cannot decide; retries and concurrent decisions never
 debit twice. Nessie's receipt retry observes the completed decision, and the
 superuser can then reverify the provider connection before new work resumes.
+
+Organisation LIVE/Sandbox changes remain blocked by every existing financial
+source: active contracts, commercial adjustments, non-free budget dispatches
+and the provider guard. Reserved, dispatching and reconciliation browser
+reservations add their own blocker. The forward guard migration composes these
+checks without changing captured accounts, modes or financial history.
 
 ## Contract and checks
 

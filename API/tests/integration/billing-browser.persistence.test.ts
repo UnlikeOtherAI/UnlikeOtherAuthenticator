@@ -105,6 +105,9 @@ describe.skipIf(!process.env.DATABASE_URL)('central browser prepaid billing', ()
     const first = await reserve(body);
     expect((await reserve(body)).reservation_id).toBe(first.reservation_id);
     expect(first.can_dispatch).toBe(false);
+    expect(await prisma.$queryRaw(Prisma.sql`
+      SELECT code FROM billing_organisation_mode_blockers(${fixture.subject.organisation_id})
+    `)).toContainEqual({ code: 'browser_reservation' });
     expect((await claim(body.dispatch_id)).can_dispatch).toBe(true);
     expect((await claim(body.dispatch_id)).can_dispatch).toBe(false);
     const value = await receipt(body.dispatch_id);
@@ -216,6 +219,9 @@ describe.skipIf(!process.env.DATABASE_URL)('central browser prepaid billing', ()
       (await settleBrowser({ request: value.request, credential: fixture.credential }, value.dependencies))
         .state,
     ).toBe('reconciliation');
+    expect(await prisma.$queryRaw(Prisma.sql`
+      SELECT code FROM billing_organisation_mode_blockers(${fixture.subject.organisation_id})
+    `)).toContainEqual({ code: 'browser_reservation' });
     await expect(release(body.dispatch_id)).rejects.toMatchObject({ statusCode: 409 });
     expect(
       await prisma.billingCreditEntry.count({ where: { browserReservationId: reserved.reservation_id } }),
