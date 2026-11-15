@@ -43,21 +43,19 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie seat and usage exceptions', (
       expect(terms.tariff).toMatchObject({ monthlyAmountMinor: BigInt(seat), anniversarySeats: seat > 0,
         seatPolicy: 'AUTOMATIC', usagePaymentMode: paidUsage ? 'PREPAID' : 'PAY_AS_YOU_GO' });
       expect(rateProviderCost('1', 'USD', { mode, markupBps: terms.tariff.markupBps }).total).toBe(paidUsage ? '1.3' : '0');
-      const send = () => p.teamInvite.create({ data: { orgId: org.id, teamId: team.id,
-        email: 'invitee@example.test', lastSentAt: new Date() } });
+      const invite = (email: string) => p.teamInvite.create({ data: { orgId: org.id, teamId: team.id, email } });
+      const ready = async (id: string) => (await p.$queryRaw<Array<{ ready: boolean }>>`
+        SELECT billing_invitation_seat_ready(${id}) AS ready`)[0]?.ready;
       // Future exceptions never waive payment under the current regular default.
-      await expect(send()).rejects.toThrow('complete the seat payment');
-      expect(await p.teamInvite.count({ where: { orgId: org.id } })).toBe(0);
+      const future = await invite('future@example.test');
+      expect(future).toMatchObject({ billingSeatRequired: true, billingSeatFundedAt: null, lastSentAt: null });
+      expect(await ready(future.id)).toBe(false);
       await p.billingTariffTermEvent.create({ data: { serviceId, source: scope === 'team' ? 'TEAM' : 'ORGANISATION',
         scopeKey: assignment.scopeKey, effectiveFromMonth: new Date().toISOString().slice(0, 7),
         tariffId: tariff.id, assignmentId: assignment.id, reason: 'effective-exception-test' } });
-      if (seat > 0) {
-        await expect(send()).rejects.toThrow('complete the seat payment');
-        const held = await p.teamInvite.create({ data: { orgId: org.id, teamId: team.id, email: 'held@example.test' } });
-        expect(held).toMatchObject({ billingSeatRequired: true, billingSeatFundedAt: null, lastSentAt: null });
-      } else {
-        expect(await send()).toMatchObject({ billingSeatRequired: false, billingSeatFundedAt: null });
-      }
+      const current = await invite('effective@example.test');
+      expect(current).toMatchObject({ billingSeatRequired: seat > 0, billingSeatFundedAt: null, lastSentAt: null });
+      expect(await ready(current.id)).toBe(seat === 0);
     });
   });
 });
