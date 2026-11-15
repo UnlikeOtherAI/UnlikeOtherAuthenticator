@@ -142,7 +142,7 @@ BEGIN
     AND NOT EXISTS(SELECT 1 FROM billing_nessie_seat_transitions WHERE org_id=target_org) THEN RETURN NEW; END IF;
   SELECT s.id INTO paid_seat FROM billing_seat_subscriptions s JOIN billing_stripe_subscriptions b ON b.id=s.stripe_subscription_id
     WHERE s.org_id=target_org AND s.team_id IS NOT DISTINCT FROM selected.team_id AND s.tariff_id=selected.tariff_id
-      AND s.ended_at IS NULL AND b.status='active' AND b.initial_seat_invoice_id IS NOT NULL;
+      AND s.ended_at IS NULL AND billing_nessie_subscription_paid_now(b.id,now());
   IF paid_seat IS NOT NULL AND (
     EXISTS(SELECT 1 FROM billing_seat_membership_intervals i WHERE i.seat_subscription_id=paid_seat AND i.user_id=subject AND i.ends_at IS NULL)
     OR EXISTS(SELECT 1 FROM team_invites i JOIN users u ON lower(u.email)=lower(i.email)
@@ -173,7 +173,7 @@ BEGIN
   root_id:=COALESCE(NEW.billing_seat_source_invite_id,NEW.id);
   SELECT s.id INTO seat FROM billing_seat_subscriptions s JOIN billing_stripe_subscriptions b ON b.id=s.stripe_subscription_id
     WHERE s.org_id=NEW.org_id AND s.team_id IS NOT DISTINCT FROM selected.team_id AND s.tariff_id=selected.tariff_id
-      AND s.ended_at IS NULL AND b.status='active' AND b.initial_seat_invoice_id IS NOT NULL;
+      AND s.ended_at IS NULL AND billing_nessie_subscription_paid_now(b.id,now());
   IF seat IS NOT NULL AND NOT EXISTS(SELECT 1 FROM team_invites i WHERE i.id=root_id AND i.billing_seat_funded_at IS NOT NULL)
     AND NOT EXISTS(SELECT 1 FROM billing_automatic_seat_changes c WHERE c.invite_id=root_id AND c.delta=1)
     AND NOT EXISTS(SELECT 1 FROM billing_stripe_subscriptions b JOIN billing_stripe_checkout_sessions c ON c.id=b.checkout_id
@@ -200,7 +200,7 @@ BEGIN
   SELECT * INTO root FROM team_invites WHERE id=COALESCE(invitation.billing_seat_source_invite_id,invitation.id);
   RETURN root.billing_seat_funded_at IS NOT NULL AND root.billing_seat_ended_at IS NULL
     AND EXISTS(SELECT 1 FROM billing_seat_subscriptions s JOIN billing_stripe_subscriptions b ON b.id=s.stripe_subscription_id
-      WHERE s.id=root.billing_seat_subscription_id AND s.ended_at IS NULL AND b.status='active' AND b.initial_seat_invoice_id IS NOT NULL);
+      WHERE s.id=root.billing_seat_subscription_id AND s.ended_at IS NULL AND billing_nessie_subscription_paid_now(b.id,now()));
 END;
 $$;
 DO $$

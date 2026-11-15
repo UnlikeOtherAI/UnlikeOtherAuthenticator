@@ -87,4 +87,22 @@ ALTER TABLE billing_seat_failure_history FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON billing_seat_payment_periods,billing_seat_renewal_recovery,billing_seat_failure_history FROM PUBLIC,uoa_app;
 GRANT SELECT,INSERT ON billing_seat_payment_periods TO uoa_admin;
 GRANT SELECT,INSERT,UPDATE ON billing_seat_renewal_recovery,billing_seat_failure_history TO uoa_admin;
+-- One current-payment predicate for invitation issuance and product access.
+CREATE FUNCTION billing_nessie_subscription_paid_now(p_subscription text,p_now timestamptz)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT EXISTS(SELECT 1 FROM billing_stripe_subscriptions b
+    WHERE b.id=p_subscription AND b.status='active' AND b.initial_seat_invoice_id IS NOT NULL
+      AND NOT EXISTS(SELECT 1 FROM billing_seat_renewal_recovery r WHERE r.subscription_id=b.id AND r.recovered_at IS NULL)
+      AND EXISTS(SELECT 1 FROM billing_seat_payment_periods p JOIN billing_stripe_payment_invoices i ON i.id=p.invoice_id
+        WHERE p.subscription_id=b.id AND p.starts_at<=p_now AND p.ends_at>p_now
+          AND i.subscription_id=b.id AND i.account_id=b.account_id AND i.livemode=b.livemode AND i.due_amount_minor>0
+          AND (SELECT COALESCE(sum(c.amount_minor),0) FROM billing_stripe_payment_invoice_cash_payments c WHERE c.invoice_id=i.id)
+            -(SELECT COALESCE(sum(CASE WHEN a.kind='DISPUTE_REVERSAL' THEN -a.amount_minor ELSE a.amount_minor END),0)
+              FROM billing_stripe_payment_invoice_adjustments a WHERE a.invoice_id=i.id)>=i.due_amount_minor));
+$$;
+DO $$ BEGIN
+  EXECUTE format('ALTER FUNCTION billing_nessie_subscription_paid_now(text,timestamptz) SET search_path=pg_catalog,%I,pg_temp',current_schema());
+END; $$;
+REVOKE ALL ON FUNCTION billing_nessie_subscription_paid_now(text,timestamptz) FROM PUBLIC,uoa_app;
+GRANT EXECUTE ON FUNCTION billing_nessie_subscription_paid_now(text,timestamptz) TO uoa_admin;
 COMMIT;

@@ -1,3 +1,5 @@
+import { readNessieSeatAccess } from '../../src/services/billing-nessie-seat-access.service.js';
+import { recordSeatRenewalFailure } from '../../src/services/billing-seat-renewal.service.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { runAnniversarySeatCycle } from '../../src/services/billing-anniversary-seat-scheduler.service.js';
@@ -91,7 +93,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
           charge_id: 'ch_initial', amount_minor: '299', paid_at: now.toISOString() }],
         orgId: org.id, teamId: null, paidAt: now, currency: 'EUR', grossAmountMinor: 299n,
         taxAmountMinor: 0n, creditAmountMinor: 0n, dueAmountMinor: 299n, paidAmountMinor: 299n },
-      lines: [], sourceDigest: 'c'.repeat(64), invoice: { billing_reason: 'subscription_create', status: 'paid',
+      lines: [{ stripeLineId: 'il_initial', serviceId: service.id, serviceIdentifier: 'nessie',
+        billingMonth: new Date(start * 1000).toISOString().slice(0, 7), label: 'Seat subscription',
+        subscriptionMinor: 299n, usageMinor: 0n, taxMinor: 0n, creditMinor: 0n, grossMinor: 299n, dueMinor: 299n,
+        seatPeriod: { subscriptionId: initialSubscription.id, startsAt: new Date(start * 1000),
+          endsAt: new Date(period.current_period_end * 1000), quantity: 1 } }], sourceDigest: 'c'.repeat(64), invoice: { billing_reason: 'subscription_create', status: 'paid',
         total: 299, amount_due: 299, amount_paid: 299, amount_remaining: 0, ending_balance: 0 },
     } as never));
     expect((await p.billingStripeSubscription.findFirstOrThrow()).initialSeatInvoiceId).not.toBeNull();
@@ -235,6 +241,47 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     expect(cohortCheckout.initialSeatInvites).toEqual([extra.id]);
     await expect(p.teamInvite.create({ data: { orgId: cohortOrg.id, teamId: cohortTeam.id,
       email: 'changed-quantity@example.test', lastSentAt: now } })).rejects.toThrow('open seat checkout');
+
+    const seatScope = { serviceId: service.id, organisationId: org.id, teamId: team.id, userId: founder.id };
+    const access = (at: Date) => p.$transaction(tx => readNessieSeatAccess(tx, seatScope, at));
+    expect((await access(new Date(start * 1000))).status).toBe('paid');
+    const renewalAt = new Date(period.current_period_end * 1000);
+    expect((await access(renewalAt)).allowed).toBe(false);
+    const deadline = new Date(renewalAt.getTime() + 86400_000);
+    await p.$transaction(tx => recordSeatRenewalFailure(tx, { accountId: acct.id,
+      subscriptionId: initialSubscription.id, stripeInvoiceId: 'in_renewal', failedAt: renewalAt,
+      graceEndsAt: deadline, reason: 'payment_required' }));
+    expect(await access(renewalAt)).toMatchObject({ allowed: true, status: 'renewal_grace', deadline: deadline.toISOString() });
+    expect((await access(deadline)).allowed).toBe(false);
+    await expect(p.billingSeatRenewalRecovery.updateMany({ where: { subscriptionId: initialSubscription.id },
+      data: { graceEndsAt: new Date(deadline.getTime() + 1) } })).rejects.toThrow('immutable');
+    await p.$transaction(tx => persistStripePaymentInvoice(tx, {
+      facts: { accountId: acct.id, subscriptionId: initialSubscription.id, livemode: false,
+        stripeInvoiceId: 'in_renewal', stripeCustomerId: 'cus_seat', stripePaymentIntentIds: ['pi_renewal'],
+        paymentEvidence: [{ invoice_payment_id: 'inpay_renewal', payment_intent_id: 'pi_renewal',
+          charge_id: 'ch_renewal', amount_minor: '1196', paid_at: deadline.toISOString() }],
+        orgId: org.id, teamId: null, paidAt: deadline, currency: 'EUR', grossAmountMinor: 1196n,
+        taxAmountMinor: 0n, creditAmountMinor: 0n, dueAmountMinor: 1196n, paidAmountMinor: 1196n },
+      lines: [{ stripeLineId: 'il_renewal', serviceId: service.id, serviceIdentifier: 'nessie',
+        billingMonth: renewalAt.toISOString().slice(0, 7), label: 'Seat subscription',
+        subscriptionMinor: 1196n, usageMinor: 0n, taxMinor: 0n, creditMinor: 0n, grossMinor: 1196n, dueMinor: 1196n,
+        seatPeriod: { subscriptionId: initialSubscription.id, startsAt: renewalAt,
+          endsAt: new Date(renewalAt.getTime() + 30 * 86400_000), quantity: 4 } }], sourceDigest: 'd'.repeat(64),
+      invoice: { billing_reason: 'subscription_cycle', status: 'paid', total: 1196, amount_due: 1196,
+        amount_paid: 1196, amount_remaining: 0, ending_balance: 0 },
+    } as never));
+    expect((await access(deadline)).status).toBe('paid');
+    const receipt = await p.billingStripePaymentInvoice.findFirstOrThrow({ where: { stripeInvoiceId: 'in_renewal' } });
+    const adjustment = { invoiceId: receipt.id, stripePaymentIntentId: 'pi_renewal', stripeChargeId: 'ch_renewal',
+      stripeObjectId: 'dp_renewal', amountMinor: 1196n, currency: 'EUR', occurredAt: deadline,
+      evidenceDigest: 'e'.repeat(64), stripeEventId: 'evt_dispute' };
+    await p.billingStripePaymentInvoiceAdjustment.create({ data: { ...adjustment, kind: 'DISPUTE' } });
+    expect((await access(deadline)).allowed).toBe(false);
+    await p.billingStripePaymentInvoiceAdjustment.create({ data: { ...adjustment, kind: 'DISPUTE_REVERSAL', stripeEventId: 'evt_won' } });
+    expect((await access(deadline)).status).toBe('paid');
+    await p.billingStripePaymentInvoiceAdjustment.create({ data: { ...adjustment, kind: 'REFUND',
+      stripeObjectId: 're_renewal', amountMinor: 1n, stripeEventId: 'evt_refund' } });
+    expect((await access(deadline)).allowed).toBe(false);
 
   });
 });

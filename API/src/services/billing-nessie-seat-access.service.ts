@@ -32,7 +32,6 @@ export async function readNessieSeatAccess(tx: Prisma.TransactionClient, scope: 
     serviceId: scope.serviceId, orgId: scope.organisationId, teamId,
     account: { stripeAccountId: accountId, livemode: mode.mode === 'live' },
   }, include: {
-    paidSeatPeriods: { where: { startsAt: { lte: now }, endsAt: { gt: now } }, take: 1 },
     seatRenewals: { where: { recoveredAt: null }, orderBy: { graceEndsAt: 'asc' }, take: 1 },
   } }) : [];
   const active = subscriptions.filter(sub => !['canceled', 'incomplete_expired'].includes(sub.status));
@@ -44,7 +43,9 @@ export async function readNessieSeatAccess(tx: Prisma.TransactionClient, scope: 
       ? { allowed: true, status: 'renewal_grace', deadline: failure.graceEndsAt.toISOString(),
         reason: failure.reason as NessieSeatAccess['reason'] }
       : hold(failure.reason as NessieSeatAccess['reason'], failure.graceEndsAt);
-    if (current.status === 'active' && current.paidSeatPeriods.length) {
+    const collected = await tx.$queryRaw<Array<{ paid: boolean }>>`
+      SELECT billing_nessie_subscription_paid_now(${current.id},${now}) AS paid`;
+    if (collected[0]?.paid === true) {
       return { allowed: true, status: 'paid', deadline: null, reason: null };
     }
     return hold('payment_required');

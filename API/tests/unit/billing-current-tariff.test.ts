@@ -5,7 +5,7 @@ import { resolveBillingTariffForMonth } from '../../src/services/billing-tariff-
 const scope = { serviceId: 'svc', organisationId: 'org', teamId: 'team', billingMonth: '2026-11' };
 const historical = { id: 'old', mode: 'AT_COST', collectionMode: 'NONE', currency: 'USD' };
 const regular = { id: 'regular', mode: 'STANDARD', collectionMode: 'STRIPE', currency: 'USD',
-  usageCurrency: 'USD', usagePaymentMode: 'PREPAID', monthlyChargeBasis: 'PER_SEAT', monthlyAmountMinor: 399n };
+  anniversarySeats: true, usageCurrency: 'USD', usagePaymentMode: 'PREPAID', monthlyChargeBasis: 'PER_SEAT', monthlyAmountMinor: 399n };
 function fixture(source = 'SERVICE_DEFAULT', current: object | null = regular, currency: string | null = null) {
   const reader = {
     billingService: { findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }) },
@@ -40,7 +40,7 @@ describe('prospective Nessie purchase terms', () => {
     expect((await resolveCurrentBillingTariff(reader as never, scope, 'nessie')).tariff)
       .toMatchObject({ id: 'eur', currency: 'EUR', usageCurrency: 'USD' });
     expect(reader.billingTariff.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({ where: expect.objectContaining({
-      serviceId: 'svc', currency: 'EUR', usageCurrency: 'USD', usagePaymentMode: 'PREPAID', anniversarySeats: true,
+      serviceId: 'svc', currency: 'EUR', anniversarySeats: true, usageCurrency: 'USD', usagePaymentMode: 'PREPAID', anniversarySeats: true,
     }) }));
   });
   it('does not change another product', async () => {

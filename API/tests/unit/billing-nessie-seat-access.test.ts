@@ -9,8 +9,9 @@ vi.mock('../../src/config/env.js', () => ({ getEnv: () => ({ STRIPE_LIVE_ACCOUNT
 const now = new Date('2026-11-15T12:00:00Z');
 const scope = { serviceId: 'nessie', organisationId: 'org', teamId: 'team', userId: 'original' };
 const paid = { tariffId: 'regular', initialSeatInvoiceId: 'initial', status: 'active', paidSeatPeriods: [{ id: 'period' }], seatRenewals: [] };
-function db(rows: unknown[] = [], history = rows.length) {
-  return { billingStripeSubscription: { findMany: vi.fn().mockResolvedValue(rows), count: vi.fn().mockResolvedValue(history) } };
+function db(rows: Array<Record<string, unknown>> = [], history = rows.length) {
+  return { $queryRaw: vi.fn().mockResolvedValue([{ paid: rows.some(row => row.status === 'active' &&
+    Array.isArray(row.paidSeatPeriods) && row.paidSeatPeriods.length > 0) }]), billingStripeSubscription: { findMany: vi.fn().mockResolvedValue(rows), count: vi.fn().mockResolvedValue(history) } };
 }
 beforeEach(() => {
   vi.clearAllMocks();
@@ -24,7 +25,8 @@ describe('Nessie seat access', () => {
     expect(await readNessieSeatAccess(tx as never, scope, now)).toMatchObject({ allowed: true, status: 'paid' });
     expect(tx.billingStripeSubscription.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
       serviceId: 'nessie', orgId: 'org', teamId: null, account: { stripeAccountId: 'acct_live', livemode: true },
-    }, include: expect.objectContaining({ paidSeatPeriods: { where: { startsAt: { lte: now }, endsAt: { gt: now } }, take: 1 } }) }));
+    } }));
+    expect(tx.$queryRaw).toHaveBeenCalledOnce();
   });
   it.each([{ initialSeatInvoiceId: null }, { paidSeatPeriods: [] }, { status: 'past_due' }, { tariffId: 'different' }])(
     'does not mistake an active subscription or old receipt for payment: %j', async change => {
