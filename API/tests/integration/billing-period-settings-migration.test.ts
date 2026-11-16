@@ -57,7 +57,7 @@ describe.skipIf(!process.env.DATABASE_URL)('billing period settings migration', 
       const ids = { running: randomUUID(), ended: randomUUID() };
       for (const [label, id] of Object.entries(ids)) {
         const user = randomUUID();
-        await admin.query(`INSERT INTO users(id,email,user_key,updated_at) VALUES($1,$2,$3,now())`,
+        await admin.query(`INSERT INTO users(id,email,user_key) VALUES($1,$2,$3)`,
           [user, `${label}@periods.example.test`, `${name}-${label}`]);
         await admin.query(`INSERT INTO organisations(id,name,slug,domain,owner_id,updated_at) VALUES($1,$2,$2,$3,$4,now())`,
           [id, `${name}-${label}`, `${label}.periods.example.test`, user]);
