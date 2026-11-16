@@ -6,6 +6,7 @@ import { billingContractInvoiceEndpoints } from './schema.billing-contract-invoi
 import { billingFundingEndpoints } from './schema.billing-funding.js';
 import { billingSmsEndpoints } from './schema.billing-sms.js';
 import { billingBrowserEndpoints } from './schema.billing-browser.js';
+import { billingPeriodEndpoints } from './schema.billing-periods.js';
 
 const adminAuth =
   'Authorization: Bearer <access_token>; token must be an ADMIN_AUTH_DOMAIN platform superuser and remain backed by a SUPERUSER domain_roles row';
@@ -24,6 +25,7 @@ const tariffBody = {
 
 export const billingEndpoints: EndpointSchema[] = [
   ...billingBrowserEndpoints,
+  ...billingPeriodEndpoints,
   { method: 'POST', path: '/billing/v1/model-prices',
     description: 'Advisory model prices in customer credits per million tokens, rated by the current exact-subject tariff. No spending authority.',
     auth: 'Product customer_lifecycle app key and exact endpoint-audience X-UOA-Actor with current subject membership',

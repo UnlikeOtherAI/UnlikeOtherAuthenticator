@@ -13,7 +13,7 @@ export function commercialTimezone(value: string | null | undefined): string {
 }
 
 /** Elapsed hours count only while the company's local date is Monday–Friday. */
-export function weekdayGraceDeadline(failure: Date, timezone: string, hours = 24): Date {
+export function weekdayGraceDeadline(failure: Date, timezone: string, hours: number): Date {
   if (!Number.isFinite(failure.getTime()) || !Number.isSafeInteger(hours) || hours <= 0) {
     throw new AppError('BAD_REQUEST', 400, 'BILLING_GRACE_INVALID');
   }

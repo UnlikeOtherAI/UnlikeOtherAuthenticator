@@ -1962,6 +1962,7 @@ model BillingService {
   invoiceAddonLines                 BillingInvoiceAddonLine[]
   seatSubscriptions                 BillingSeatSubscription[]
   customerBillingCycles             BillingCustomerCycle[]
+  periodSettings                    BillingPeriodSettings?
 
   @@map("billing_services")
   stripePaymentInvoiceLines         BillingStripePaymentInvoiceLine[]
@@ -6421,6 +6422,17 @@ model BillingSeatFailureHistory {
 }
 
 /// Immutable provider rate evidence. Only platform operators publish a new version.
+// Operator-edited commercial periods for one product. Absent row: the defaults in billing_period_setting().
+model BillingPeriodSettings {
+  serviceId String @id @map("service_id")
+  seatTrialHours Int @map("seat_trial_hours")
+  seatRenewalGraceHours Int @map("seat_renewal_grace_hours")
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  updatedByUserId String @map("updated_by_user_id")
+  service BillingService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  @@map("billing_period_settings")
+}
+
 model BillingBrowserPolicy {
   reservations BillingBrowserReservation[]
   id String @id @default(cuid())

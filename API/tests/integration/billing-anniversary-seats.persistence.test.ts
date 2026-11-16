@@ -220,7 +220,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     await p.$executeRaw`SELECT billing_nessie_start_transition(${cohortOrg.id})`;
     const cohort = await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: cohortOrg.id } });
     expect(cohort.cohortUserIds).toEqual([founder.id, member.id].sort());
-    expect(cohort.endsAt.getTime() - cohort.startsAt.getTime()).toBe(14 * 86400_000);
+    expect(cohort.endsAt.getTime() - cohort.startsAt.getTime()).toBe(7 * 86400_000);
     await p.$executeRaw`SELECT billing_nessie_start_transition(${cohortOrg.id})`;
     expect(await p.billingNessieSeatTransition.findUnique({ where: { orgId: cohortOrg.id } })).toEqual(cohort);
     const extra = await p.teamInvite.create({ data: { orgId: cohortOrg.id, teamId: cohortTeam.id,

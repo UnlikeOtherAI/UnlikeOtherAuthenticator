@@ -39,10 +39,36 @@ checked again after the snapshot succeeds.
 ## Seats and invitations
 
 New and pre-cutover default-plan organisations enter the regular paid plan.
-Explicit agreements retain their terms. The 14-day transition freezes the
-original member cohort and deadline. It never includes consumables, resets on
-login or grants new members an allowance. Adding a person ends it and requires
-collection for all existing seats and the invitation before delivery.
+Explicit agreements retain their terms. The free trial freezes the original
+member cohort and deadline: a new organisation's creator, or the people already
+in an organisation that moves to the paid plan. It never includes consumables,
+resets on login or grants new members an allowance. Adding a person ends it and
+requires collection for all existing seats and the invitation before delivery.
+
+### Time periods are operator settings
+
+Every commercial period is a setting on the product, edited in Admin → Billing →
+the product → **Time periods** (`GET`/`PUT
+/internal/admin/billing/services/:serviceId/period-settings`, admin-domain
+SUPERUSER) and stored in `billing_period_settings`. `billing_period_setting()`
+is the one reader and the one place the defaults are written:
+
+| Setting | Default | Controls |
+| --- | --- | --- |
+| `seat_trial_hours` | 168 (one week) | The free trial read by `billing_nessie_start_transition`. |
+| `seat_renewal_grace_hours` | 24 | Monday–Friday hours after a failed seat renewal, read by `prepareSeatRenewalFailure`. |
+
+A change applies to periods that start afterwards. A running trial or grace
+keeps its stored, immutable deadline, because that is the date its organisation
+was shown. Products hold neither number; they render the deadline
+`/billing/v1/organisation/access` returns.
+
+On 16 November 2026 the owner replaced the 14-day allowance with one week.
+Migration `20261116090000_billing_period_settings` gave every organisation still
+inside its trial one week from the moment it ran, for the people already in it,
+and records that moment as `billing_nessie_admission_cutover.trial_reset_at`. An
+organisation whose trial would have begun before it has the trial length counted
+from it. Trials that had already ended were not reopened.
 
 Invitation creation commits the held intent before provider IO. Payment failure
 retains it. Resends and cross-team invitations reuse the original funded seat
@@ -58,8 +84,8 @@ a redirect cannot grant access. Cash adjustments for refunds and disputes affect
 current coverage. Renewal recovery retains the first failure and fixed deadline;
 only that invoice's verified payment clears it. A completed event-history proof
 survives retries beyond Stripe's event-history window. The recovered commercial
-policy uses 24 weekday hours in UTC for seat-renewal recovery; this is distinct
-from the new 14-day allowance and must not be described as verified hosted policy.
+policy uses 24 weekday hours in UTC for seat-renewal recovery by default; this is
+distinct from the free trial and must not be described as verified hosted policy.
 
 ## Rollout and verification
 
