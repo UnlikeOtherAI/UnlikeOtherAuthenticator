@@ -1,15 +1,17 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { installOrganisationBillingFixtures } from './billing-organisations-fixtures';
 import { installFixtures } from './fixtures';
 
 const shots = process.env.UOA_BILLING_ORGANISATIONS_SHOTS;
 
-async function capture(page: Page, project: string, state: string) {
+/** Saves a picture when asked to; `focus` is scrolled into view first (the phone shows one screen). */
+async function capture(page: Page, project: string, state: string, focus?: Locator) {
   if (!shots) return;
   await mkdir(shots, { recursive: true });
+  await focus?.scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(shots, `${project}-${state}.png`), fullPage: true });
 }
 
@@ -29,7 +31,7 @@ test('operator finds organisations by search, product and custom tariffs', async
   await expect(row(page, 'Widgets Core')).toContainText('DeepWater: Metered plus');
   await expect(row(page, 'Acme Design')).toContainText('Product defaults');
   await noHorizontalOverflow(page);
-  await capture(page, info.project.name, 'organisations-list-all');
+  await capture(page, info.project.name, 'organisations-list-all', page.getByRole('table'));
 
   await page.getByRole('textbox', { name: 'Search organisations' }).fill('widgets-');
   await expect(page.getByRole('link', { name: 'Widgets Core', exact: true })).toBeVisible();
@@ -54,7 +56,7 @@ test('operator finds organisations by search, product and custom tariffs', async
   await expect(acme).toContainText('QA: Free');
   await expect(row(page, 'Widgets Core')).toContainText('Product default — Standard');
   await noHorizontalOverflow(page);
-  await capture(page, info.project.name, 'organisations-list-product');
+  await capture(page, info.project.name, 'organisations-list-product', page.getByRole('table'));
 
   await page.getByRole('link', { name: 'Acme Engineering', exact: true }).click();
   await expect(page).toHaveURL(/organisation=o1/);
@@ -91,7 +93,7 @@ test('operator moves a team, retries a refused change and removes a team tariff'
   await expect(page.getByRole('row').filter({ hasText: 'QA' })).toContainText(/Starts 1 \w+ \d{4}/);
   await expect(page.getByRole('row').filter({ hasText: 'Backend' })).toContainText('3.99');
   await noHorizontalOverflow(page);
-  await capture(page, info.project.name, 'organisation');
+  await capture(page, info.project.name, 'organisation', page.getByRole('table'));
 
   // Save and Cancel appear in a column that already has their width.
   const actionsWidth = async () => (await page.getByRole('columnheader').last().boundingBox())?.width;
@@ -101,7 +103,8 @@ test('operator moves a team, retries a refused change and removes a team tariff'
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
   expect(await actionsWidth()).toBe(before);
   await expect(page.getByRole('combobox', { name: 'Tariff for Backend' })).toBeDisabled();
-  await capture(page, info.project.name, 'organisation-unsaved');
+  await capture(page, info.project.name, 'organisation-unsaved',
+    page.getByRole('button', { name: 'Cancel', exact: true }));
 
   billing.refuseNextSave();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -116,7 +119,7 @@ test('operator moves a team, retries a refused change and removes a team tariff'
   await expect(frontendRow.getByRole('alert'))
     .toHaveText('An active Stripe subscription keeps the current tariff until it ends.');
   await expect(frontend).toHaveValue('standard');
-  await capture(page, info.project.name, 'organisation-refused');
+  await capture(page, info.project.name, 'organisation-refused', frontendRow.getByRole('alert'));
 
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Move Frontend to Standard' }).click();

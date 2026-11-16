@@ -1,14 +1,16 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { installFixtures } from './fixtures';
 
 const shots = process.env.UOA_BILLING_PRODUCT_TABS_SHOTS;
 
-async function capture(page: Page, project: string, state: string) {
+/** Saves a picture when asked to; `focus` is scrolled into view first (the phone shows one screen). */
+async function capture(page: Page, project: string, state: string, focus?: Locator) {
   if (!shots) return;
   await mkdir(shots, { recursive: true });
+  await focus?.scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(shots, `${project}-${state}.png`), fullPage: true });
 }
 
@@ -53,7 +55,7 @@ test('a tariff version is retired, shown on request and restored', async ({ page
   // Created is the date only, and leaves the table below the md breakpoint.
   await expect(page.getByRole('columnheader', { name: 'Created' }))
     .toBeVisible({ visible: info.project.name === 'desktop' });
-  await capture(page, info.project.name, 'tariffs');
+  await capture(page, info.project.name, 'tariffs', page.getByRole('table').first());
 
   await row('team v1').getByRole('button', { name: 'Retire', exact: true }).click();
   const confirmation = page.getByRole('dialog', { name: 'Retire Team · team v1?' });
@@ -68,7 +70,7 @@ test('a tariff version is retired, shown on request and restored', async ({ page
   await expect(row('team v1')).toContainText('Retired');
   await expect(row('standard v1')).toContainText(/Retired \d+ \w+ 2026/);
   await expect(row('standard v1').getByRole('cell').nth(2)).toHaveText('Nobody');
-  await capture(page, info.project.name, 'tariffs-retired');
+  await capture(page, info.project.name, 'tariffs-retired', page.getByRole('table').first());
   await expect(row('standard v1').getByRole('button', { name: 'Set default' })).toHaveCount(0);
   await row('team v1').getByRole('button', { name: 'Restore', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -94,7 +96,7 @@ test('assignments start next month and never offer a retired tariff', async ({ p
     .toContainText('In effect');
   await expect(row('Backend').getByRole('link', { name: 'Edit' })).toHaveAttribute(
     'href', '/billing?section=organisations&organisation=o1&product=billing-1');
-  await capture(page, info.project.name, 'assignments');
+  await capture(page, info.project.name, 'assignments', page.getByRole('table').first());
 
   await page.getByRole('button', { name: 'Assign tariff', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Assign tariff · Fixture product' });
@@ -123,7 +125,7 @@ test('app and Ledger keys filter active from revoked; a tab change clears paging
   await expect(tab(page, 'App keys', 1)).toBeVisible();
   await expect(page.getByText('Fixture production', { exact: true })).toBeVisible();
   await expect(page.getByText('Fixture staging', { exact: true })).toHaveCount(0);
-  await capture(page, info.project.name, 'app-keys');
+  await capture(page, info.project.name, 'app-keys', page.getByRole('table').first());
   await page.getByRole('button', { name: 'Revoked (2)', exact: true }).click();
   await expect(page).toHaveURL(/key_status=revoked/);
   await expect(page.getByRole('row').filter({ hasText: 'Fixture staging' })).toContainText('Revoked');
@@ -143,7 +145,7 @@ test('app and Ledger keys filter active from revoked; a tab change clears paging
   await expect(page.getByRole('heading', { name: 'Seat subscriptions' })).toBeVisible();
   await expect(page.getByText('Past due', { exact: true })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Close modal' }).click();
-  await capture(page, info.project.name, 'subscriptions');
+  await capture(page, info.project.name, 'subscriptions', page.getByRole('heading', { name: 'Stripe subscriptions' }));
   await page.getByRole('button', { name: /^Tariffs/ }).click();
   await expect(page).toHaveURL(/\?product=billing-1&tab=tariffs$/);
   expect(await noOverflow(page)).toBe(true);
@@ -160,7 +162,7 @@ test('the product list says product and shows assignment counts', async ({ page 
   const row = page.getByRole('row').filter({ hasText: 'Fixture product' });
   await expect(row).toContainText('Standard');
   await expect(row.locator('td').nth(3)).toHaveText('3');
-  await capture(page, info.project.name, 'products');
+  await capture(page, info.project.name, 'products', page.getByRole('table').first());
   await page.getByRole('textbox', { name: 'Search billing products' }).fill('nothing');
   await expect(page.getByText('No products match this search.')).toBeVisible();
   expect(await noOverflow(page)).toBe(true);
