@@ -31,7 +31,7 @@ spend. Supplier dispatch still needs its own bounded reservation and card setup.
 The access projection reads an existing transition without writing the roster
 lock. First creation still uses the database's locked cohort capture. PostgreSQL
 serialization conflicts retry the entire repeatable-read snapshot, with the
-shared eight-attempt billing retry bound; exhaustion returns HTTP 503 with
+shared eight-attempt billing retry bound; exhaustion returns HTTP 503 and logs
 `BILLING_ACCESS_RETRY_EXHAUSTED`. No conflict grants access or resets the allowance.
 Paid-operation admission retains its roster write fence, and membership is
 checked again after the snapshot succeeds.

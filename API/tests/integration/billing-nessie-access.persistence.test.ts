@@ -33,7 +33,7 @@ describe.skipIf(!enabled)('Nessie access snapshot contention', () => {
     await prisma.billingAppKey.create({ data: { serviceId: ids.service, purpose: 'CUSTOMER_LIFECYCLE',
       name: 'Contention fixture', keyPrefix: 'contention', secretDigest: 'contention-fixture',
       actorIssuer: 'https://prepaid.example.com', actorAudience: 'https://identity.example',
-      actorKeyId: 'fixture', actorPublicJwk: {} } });
+      actorKeyId: 'fixture', actorPublicJwk: {}, checkoutReturnOrigins: ['https://prepaid.example.com'] } });
   });
 
   it('recovers an actual 40001 on first creation using a fresh whole snapshot', async () => {
