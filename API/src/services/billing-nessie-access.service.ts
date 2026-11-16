@@ -8,6 +8,7 @@ import { readNessieSeatAccess } from './billing-nessie-seat-access.service.js';
 import { authorizeOrganisationBilling, type OrganisationBillingContext } from './billing-organisation-authority.service.js';
 import { organisationFinancialAccount } from './billing-organisation-financial-account.service.js';
 import { resolveOrganisationBillingMode } from './billing-organisation-mode.service.js';
+import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { utcBillingMonth } from './billing-tariff-history.service.js';
 
 /** Admission signals contain no amounts or provider detail for ordinary members. Actual spending still requires a hold. */
@@ -19,8 +20,8 @@ export async function nessieBillingAccess(context: OrganisationBillingContext,
   const scope = { ...context.request, serviceId: context.credential.service.id };
   const selection = await resolveOrganisationBillingMode(scope.organisationId, prisma);
   const account = await organisationFinancialAccount(selection, prisma);
-  const state = await prisma.$transaction(async tx => {
-    const seats = await readNessieSeatAccess(tx, scope, now);
+  const state = await runBillingSerializableTransaction(prisma, async tx => {
+    const seats = await readNessieSeatAccess(tx, scope, now, 'projection');
     const effective = await resolveCurrentBillingTariff(tx, { ...scope, billingMonth: utcBillingMonth(now) }, 'nessie');
     const subsidised = effective.source !== 'SERVICE_DEFAULT' && effective.tariff.mode === 'FREE';
     const wallet = await tx.billingCreditAccount.findUnique({ where: { accountId_scopeKey_currency: {
@@ -31,7 +32,7 @@ export async function nessieBillingAccess(context: OrganisationBillingContext,
     }
     const credits = subsidised || Boolean(wallet && wallet.balanceMicrocredits > await billingReservedMicrocredits(tx, wallet.id));
     return { seats, credits };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }, 'BILLING_ACCESS_RETRY_EXHAUSTED', { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   // Membership and financial authority may have changed while reading the financial snapshot.
   const current = await authorizeOrganisationBilling(context, prisma);
   const manager = viewer.billingManager && current.billingManager;

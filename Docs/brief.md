@@ -3571,3 +3571,9 @@ Cloud Run rollout must recover from an older failed desired traffic target by
 verifying and promoting the exact new revision and merged-commit image digest.
 Service health from the previous revision is not rollout evidence; see
 [deployment](deploy.md#github-actions-configuration).
+
+Nessie access projections must tolerate concurrent logins without rewriting an
+existing seat cohort or taking its roster write lock. First creation retains
+locked cohort capture and bounded whole-transaction serialization retries.
+Paid dispatch admission keeps its roster fence; conflicts never grant access or
+extend the allowance. See [payment admission](Billing/nessie-payment-admission.md).

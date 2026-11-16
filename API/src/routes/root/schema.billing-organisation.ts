@@ -2,6 +2,12 @@ import type { EndpointSchema } from './schema.js';
 const auth='CUSTOMER_LIFECYCLE app key + fresh exact-endpoint RS256 actor, live subject epoch and original assurance custody.';
 const body={product:'registered product',organisation_id:'exact ACTIVE organisation',team_id:'selected admitted ACTIVE team; explicit null only in organisation financial realm',user_id:'exact actor'};
 export const organisationBillingEndpoints:EndpointSchema[]=[
+  {method:'POST',path:'/billing/v1/organisation/access',auth,body:{...body,product:'nessie'},
+    description:'Member-safe current seat access and prepaid-usage availability. Rechecks membership after a repeatable-read financial snapshot.',
+    response:{schema_version:'1',generated_at:'ISO timestamp',subject:'exact requested subject',can_manage_billing:'boolean',
+      access:'allowed boolean, status paid | agreement | transition | renewal_grace | payment_required, nullable deadline',
+      consumables:'available boolean; does not authorize spending',manager_reason:'organisation billing managers only; no member-facing payment diagnosis'},
+    notes:'Private, no-store. Existing transitions are read without a roster write. First creation keeps locked cohort capture. Serialization conflicts retry the whole snapshot at most eight times, then return 503; no allowance extension or access fallback.'},
   {method:'POST',path:'/billing/v1/organisation/capabilities',auth,body,
     description:'Current organisation financial authority or own-team reader admission without Stripe, credits or Ledger.',
     response:{capabilities:'Without authority header: strict schema1 booleans, true only for ACTIVE organisation owner/admin.',
