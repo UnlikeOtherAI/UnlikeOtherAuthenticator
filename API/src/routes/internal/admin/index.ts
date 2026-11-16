@@ -1,4 +1,5 @@
 import { registerInternalAdminBrowserPolicyRoutes } from './billing-browser-policies.js';
+import { registerInternalAdminBillingPeriodSettingsRoutes } from './billing-period-settings.js';
 import { registerAdminMachineRoutes } from './machines.js';
 import { registerInternalAdminDebugLoginRoutes } from './debug-login.js';
 import type { FastifyInstance } from 'fastify';
@@ -47,6 +48,7 @@ export function registerInternalAdminRoutes(app: FastifyInstance): void {
   registerInternalAdminBanRoutes(app);
   registerInternalAdminBillingRoutes(app);
   registerInternalAdminBrowserPolicyRoutes(app);
+  registerInternalAdminBillingPeriodSettingsRoutes(app);
   registerInternalAdminBillingTeamModeRoutes(app);
   registerInternalAdminBillingSeatCapacityRoutes(app);
   registerInternalAdminLedgerRuntimeKeyRoutes(app);

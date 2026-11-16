@@ -4,6 +4,7 @@ import type Stripe from 'stripe';
 
 import { AppError } from '../utils/errors.js';
 import { weekdayGraceDeadline } from './billing-commercial-clock.service.js';
+import { readBillingPeriods } from './billing-period-settings.service.js';
 import type { StripeAccountContext } from './billing-stripe-client.service.js';
 import { verifyStripePaymentInvoiceLines } from './billing-stripe-payment-lines.service.js';
 import { stripeExternalId } from './billing-stripe-webhook-utils.service.js';
@@ -68,7 +69,8 @@ export async function prepareSeatRenewalFailure(event: Stripe.Event, account: St
   if (!lines.some(line => line.serviceId === subscription.serviceId && line.subscriptionMinor > 0n)) return null;
   const failedAt = await firstSeatRenewalFailure(invoice, event, account.id, prisma, stripe);
   return { accountId: account.id, subscriptionId: subscription.id, stripeInvoiceId: invoice.id, failedAt,
-    graceEndsAt: weekdayGraceDeadline(failedAt, 'UTC'),
+    graceEndsAt: weekdayGraceDeadline(failedAt, 'UTC',
+      (await readBillingPeriods(prisma, subscription.serviceId)).seatRenewalGraceHours),
     reason: await seatRenewalPaymentReason(invoice, externalSubscription, event.type === 'invoice.payment_action_required', stripe) };
 }
 

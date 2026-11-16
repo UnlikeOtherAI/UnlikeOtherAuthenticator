@@ -11,7 +11,7 @@ describe('seat renewal recovery', () => {
     ['2026-10-23T18:30:00Z', 'Europe/London', '2026-10-26T19:30:00Z'],
     ['2026-03-27T18:30:00Z', 'Europe/London', '2026-03-30T17:30:00Z'],
   ])('counts 24 weekday hours from %s in %s', (start, timezone, expected) => {
-    expect(weekdayGraceDeadline(new Date(start), timezone).toISOString()).toBe(new Date(expected).toISOString());
+    expect(weekdayGraceDeadline(new Date(start), timezone, 24).toISOString()).toBe(new Date(expected).toISOString());
   });
   it('continues a bounded history scan and fixes the earliest failure across redelivery', async () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-15T12:00:00Z'));

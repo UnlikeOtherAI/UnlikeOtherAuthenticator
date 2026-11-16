@@ -41,7 +41,7 @@ describe.skipIf(!process.env.DATABASE_URL)('free-to-paid seat cohort', () => {
     return { p, now, month, owner, member, extra, org, team, assignment };
   }
 
-  it.each(['ORGANISATION', 'TEAM'] as const)('starts 14 days at the %s plan change for its existing members', async source => {
+  it.each(['ORGANISATION', 'TEAM'] as const)('starts one week at the %s plan change for its existing members', async source => {
     const { p, month, owner, member, extra, org, team, assignment } = await fixture(source.toLowerCase());
     const target = source === 'TEAM'
       ? await p.billingTariffAssignment.create({ data: { serviceId, orgId: org.id, teamId: team.id,
@@ -51,7 +51,7 @@ describe.skipIf(!process.env.DATABASE_URL)('free-to-paid seat cohort', () => {
       effectiveFromMonth: month, tariffId: paidId, assignmentId: target.id, reason: 'free-to-paid-test' } });
     const transition = await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: org.id } });
     expect(transition.startsAt).toEqual(term.createdAt);
-    expect(transition.endsAt.getTime() - transition.startsAt.getTime()).toBe(14 * 86400_000);
+    expect(transition.endsAt.getTime() - transition.startsAt.getTime()).toBe(7 * 86400_000);
     expect(transition.cohortUserIds).toEqual([owner.id, member.id].sort());
     const add = () => p.orgMember.create({ data: { orgId: org.id, userId: extra.id, role: 'member' } });
     if (source === 'ORGANISATION') await expect(add()).rejects.toThrow('complete the seat payment');
@@ -61,6 +61,25 @@ describe.skipIf(!process.env.DATABASE_URL)('free-to-paid seat cohort', () => {
     }
     await p.$executeRaw`SELECT billing_nessie_start_transition(${org.id})`;
     expect(await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: org.id } })).toEqual(transition);
+  });
+
+  it('uses the operator-set trial length for a trial that starts afterwards, and leaves a running one alone', async () => {
+    const running = await db.prisma.billingNessieSeatTransition.findFirstOrThrow();
+    const { p, month, owner, org, assignment } = await fixture('configured');
+    await p.billingPeriodSettings.create({ data: { serviceId, seatTrialHours: 72, seatRenewalGraceHours: 24,
+      updatedByUserId: owner.id } });
+    try {
+      expect(await p.$queryRaw`SELECT * FROM billing_period_setting(${serviceId})`)
+        .toEqual([{ seat_trial_hours: 72, seat_renewal_grace_hours: 24 }]);
+      expect(await p.$queryRaw`SELECT * FROM billing_period_setting(${'another-product'})`)
+        .toEqual([{ seat_trial_hours: 168, seat_renewal_grace_hours: 24 }]);
+      const target = await p.billingTariffAssignment.update({ where: { id: assignment.id }, data: { tariffId: paidId } });
+      await p.billingTariffTermEvent.create({ data: { serviceId, source: 'ORGANISATION', scopeKey: target.scopeKey,
+        effectiveFromMonth: month, tariffId: paidId, assignmentId: target.id, reason: 'configured-trial-test' } });
+      const transition = await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: org.id } });
+      expect(transition.endsAt.getTime() - transition.startsAt.getTime()).toBe(72 * 3600_000);
+      expect(await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: running.orgId } })).toEqual(running);
+    } finally { await p.billingPeriodSettings.delete({ where: { serviceId } }); }
   });
 
   it('freezes a due scheduled team transition before another member joins the still-free organisation', async () => {
@@ -79,6 +98,9 @@ describe.skipIf(!process.env.DATABASE_URL)('free-to-paid seat cohort', () => {
     await p.orgMember.create({ data: { orgId: org.id, userId: extra.id, role: 'member' } });
     const transition = await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: org.id } });
     expect(transition.startsAt).toEqual(start);
+    // It began before the current trial terms, so its week runs from when those terms began.
+    const [{ reset }] = await p.$queryRaw<Array<{ reset: Date }>>`SELECT trial_reset_at AS reset FROM billing_nessie_admission_cutover`;
+    expect(transition.endsAt.getTime()).toBe(reset.getTime() + 7 * 86400_000);
     expect(transition.cohortUserIds).toEqual([owner.id, member.id].sort());
     expect(transition.cohortUserIds).not.toContain(extra.id);
     await expect(p.teamMember.create({ data: { teamId: team.id, userId: extra.id } })).rejects.toThrow('complete the seat payment');

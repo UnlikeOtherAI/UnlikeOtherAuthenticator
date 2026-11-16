@@ -1972,8 +1972,8 @@ Provider outages retain the pending operation. Source:
 The coordinated Nessie cutover publishes approved regional anniversary-seat
 versions prospectively, preserves historical usage terms, and refuses to proceed
 while an existing default-plan subscription lacks an explicit agreement. New
-organisations use the regular plan; the original cohort receives 14 days of seat
-access. Issuing an additional invitation ends that allowance and requires all
+organisations use the regular plan; the original cohort receives a free trial of
+seat access, one week by default and set per product under Time periods. Issuing an additional invitation ends that allowance and requires all
 seats to be collected. No usable invitation token or email is released before
 payment. Acceptance consumes its funded seat without a second charge.
 
