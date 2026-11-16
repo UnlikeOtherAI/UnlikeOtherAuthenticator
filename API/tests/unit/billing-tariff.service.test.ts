@@ -142,6 +142,19 @@ describe('billing tariff validation', () => {
     }
   });
 
+  it('refuses to make a retired version the default', async () => {
+    const tx = {
+      billingTariff: { findFirst: vi.fn().mockResolvedValue({ id: 'tariff_3', serviceId: 'service_1',
+        isDefault: false, retiredAt: new Date('2026-11-16T00:00:00Z') }), updateMany: vi.fn() },
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'service_1' }]),
+    };
+    await expect(setDefaultBillingTariff(
+      { serviceId: 'service_1', tariffId: 'tariff_3', actor: { email: 'admin@example.com' } },
+      { prisma: { $transaction: async (run: (client: typeof tx) => unknown) => run(tx) } as never },
+    )).rejects.toThrow('BILLING_TARIFF_RETIRED');
+    expect(tx.billingTariff.updateMany).not.toHaveBeenCalled();
+  });
+
   it('retries a concurrent default update in a serializable transaction', async () => {
     const tariff = { id: 'tariff_2', serviceId: 'service_1', isDefault: false };
     const transactionClient = {
@@ -158,7 +171,11 @@ describe('billing tariff validation', () => {
       },
       billingStripeSubscription: {
         findFirst: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
       },
+      billingTariffAssignment: { findMany: vi.fn().mockResolvedValue([]) },
+      billingSeatSubscription: { findMany: vi.fn().mockResolvedValue([]) },
+      billingContractServiceTerm: { findMany: vi.fn().mockResolvedValue([]) },
       adminAuditLog: {
         create: vi.fn().mockResolvedValue({}),
       },
@@ -185,7 +202,7 @@ describe('billing tariff validation', () => {
       { prisma: { $transaction: transaction } as never },
     );
 
-    expect(result).toMatchObject({ id: 'tariff_2', isDefault: true });
+    expect(result).toMatchObject({ id: 'tariff_2', isDefault: true, retireBlockedBy: ['default'] });
     expect(transaction).toHaveBeenCalledTimes(2);
   });
 });

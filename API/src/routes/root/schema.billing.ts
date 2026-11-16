@@ -7,6 +7,7 @@ import { billingFundingEndpoints } from './schema.billing-funding.js';
 import { billingSmsEndpoints } from './schema.billing-sms.js';
 import { billingBrowserEndpoints } from './schema.billing-browser.js';
 import { billingPeriodEndpoints } from './schema.billing-periods.js';
+import { billingTariffRetirementEndpoints } from './schema.billing-tariff-retirement.js';
 
 const adminAuth =
   'Authorization: Bearer <access_token>; token must be an ADMIN_AUTH_DOMAIN platform superuser and remain backed by a SUPERUSER domain_roles row';
@@ -231,6 +232,7 @@ export const billingEndpoints: EndpointSchema[] = [
       'Canonical identifiers are nessie, deepwater, deepsignal, deeptest, and docgen. Product/repository slugs such as deep-water or deep-test are mapped before this call. The browser receives neither credential.',
   },
   ...billingContractInvoiceEndpoints,
+  ...billingTariffRetirementEndpoints,
   {
     method: 'GET',
     path: '/internal/admin/billing/services',
@@ -266,6 +268,7 @@ export const billingEndpoints: EndpointSchema[] = [
     description: 'Change the service default pointer to an existing tariff version',
     auth: adminAuth,
     body: { tariff_id: 'string (required; tariff must belong to service)' },
+    response: { 200: 'The new default tariff', 409: 'BILLING_TARIFF_RETIRED: the version is retired' },
   },
   {
     method: 'PUT',
@@ -278,6 +281,7 @@ export const billingEndpoints: EndpointSchema[] = [
       organisation_id: 'string (required)',
       team_id: 'string | null (optional; when set, team must belong to organisation)',
     },
+    response: { 200: 'The assignment with its tariff and effective_from_month', 409: 'BILLING_TARIFF_RETIRED: the version is retired' },
   },
   {
     method: 'DELETE',

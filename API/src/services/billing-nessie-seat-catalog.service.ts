@@ -23,12 +23,16 @@ export async function provisionNessieSeatCatalog(params: {
     const rows = [];
     for (const currency of CREDIT_PURCHASE_CURRENCIES) {
       const key = 'standard-' + currency.toLowerCase();
-      const prior = await tx.billingTariff.findFirstOrThrow({ where: { serviceId: service.id, key }, orderBy: { version: 'desc' } });
+      // Publish from the newest version still on offer, numbered after every version of the key.
+      const [prior, newest] = await Promise.all([
+        tx.billingTariff.findFirstOrThrow({ where: { serviceId: service.id, key, retiredAt: null }, orderBy: { version: 'desc' } }),
+        tx.billingTariff.findFirstOrThrow({ where: { serviceId: service.id, key }, orderBy: { version: 'desc' }, select: { version: true } }),
+      ]);
       if (prior.currency !== currency || prior.mode !== 'STANDARD' || !usesAnniversarySeats(service.identifier, prior)) {
         throw new AppError('INTERNAL', 409, 'NESSIE_REGIONAL_SEAT_TERMS_INVALID');
       }
       if ((prior.anniversarySeats && prior.usageCurrency === 'USD') || params.dryRun) { rows.push(prior); continue; }
-      const created = await tx.billingTariff.create({ data: { key, serviceId: service.id, version: prior.version + 1,
+      const created = await tx.billingTariff.create({ data: { key, serviceId: service.id, version: newest.version + 1,
         name: prior.name, mode: prior.mode, collectionMode: prior.collectionMode, markupBps: prior.markupBps,
         monthlyAmountMinor: prior.monthlyAmountMinor, monthlyChargeBasis: prior.monthlyChargeBasis,
         seatPolicy: prior.seatPolicy, seatChargeTiming: prior.seatChargeTiming,
