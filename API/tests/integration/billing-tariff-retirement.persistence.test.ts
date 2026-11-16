@@ -164,10 +164,12 @@ describe.skipIf(!process.env.DATABASE_URL)('tariff version retirement with Postg
       contractVersionId: version.id, serviceId, tariffId: seatTariff.id, monthlyAmountMinor: 1000n } });
     const seat = await db.prisma.$transaction(async (tx) => {
       const now = await observedBillingTime(tx);
-      return tx.billingSeatSubscription.create({ data: {
+      const created = await tx.billingSeatSubscription.create({ data: {
         contractServiceTermId: term.id, serviceId, tariffId: seatTariff.id, orgId: holder.id, teamId: null,
         scope: 'ORGANISATION', seatPolicy: 'FIXED', seatChargeTiming: 'PRORATED', unitAmountMinor: 1000n,
         currency: 'USD', activatedAt: now, baselineCapturedAt: now, commercialEffectiveAt: now } });
+      await tx.billingFixedSeatCapacityRevision.create({ data: { seatSubscriptionId: created.id, quantity: 1, effectiveAt: now } });
+      return created;
     });
     expect(await blockers(seatTariff.id)).toEqual(['subscriptions', 'contract_terms']);
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -214,7 +216,7 @@ describe.skipIf(!process.env.DATABASE_URL)('tariff version retirement with Postg
         name: `Regular EUR ${version}`, currency: 'EUR' } }));
     }
     const holder = await org('nessie-region');
-    await db.prisma.billingOrganisationRegion.create({ data: { orgId: holder.id, region: 'EU', currency: 'EUR',
+    await db.prisma.billingOrganisationRegion.create({ data: { orgId: holder.id, region: 'EUROPE', currency: 'EUR',
       setByUserId: ownerId } });
     await db.prisma.billingAppKey.create({ data: { serviceId: nessie.id, purpose: 'CUSTOMER_LIFECYCLE',
       name: 'Nessie lifecycle', keyPrefix: 'uoa_app_retire', secretDigest: 'retire-nessie-digest',
