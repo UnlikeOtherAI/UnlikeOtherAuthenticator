@@ -64,6 +64,7 @@ describe('billing serializable transaction retries', () => {
   });
 
   it.each([
+    'BILLING_ACCESS_RETRY_EXHAUSTED',
     'BILLING_CREDIT_ACCOUNT_RETRY_EXHAUSTED',
     'BILLING_CREDIT_SETTLEMENT_RETRY_EXHAUSTED',
   ] as const)('returns a stable 503 for %s', async (retryExhaustedMessage) => {

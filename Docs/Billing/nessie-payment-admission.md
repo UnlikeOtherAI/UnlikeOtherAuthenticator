@@ -2,7 +2,7 @@
 
 UOA is the authority for human membership, invitations, seat coverage, credit
 balances and billing. Nessie renders decisions and keeps no duplicate financial
-or identity store. This coordinated change is not yet deployed.
+or identity store.
 
 ## Member-safe access read
 
@@ -27,6 +27,14 @@ team administrator without organisation billing authority. A renewal diagnosis
 records why that renewal failed; it does not assert that a subsequently replaced
 card is still expired. The read neither charges a card nor authorizes supplier
 spend. Supplier dispatch still needs its own bounded reservation and card setup.
+
+The access projection reads an existing transition without writing the roster
+lock. First creation still uses the database's locked cohort capture. PostgreSQL
+serialization conflicts retry the entire repeatable-read snapshot, with the
+shared eight-attempt billing retry bound; exhaustion returns HTTP 503 and logs
+`BILLING_ACCESS_RETRY_EXHAUSTED`. No conflict grants access or resets the allowance.
+Paid-operation admission retains its roster write fence, and membership is
+checked again after the snapshot succeeds.
 
 ## Seats and invitations
 

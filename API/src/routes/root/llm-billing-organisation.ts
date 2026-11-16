@@ -1,4 +1,7 @@
 export const llmOrganisationBillingMarkdown=`
+### Nessie access status
+POST /billing/v1/organisation/access takes the strict financial subject with product nessie, a CUSTOMER_LIFECYCLE key and an exact-endpoint actor assertion. It returns seat access and prepaid-usage availability without amounts or payment diagnoses for ordinary members. Only organisation billing managers receive manager_reason. Responses are private, no-store; membership is checked before and after the read. Existing transitions are read without a roster write. First creation keeps the locked cohort capture. Serialization conflicts retry the whole repeatable-read snapshot up to eight attempts, then return 503. This read never grants paid-operation authority or extends the allowance; paid dispatches keep their own roster fence and funding checks.
+
 ## Organisation customer billing (public protocol 6.4)
 
 The 8 November authority clarification supersedes the any-team-manager policy below: ONLY ACTIVE organisation owners/admins read/manage Org finances. Team-only owners/admins get read-only records of their exact selected ACTIVE team, never shared Org wallets, invoices, subscriptions, cards, consents or money actions. An organisation owner/admin may select any ACTIVE same-org team without fabricated membership. No-team browser recovery creates a team, not a financial-only sign-in.
