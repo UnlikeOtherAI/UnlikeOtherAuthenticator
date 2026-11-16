@@ -76,7 +76,8 @@ describe.skipIf(!enabled)('Nessie access snapshot contention', () => {
     for (const value of values) expect(value.access).toEqual({ allowed: true, status: 'transition', deadline: cohort.endsAt.toISOString() });
     expect(await guardVersion()).toBe(before);
     expect(await prisma.billingNessieSeatTransition.findUnique({ where: { orgId: ids.org } })).toEqual(cohort);
-    expect(cohort.endsAt.getTime() - cohort.startsAt.getTime()).toBe(336 * 3600_000);
+    // The default free trial is one week (`billing_period_setting`, 168 hours).
+    expect(cohort.endsAt.getTime() - cohort.startsAt.getTime()).toBe(168 * 3600_000);
     expect((await nessieBillingAccess(context as never, { prisma, now: cohort.endsAt })).access.allowed).toBe(false);
     expect((await nessieBillingAccess({ ...context, request: { ...request, userId: 'outside-cohort' } } as never,
       { prisma })).access.allowed).toBe(false);
