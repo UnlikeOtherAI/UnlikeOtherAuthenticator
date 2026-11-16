@@ -82,7 +82,7 @@ export function BillingTariffsTab({ service }: { service: BillingService }) {
                   {tariff.is_default ? <Badge variant="blue">Default</Badge> : null}
                   {retired ? <Badge variant="slate">Retired</Badge> : null}
                 </p>
-                <code className="text-xs text-gray-400">{tariff.key} v{tariff.version}</code>
+                <code className="whitespace-nowrap text-xs text-gray-400">{tariff.key} v{tariff.version}</code>
               </Td>
               <Td className={cn(retired && 'opacity-60')}>{billingTariffSummary(tariff)}</Td>
               <Td className={cn(retired && 'opacity-60')}>

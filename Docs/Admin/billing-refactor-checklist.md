@@ -12,6 +12,14 @@ The approved October 2026 admin decluttering work replaces selection-only dropdo
 - `invoice=<id>` opens the existing invoice lifecycle detail. A direct reload restores the selection. Unknown records show an explicit unavailable state instead of silently selecting another entity.
 - `contracts_page` and `invoices_page` keep independent list positions. Related organisation/team links use the canonical directory routes.
 
+### November 2026 product view and section changes
+
+- Top tabs, in order: **Products · Organisations · Contracts & invoices · Usage exceptions · SMS policies** (`section=organisations|contracts|exceptions|sms`; Products has no `section`). Changing the top tab clears every other billing parameter. The "Add product" action shows only on the product list.
+- Product tabs, in order: `tab=tariffs|assignments|adjustments|subscriptions|periods|browser|app-keys|runtime-keys` (Tariffs · Assignments · Add-ons & credits · Subscriptions · Time periods · Cloud browsers · App keys · Ledger keys). Changing the product tab clears `record`, every `*_page` parameter and the tab-local filters `retired` and `key_status`.
+- `retired=1` on Tariffs adds retired versions after the active ones. `key_status=revoked` on App keys and Ledger keys shows revoked keys (expired app keys count as revoked); Active is the default.
+- Every billing table and every list that can pass ten rows has its own page key: `products_page`, `tariffs_page`, `assignments_page`, `adjustments_page`, `subscriptions_page`, `seat_subscriptions_page`, `app_keys_page`, `runtime_keys_page`, `browser_policies_page`, `contracts_page`, `contract_versions_page`, `invoices_page`, `invoice_payments_page`, `corrections_page`, `tax_policies_page`, `exceptions_page`, `sms_history_page`, `sms_recovery_page`, `sms_liabilities_page`. The Organisations section keeps `organisations_page` and `organisation_teams_page`.
+- An assignment's "Edit" links to `?section=organisations&organisation=<id>&product=<service id>`.
+
 No new App route registration is required. All these URLs remain under the existing authenticated `/billing` route and router basename.
 
 ## Before / after capability inventory
@@ -37,6 +45,8 @@ No new App route registration is required. All these URLs remain under the exist
 | Payment / refund / write-off | Exact positive minor amount, projected cap, idempotency | Same checks and inputs; failed requests preserve the same idempotency key and values for retry |
 | Void | Server eligibility plus reason | Same mutation and reason, pending lock; settled/void invoices remain server-controlled |
 | Invoice confidentiality | Customer-price-only lines and totals | Same DTO/schema; no provider costs, token quantities, markup or private Ledger evidence added |
+| Tariff retirement | Not available; versions could only be added | Retire a version nobody is on (confirmation), hidden by default, "Show retired (n)" lists it greyed, Restore without confirmation; retired versions never appear in the Assign tariff dialog or any other tariff picker; history and invoices keep pointing at it |
+| Organisation tariffs | Assignments created per product from the product view | Organisations section edits the organisation and each team per product through the existing assignment endpoint; product Assignments rows link to it with "Edit"; "Starts" shows a future first month in amber |
 
 ## Justification of retained interface elements
 
@@ -62,3 +72,9 @@ Focused Vitest coverage includes:
 - transport/schema tests keep all real billing request payloads and response validation.
 
 The focused suite and Admin typecheck/lint are run in the dedicated Windows billing worktree. No production monetary mutation, Stripe call, PDF issuance, live contract activation or database migration is performed by this refactor. Real rendered desktop/mobile checks and the integrated full suite belong to the orchestrator's final verification; unit/component evidence does not claim those checks passed.
+
+### November 2026 verification
+
+- Vitest: `billing-format.test.ts` (tariff summary, one date/month/label/actor vocabulary, UTC month boundaries), `BillingPage.test.tsx` (retire after confirmation, show retired, restore without confirmation, retired versions absent from Assign tariff, tab change clearing `record`/`*_page`/filters, product copy), `billing-admin-service.test.ts` (exact retire/restore endpoints and parsed tariff).
+- Playwright, 1440×1000 and Pixel 7: `billing-product-tabs.e2e.ts` (retire → show retired → restore with the modeled `POST …/tariffs/:id/retire|restore`; assignments start next month and never offer a retired tariff; app and Ledger key Active/Revoked filters; tab change clears paging; product list copy and counts), plus the updated `admin.e2e.ts`, `billing-*.e2e.ts` journeys. Fixtures carry `retired_at`, `retire_blocked_by` and `effective_from_month`, including a retired version, blocked versions and an assignment starting next month.
+- Not verified here: the API half of retirement against a real database (built in parallel to the same contract), and the Organisations section (its own agent and specs).
