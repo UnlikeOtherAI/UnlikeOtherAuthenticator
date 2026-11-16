@@ -5,6 +5,7 @@ import { Card } from '../../components/ui/Card';
 import { FieldShell, TextField } from '../../components/ui/FormFields';
 import { billingSmsPolicyService as service } from '../../services/billing-sms-policy-service';
 import { SmsMonthlyPriceInputSchema, type SmsMonthlyPrice } from '../../schemas/billing-sms-policies';
+import { billingDateTime } from './billing-format';
 
 const queryKey = ['admin', 'billing', 'sms-policies', 'monthly-prices'];
 const regions: Record<SmsMonthlyPrice['currency'], string> = { EUR: 'Europe', GBP: 'UK', USD: 'US' };
@@ -33,7 +34,7 @@ function MonthlyPriceRow({ price }: { price: SmsMonthlyPrice }) {
       <span className="w-28 text-sm text-gray-600">{label}</span>
       <strong className="text-gray-900">{price.currency} {price.amount}</strong>
       <span className="text-xs text-gray-500">per number per month · {price.set_by === 'seed' ? 'initial price'
-        : `set by ${price.set_by_user_id}`} · {new Date(price.set_at).toLocaleString()}</span>
+        : `set by ${price.set_by_user_id}`} · {billingDateTime(price.set_at)}</span>
       <Button aria-label={`Edit ${label} price`} onClick={() => { save.reset(); setDraft(price.amount); }}>Edit</Button>
     </div>;
   }

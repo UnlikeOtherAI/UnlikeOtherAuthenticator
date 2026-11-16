@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { AutocompleteSelect } from '../../components/ui/AutocompleteSelect';
 import { Button } from '../../components/ui/Button';
 import { FieldShell, SelectField } from '../../components/ui/FormFields';
 import { Modal } from '../../components/ui/Modal';
@@ -12,6 +13,7 @@ import {
 } from '../../schemas/billing';
 import { useOrganisationsQuery, useTeamsQuery } from './admin-queries';
 import { useSaveBillingAssignmentMutation } from './billing-admin-queries';
+import { billingRefusal, billingTariffLabel } from './billing-format';
 
 const defaults: BillingAssignmentFormValues = {
   organisationId: '',
@@ -36,6 +38,15 @@ export function BillingAssignmentDialog({
     defaultValues: defaults,
   });
   const organisationId = form.watch('organisationId');
+  // A retired version can never be given to anybody, so it is never offered.
+  const activeTariffs = useMemo(
+    () => service.tariffs.filter((tariff) => !tariff.retired_at),
+    [service.tariffs],
+  );
+  const organisationOptions = useMemo(
+    () => organisations.map((organisation) => ({ label: organisation.name, value: organisation.id })),
+    [organisations],
+  );
   const eligibleTeams = useMemo(
     () => teams.filter((team) => team.orgId === organisationId),
     [organisationId, teams],
@@ -45,10 +56,10 @@ export function BillingAssignmentDialog({
     if (open) {
       form.reset({
         ...defaults,
-        tariffId: service.tariffs.find((tariff) => tariff.is_default)?.id ?? '',
+        tariffId: activeTariffs.find((tariff) => tariff.is_default)?.id ?? '',
       });
     }
-  }, [form, open, service.tariffs]);
+  }, [form, open, activeTariffs]);
 
   useEffect(() => {
     const selectedTeam = form.getValues('teamId');
@@ -87,16 +98,25 @@ export function BillingAssignmentDialog({
       }
     >
       <form className="space-y-4" onSubmit={form.handleSubmit(submit)}>
-        <FieldShell label="Organisation" error={form.formState.errors.organisationId?.message}>
-          <SelectField {...form.register('organisationId')} className="w-full">
-            <option value="">Select organisation</option>
-            {organisations.map((organisation) => (
-              <option key={organisation.id} value={organisation.id}>
-                {organisation.name}
-              </option>
-            ))}
-          </SelectField>
-        </FieldShell>
+        <div>
+          <AutocompleteSelect
+            label="Organisation"
+            placeholder="Search organisations"
+            allLabel="Select organisation"
+            options={organisationOptions}
+            value={organisationId}
+            onChange={(value) =>
+              form.setValue('organisationId', value === 'all' ? '' : value, {
+                shouldDirty: true,
+                shouldValidate: form.formState.isSubmitted,
+              })}
+          />
+          {form.formState.errors.organisationId?.message ? (
+            <p className="mt-1.5 text-xs text-red-600">
+              {form.formState.errors.organisationId.message}
+            </p>
+          ) : null}
+        </div>
         <FieldShell
           label="Team (optional)"
           hint="Leave empty to apply the tariff to the whole organisation."
@@ -113,21 +133,21 @@ export function BillingAssignmentDialog({
         <FieldShell label="Tariff version" error={form.formState.errors.tariffId?.message}>
           <SelectField {...form.register('tariffId')} className="w-full">
             <option value="">Select tariff</option>
-            {service.tariffs.map((tariff) => (
+            {activeTariffs.map((tariff) => (
               <option key={tariff.id} value={tariff.id}>
-                {tariff.name} · {tariff.key} v{tariff.version}
+                {billingTariffLabel(tariff, service.tariffs)}
                 {tariff.is_default ? ' · default' : ''}
               </option>
             ))}
           </SelectField>
         </FieldShell>
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Team assignments override organisation assignments, which override the service default.
+          Team assignments override organisation assignments, which override the product default.
           Active Stripe subscriptions pin their assignment until they terminate.
         </div>
         {save.isError ? (
           <p className="text-sm text-red-600">
-            {save.error instanceof Error ? save.error.message : 'Could not save assignment.'}
+            {billingRefusal(save.error)}
           </p>
         ) : null}
       </form>

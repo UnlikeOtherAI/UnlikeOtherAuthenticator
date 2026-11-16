@@ -368,6 +368,14 @@ describe('Stripe Checkout authorization, recovery, and account binding', () => {
     expect(state.checkoutCreate.mock.calls[0][1]).toEqual(state.checkoutCreate.mock.calls[1][1]);
   });
 
+  it('refuses a retired tariff version before creating Stripe resources', async () => {
+    const state = setup();
+    state.prisma.billingTariff.findFirst.mockResolvedValue({ ...tariff, retiredAt: new Date('2026-11-16T00:00:00Z') });
+    await expect(createStripeCheckoutSession({ request, actorToken: 'signed-actor', credential }, deps(state)))
+      .rejects.toThrow('BILLING_TARIFF_RETIRED');
+    expect(state.checkoutCreate).not.toHaveBeenCalled();
+  });
+
   it('rejects a cross-origin checkout redirect before creating Stripe resources', async () => {
     const state = setup();
     await expect(

@@ -19,6 +19,8 @@ type Tariff = {
   isDefault: boolean;
   createdByEmail: string | null;
   createdAt: Date;
+  retiredAt: Date | null;
+  retireBlockedBy: readonly string[];
 };
 
 export function serializeBillingTariff(tariff: Tariff) {
@@ -44,6 +46,8 @@ export function serializeBillingTariff(tariff: Tariff) {
     is_default: tariff.isDefault,
     created_by_email: tariff.createdByEmail,
     created_at: tariff.createdAt.toISOString(),
+    retired_at: tariff.retiredAt?.toISOString() ?? null,
+    retire_blocked_by: [...tariff.retireBlockedBy],
   };
 }
 
@@ -84,6 +88,7 @@ type ListedService = {
     createdByEmail: string | null;
     createdAt: Date;
     updatedAt: Date;
+    effectiveFromMonth: string | null;
     tariff: Tariff;
     org: { id: string; name: string };
     team: { id: string; name: string } | null;
@@ -180,6 +185,7 @@ export function serializeBillingService(service: ListedService) {
       organisation: assignment.org,
       team: assignment.team,
       tariff: serializeBillingTariff(assignment.tariff),
+      effective_from_month: assignment.effectiveFromMonth,
       created_by_email: assignment.createdByEmail,
       created_at: assignment.createdAt.toISOString(),
       updated_at: assignment.updatedAt.toISOString(),

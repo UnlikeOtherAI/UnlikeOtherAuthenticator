@@ -5,8 +5,10 @@ import { z } from 'zod';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { FieldShell, SelectField, TextField } from '../../components/ui/FormFields';
+import { PaginationFooter, usePagination } from '../../components/ui/Table';
 import { createApiClient } from '../../services/api-client';
 import { useBillingInvoiceIssuersQuery } from './billing-contract-queries';
+import { billingDateTime } from './billing-format';
 
 const api = createApiClient();
 const PolicySchema = z.object({
@@ -59,6 +61,8 @@ export function BillingCreditInvoiceTaxPolicyPanel() {
       setBasis('');
     },
   });
+  const { pageItems, pagination } = usePagination(policies.data?.policies ?? [], 10,
+    { key: 'tax_policies_page' });
   const [accountId, setAccountId] = useState('');
   const [issuerId, setIssuerId] = useState('');
   const [treatment, setTreatment] = useState<PolicyInput['treatment']>('INCLUSIVE_RATE');
@@ -168,15 +172,16 @@ export function BillingCreditInvoiceTaxPolicyPanel() {
       </Button>
       {policies.data?.policies.length ? (
         <div className="mt-5 space-y-2">
-          {policies.data.policies.map((policy) => (
+          {pageItems.map((policy) => (
             <p key={policy.id} className="text-xs text-gray-600">
               Version {policy.version} · {policy.jurisdiction_country} ·{' '}
               {policy.treatment === 'INCLUSIVE_RATE'
                 ? `${policy.rate_bps / 100}% inclusive` : 'No tax charged'} ·{' '}
-              from {new Date(policy.effective_from).toLocaleString()} ·{' '}
+              from {billingDateTime(policy.effective_from)} ·{' '}
               {policy.legal_basis_reference}
             </p>
           ))}
+          <PaginationFooter {...pagination} />
         </div>
       ) : null}
     </Card>

@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/Button';
 import { FieldShell, TextField } from '../../components/ui/FormFields';
 import type { BillingService } from '../../schemas/billing';
 import { useBillingPeriodSettings, useSaveBillingPeriodSettings } from './billing-period-settings-queries';
+import { billingDateTime } from './billing-format';
 
 const whole = (value: string, max: number): number | null => {
   const parsed = Number(value.trim());
@@ -74,7 +75,7 @@ export function BillingPeriodsPanel({ service }: { service: BillingService }) {
           </FieldShell>
           <p className="text-sm text-gray-500 sm:col-span-2">
             {saved.updated_at
-              ? `Last changed ${new Date(saved.updated_at).toLocaleString()}.`
+              ? `Last changed ${billingDateTime(saved.updated_at)}.`
               : 'These are the defaults; nobody has changed them.'}
           </p>
           <Button type="submit" variant="primary" disabled={save.isPending}>

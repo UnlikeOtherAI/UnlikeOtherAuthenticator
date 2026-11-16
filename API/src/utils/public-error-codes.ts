@@ -135,6 +135,15 @@ export const PRODUCTION_PUBLIC_ERROR_CODES = new Set([
   // A superuser's sign-up funnel period is malformed, reversed or too long: Admin asks for a valid
   // range. Only the superuser-only /internal/admin/auth-funnel route throws it.
   'INVALID_DATE_RANGE',
+  // Admin › Billing tariff changes, refused: the Admin tells the superuser why (retired, somebody
+  // still on it, pinned by a Stripe subscription, set by a contract, or not assignable there).
+  // Retired also answers a product's Checkout for a version it can already read. None names a
+  // customer or an amount.
+  'BILLING_TARIFF_RETIRED',
+  'BILLING_TARIFF_IN_USE',
+  'STRIPE_TARIFF_PINNED',
+  'BILLING_CONTRACT_ASSIGNMENT_LOCKED',
+  'INVALID_TARIFF_ASSIGNMENT',
 ]);
 
 const browserRefusalStatuses = new Map<string, number>([

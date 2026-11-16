@@ -1,4 +1,3 @@
-import { billingOrganisationModeCopy } from '../features/admin/billing-organisation-mode-copy';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 
@@ -19,15 +18,15 @@ import { BillingServiceDialog } from '../features/admin/BillingServiceDialog';
 import { BillingServicePanel } from '../features/admin/BillingServicePanel';
 import { BillingTariffDialog } from '../features/admin/BillingTariffDialog';
 import { BillingContractsPanel } from '../features/admin/BillingContractsPanel';
+import { BillingOrganisationsSection } from '../features/admin/BillingOrganisationsSection';
 import { BillingCreditInvoiceTaxPolicyPanel } from '../features/admin/BillingCreditInvoiceTaxPolicyPanel';
 import { BillingPaidUsageExceptionsPanel } from '../features/admin/BillingPaidUsageExceptionsPanel';
 import { BillingSmsPoliciesPanel } from '../features/admin/BillingSmsPoliciesPanel';
 import type { CreatedBillingAppKey } from '../schemas/billing';
 
 export function BillingPage() {
-  const modeCopy = billingOrganisationModeCopy();
   const { data: services = [], isError, isLoading, refetch } = useBillingServicesQuery();
-  const { params, href, update } = useBillingNavigation();
+  const { params, href, update, openSection } = useBillingNavigation();
   const selectedServiceId = params.get('product') ?? '';
   const query = params.get('q') ?? '';
   const visibleServices = services
@@ -42,9 +41,9 @@ export function BillingPage() {
   const [appKeyOpen, setAppKeyOpen] = useState(false);
   const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedBillingAppKey | null>(null);
-  const section = params.get('section') === 'contracts' ? 'contracts'
-    : params.get('section') === 'exceptions' ? 'exceptions'
-    : params.get('section') === 'sms' ? 'sms' : 'products';
+  const requestedSection = params.get('section');
+  const section = requestedSection === 'organisations' || requestedSection === 'contracts' ||
+    requestedSection === 'exceptions' || requestedSection === 'sms' ? requestedSection : 'products';
   const selectedService = useMemo(
     () => services.find((service) => service.id === selectedServiceId) ?? null,
     [selectedServiceId, services],
@@ -54,23 +53,20 @@ export function BillingPage() {
       <PageHeader
         title="Billing"
         actions={
-          section === 'products' ? (
+          section === 'products' && !selectedServiceId ? (
             <Button icon="plus" variant="primary" onClick={() => setCreateServiceOpen(true)}>
-              Add service
+              Add product
             </Button>
           ) : undefined
         }
       />
 
-      <p className="mb-4 text-sm text-gray-600">{modeCopy.defaultMode}{' '}
-        <Link className="text-blue-600 hover:underline" to="/organisations">{modeCopy.doorway}</Link>
-      </p>
-
       <UnderlineTabs
         value={section}
-        onChange={(value) => update({ section: value })}
+        onChange={(value) => openSection(value === 'products' ? null : value)}
         options={[
-          { label: 'Product billing', value: 'products' },
+          { label: 'Products', value: 'products' },
+          { label: 'Organisations', value: 'organisations' },
           { label: 'Contracts & invoices', value: 'contracts' },
           { label: 'Usage exceptions', value: 'exceptions' },
           { label: 'SMS policies', value: 'sms' },
@@ -84,7 +80,7 @@ export function BillingPage() {
           ) : null}
           {isError ? (
             <Card className="border-red-200 px-5 py-8 text-sm text-red-600">
-              Could not load billing services.{' '}
+              Could not load products.{' '}
               <Button className="ml-3" onClick={() => void refetch()}>
                 Retry
               </Button>
@@ -92,16 +88,8 @@ export function BillingPage() {
           ) : null}
           {!isLoading && !isError && services.length === 0 ? (
             <Card className="px-5 py-10 text-center">
-              <p className="text-sm font-semibold text-gray-800">No billing services yet</p>
+              <p className="text-sm font-semibold text-gray-800">No products yet</p>
               <p className="mt-1 text-sm text-gray-500">Add a product with its initial tariff.</p>
-              <Button
-                className="mt-4"
-                icon="plus"
-                variant="primary"
-                onClick={() => setCreateServiceOpen(true)}
-              >
-                Add first service
-              </Button>
             </Card>
           ) : null}
 
@@ -115,7 +103,7 @@ export function BillingPage() {
                   onChange={(event) => update({ q: event.target.value, products_page: null })}
                 />
               </div>
-              <DataTable headers={['Product', 'Status', 'Default tariff']}>
+              <DataTable headers={['Product', 'Status', 'Default tariff', 'Assignments']}>
                 {pageItems.map((service) => (
                   <tr key={service.id}>
                     <Td>
@@ -133,14 +121,14 @@ export function BillingPage() {
                       </Badge>
                     </Td>
                     <Td>
-                      {service.tariffs.find((tariff) => tariff.is_default)?.name ??
-                        'No default tariff'}
+                      {service.tariffs.find((tariff) => tariff.is_default)?.name ?? '—'}
                     </Td>
+                    <Td>{service.assignments.length}</Td>
                   </tr>
                 ))}
                 {visibleServices.length === 0 ? (
                   <tr>
-                    <Td colSpan={3}>No products match this search.</Td>
+                    <Td colSpan={4} className="text-gray-400">No products match this search.</Td>
                   </tr>
                 ) : null}
               </DataTable>
@@ -176,6 +164,12 @@ export function BillingPage() {
             </div>
           ) : null}
         </>
+      ) : section === 'organisations' ? (
+        <BillingOrganisationsSection
+          services={services}
+          servicesError={isError}
+          servicesLoading={isLoading}
+        />
       ) : section === 'contracts' ? (
         <div className="space-y-4">
           <BillingContractsPanel

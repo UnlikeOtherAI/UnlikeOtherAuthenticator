@@ -214,7 +214,7 @@ export function AddBillingContractVersionDialog({
         </div>
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           Choose a future billing month. Saving creates draft terms; activation freezes monthly
-          service prices for that month and later months.
+          product prices for that month and later months.
         </div>
         <ErrorMessage error={create.error} />
       </form>
@@ -276,7 +276,7 @@ export function ActivateBillingContractVersionDialog({
   async function submit() {
     if (!parsedSelection.success || !confirmed) {
       setValidationError(
-        'Select services, enter each monthly price and required seat quantity, then confirm.',
+        'Select products, enter each monthly price and required seat quantity, then confirm.',
       );
       return;
     }
@@ -332,13 +332,13 @@ export function ActivateBillingContractVersionDialog({
           ))}
           {activeServices.length === 0 ? (
             <p className="px-4 py-5 text-sm text-gray-500">
-              No active billing services are available.
+              No active products are available.
             </p>
           ) : null}
         </div>
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
           <p className="font-medium">
-            {selectedInputs.length} service{selectedInputs.length === 1 ? '' : 's'} selected ·{' '}
+            {selectedInputs.length} product{selectedInputs.length === 1 ? '' : 's'} selected ·{' '}
             {version?.currency ?? '—'}
           </p>
           <label className="mt-2 flex items-start gap-2 text-xs">

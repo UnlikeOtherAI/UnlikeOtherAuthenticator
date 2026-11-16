@@ -23,7 +23,7 @@ export async function resolveCurrentBillingTariff(reader: Reader,
   const regional = await reader.billingTariff.findFirst({ where: {
     serviceId: scope.serviceId, key: 'standard-' + region.currency.toLowerCase(), currency: region.currency,
     mode: 'STANDARD', collectionMode: 'STRIPE', usagePaymentMode: 'PREPAID', usageCurrency: 'USD',
-    monthlyChargeBasis: 'PER_SEAT', monthlyAmountMinor: { gt: 0n }, anniversarySeats: true,
+    monthlyChargeBasis: 'PER_SEAT', monthlyAmountMinor: { gt: 0n }, anniversarySeats: true, retiredAt: null,
   }, orderBy: { version: 'desc' } });
   if (!regional) throw new AppError('BAD_REQUEST', 409, 'NESSIE_REGIONAL_SEAT_TERMS_INVALID');
   return { ...effective, tariff: regional };

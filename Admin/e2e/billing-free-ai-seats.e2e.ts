@@ -13,7 +13,7 @@ test('a billing operator can waive AI usage and charge a monthly seat price', as
   });
   await page.goto('/billing?section=products');
   await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
-  await page.getByRole('button', { name: 'Tariff version' }).click();
+  await page.getByRole('button', { name: 'New tariff' }).click();
   const dialog = page.getByRole('dialog', { name: /Add tariff version/ });
   await dialog.getByLabel('Tariff key').fill('internal-free-ai');
   await dialog.getByLabel('Name', { exact: true }).fill('Staff AI with paid seats');

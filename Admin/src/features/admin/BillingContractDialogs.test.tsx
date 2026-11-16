@@ -131,7 +131,7 @@ describe('ActivateBillingContractVersionDialog', () => {
     expect(deepWaterAmount.disabled).toBe(true);
     expect(deepTestAmount.value).toBe('');
     expect(deepTestAmount.disabled).toBe(true);
-    expect(screen.getByText(/0 services selected/)).toBeTruthy();
+    expect(screen.getByText(/0 products selected/)).toBeTruthy();
     expect(
       (screen.getByRole('button', { name: 'Activate immutable terms' }) as HTMLButtonElement)
         .disabled,

@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 
+import { AppError } from '../utils/errors.js';
 import { assertContractAssignmentWriteAllowed } from './billing-contract-guard.service.js';
 import { assertTariffAssignmentChangeAllowed } from './billing-stripe-tariff-guard.service.js';
 import { appendTariffTermEvent, lockTariffHistoryService, utcBillingMonth } from './billing-tariff-history.service.js';
@@ -26,7 +27,8 @@ export async function assignNewNessieOrganisation(tx: Prisma.TransactionClient, 
   const where = { serviceId: input.serviceId, key, currency: input.currency, anniversarySeats: true, mode: 'STANDARD' as const };
   const published = await tx.billingTariff.findFirst({ where: { ...where, createdAt: { lte: org.createdAt } }, select: { id: true } });
   if (!published) return;
-  const tariff = await tx.billingTariff.findFirstOrThrow({ where, orderBy: { version: 'desc' } });
+  // Whether the regional catalogue existed is history; the version given out must not be retired.
+  const tariff = await tx.billingTariff.findFirst({ where: { ...where, retiredAt: null }, orderBy: { version: 'desc' } });
   // An explicit team, organisation or contract arrangement takes precedence over initial defaults.
   const [assignment, contract] = await Promise.all([
     tx.billingTariffAssignment.findFirst({ where: { serviceId: input.serviceId, orgId: input.orgId }, select: { id: true } }),
@@ -34,6 +36,7 @@ export async function assignNewNessieOrganisation(tx: Prisma.TransactionClient, 
       contractVersion: { contract: { orgId: input.orgId } } }, select: { id: true } }),
   ]);
   if (assignment || contract) return;
+  if (!tariff) throw new AppError('BAD_REQUEST', 409, 'NESSIE_REGIONAL_SEAT_TERMS_INVALID');
   await assertContractAssignmentWriteAllowed(tx, { serviceId: input.serviceId, organisationId: input.orgId, teamId: null });
   await assertTariffAssignmentChangeAllowed(tx, { serviceId: input.serviceId, orgId: input.orgId,
     teamId: null, targetTariffId: tariff.id, currentAssignmentId: null });

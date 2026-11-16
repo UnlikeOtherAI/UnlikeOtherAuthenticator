@@ -1,5 +1,6 @@
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
+import { PaginationFooter, usePagination } from '../../components/ui/Table';
 import { useBillingCycleCorrectionsQuery,
   usePrepareBillingCycleCorrectionMutation } from './billing-contract-queries';
 
@@ -9,6 +10,8 @@ export function BillingCycleCorrectionsPanel({ onInvoicePrepared }: {
 }) {
   const candidates = useBillingCycleCorrectionsQuery();
   const prepare = usePrepareBillingCycleCorrectionMutation();
+  const { pageItems, pagination } = usePagination(candidates.data ?? [], 10,
+    { key: 'corrections_page' });
   if (candidates.isLoading || candidates.data?.length === 0) return null;
 
   return (
@@ -25,7 +28,7 @@ export function BillingCycleCorrectionsPanel({ onInvoicePrepared }: {
         Billing corrections could not be loaded.
       </p> : null}
       <div className="divide-y divide-gray-200">
-        {(candidates.data ?? []).map((item) => (
+        {pageItems.map((item) => (
           <div key={item.cycle_id} className="flex flex-wrap items-center gap-3 px-5 py-3">
             <div className="min-w-0 flex-1 text-sm">
               <p className="font-medium text-gray-900">{item.billing_month} · {item.service_id}</p>
@@ -57,6 +60,7 @@ export function BillingCycleCorrectionsPanel({ onInvoicePrepared }: {
           </div>
         ))}
       </div>
+      <PaginationFooter {...pagination} />
       {prepare.isError ? <p role="alert" className="px-5 pb-4 text-sm text-red-600">
         {prepare.error instanceof Error ? prepare.error.message :
           'The correction could not be prepared.'}

@@ -44,10 +44,10 @@ test('operator reaches product runtime keys, reviews binding, retries and clears
   });
   await page.goto('/billing');
   await page.getByRole('link', { name: 'Nessie', exact: true }).click();
-  await page.getByRole('button', { name: 'Ledger runtime keys', exact: true }).click();
+  await page.getByRole('button', { name: /^Ledger keys/ }).click();
   await expect(page).toHaveURL(/product=nessie.*tab=runtime-keys/);
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
-  await expect(page.getByText('No Ledger runtime keys have been issued for Nessie.')).toBeVisible();
+  await expect(page.getByText('Nessie has no active Ledger runtime key.')).toBeVisible();
   await expect(page.getByText('uoa_ledger_other')).toHaveCount(0);
   await page.getByRole('button', { name: 'Issue runtime key', exact: true }).click();
   const dialog = page.getByRole('dialog');
@@ -80,6 +80,9 @@ test('operator reaches product runtime keys, reviews binding, retries and clears
   await page.getByRole('button', { name: 'Revoke', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('api.nessie.works');
   await page.getByRole('dialog').getByRole('button', { name: 'Revoke runtime key uoa_ledger_fixture', exact: true }).click();
+  await expect(page.getByText('Nessie has no active Ledger runtime key.')).toBeVisible();
+  await page.getByRole('button', { name: 'Revoked (1)', exact: true }).click();
+  await expect(page).toHaveURL(/key_status=revoked/);
   await expect(page.getByText('Revoked', { exact: true })).toBeVisible();
   expect(revocations).toEqual(['runtime-1']); expect(writes).toHaveLength(2);
   expect(fixture.unexpected).toEqual([]); expect(fixture.errors).toEqual([]);

@@ -18,6 +18,10 @@ import {
   setDefaultBillingTariff,
   upsertBillingTariffAssignment,
 } from '../../../services/billing-tariff.service.js';
+import {
+  restoreBillingTariff,
+  retireBillingTariff,
+} from '../../../services/billing-tariff-retirement.service.js';
 import { markupPercentToBps } from '../../../services/billing-markup-percent.service.js';
 import { listBillingServices } from '../../../services/billing-tariff-read.service.js';
 import {
@@ -31,6 +35,9 @@ const IdParamsSchema = z.object({
 });
 const AssignmentParamsSchema = IdParamsSchema.extend({
   assignmentId: z.string().trim().min(1),
+});
+const TariffParamsSchema = IdParamsSchema.extend({
+  tariffId: z.string().trim().min(1),
 });
 const AppKeyParamsSchema = IdParamsSchema.extend({
   keyId: z.string().trim().min(1),
@@ -221,7 +228,30 @@ export function registerInternalAdminBillingRoutes(app: FastifyInstance): void {
         team_id: assignment.teamId,
         scope: assignment.scope.toLowerCase(),
         tariff: serializeBillingTariff(assignment.tariff),
+        effective_from_month: assignment.effectiveFromMonth,
       };
+    },
+  );
+
+  app.post(
+    '/internal/admin/billing/services/:serviceId/tariffs/:tariffId/retire',
+    { ...adminRoute, schema: { response: { 200: objectSchema } } },
+    async (request) => {
+      const { serviceId, tariffId } = TariffParamsSchema.parse(request.params);
+      return serializeBillingTariff(
+        await retireBillingTariff({ serviceId, tariffId, actor: mutationActor(request) }),
+      );
+    },
+  );
+
+  app.post(
+    '/internal/admin/billing/services/:serviceId/tariffs/:tariffId/restore',
+    { ...adminRoute, schema: { response: { 200: objectSchema } } },
+    async (request) => {
+      const { serviceId, tariffId } = TariffParamsSchema.parse(request.params);
+      return serializeBillingTariff(
+        await restoreBillingTariff({ serviceId, tariffId, actor: mutationActor(request) }),
+      );
     },
   );
 

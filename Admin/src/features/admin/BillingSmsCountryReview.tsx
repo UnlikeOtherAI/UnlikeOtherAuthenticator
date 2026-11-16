@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import type { SmsCountryPreview } from '../../schemas/billing-sms-policies';
 import { smsCountryName } from './sms-countries';
+import { billingDateTime } from './billing-format';
 
 /** The one Add country screen: both directions' account prices and bounds, then one Accept. */
 export function BillingSmsCountryReview({ preview, pending, error, onClose, onAccept }: {
@@ -20,7 +21,7 @@ export function BillingSmsCountryReview({ preview, pending, error, onClose, onAc
     {preview && evidence ? <div className="space-y-4 text-sm">
       <dl className="grid gap-1 sm:grid-cols-[8rem_1fr]">
         <dt className="text-gray-500">Account</dt><dd className="break-all font-mono text-xs text-gray-900">{evidence.account_sid}</dd>
-        <dt className="text-gray-500">Validity</dt><dd className="text-gray-900">{evidence.validity_days} days, until {new Date(evidence.routes[0].expires_at).toLocaleString()}</dd>
+        <dt className="text-gray-500">Validity</dt><dd className="text-gray-900">{evidence.validity_days} days, until {billingDateTime(evidence.routes[0].expires_at)}</dd>
         <dt className="text-gray-500">Bound rule</dt><dd className="font-mono text-xs text-gray-900">{evidence.rule}</dd>
       </dl>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm">

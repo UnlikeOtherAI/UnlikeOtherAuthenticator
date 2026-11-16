@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { DataTable, Td, PaginationFooter, usePagination } from '../../components/ui/Table';
 import { useBillingNavigation } from './billing-navigation';
+import { billingLabel } from './billing-format';
 
 import { Badge, type BadgeVariant } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -74,7 +75,7 @@ function VersionAction({
   version: BillingContractVersion;
 }) {
   if (version.actions.activate) {
-    if (!servicesReady) return <span className="text-xs text-red-500">Services unavailable</span>;
+    if (!servicesReady) return <span className="text-xs text-red-500">Products unavailable</span>;
     return (
       <Button size="sm" variant="primary" onClick={onActivate}>
         Activate
@@ -131,6 +132,8 @@ export function BillingContractsPanel({
   );
   const { pageItems, pagination } = usePagination(visibleContracts, 10, { key: 'contracts_page' });
   const selectedContract = contracts.find((contract) => contract.id === selectedContractId) ?? null;
+  const versions = usePagination(selectedContract?.versions ?? [], 10,
+    { key: 'contract_versions_page' });
   const selectedInvoice = invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
 
   const loading = contractsQuery.isLoading || issuersQuery.isLoading || invoicesQuery.isLoading;
@@ -140,12 +143,12 @@ export function BillingContractsPanel({
     <div className="space-y-5">
       {servicesLoading ? (
         <p className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">
-          Loading billing services before contract activation...
+          Loading products before contract activation...
         </p>
       ) : null}
       {servicesError ? (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Billing services could not be loaded. Contract activation is disabled; invoice history
+          Products could not be loaded. Contract activation is disabled; invoice history
           remains available.
         </p>
       ) : null}
@@ -155,7 +158,7 @@ export function BillingContractsPanel({
           <div>
             <h2 className="text-sm font-semibold text-gray-900">Organisation contracts</h2>
             <p className="mt-0.5 text-xs text-gray-500">
-              Versioned usage markup and monthly service prices.
+              Versioned usage markup and monthly product prices.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -235,7 +238,9 @@ export function BillingContractsPanel({
                     </Link>
                   </Td>
                   <Td>
-                    <Badge variant={contractVariant(contract.status)}>{contract.status}</Badge>
+                    <Badge variant={contractVariant(contract.status)}>
+                      {billingLabel(contract.status)}
+                    </Badge>
                   </Td>
                 </tr>
               ))}
@@ -263,7 +268,7 @@ export function BillingContractsPanel({
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-gray-900">{selectedContract.name}</h3>
                   <Badge variant={contractVariant(selectedContract.status)}>
-                    {selectedContract.status}
+                    {billingLabel(selectedContract.status)}
                   </Badge>
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
@@ -289,7 +294,7 @@ export function BillingContractsPanel({
               </div>
             </div>
             <div className="mt-4 space-y-3 md:hidden">
-              {selectedContract.versions.map((version) => (
+              {versions.pageItems.map((version) => (
                 <div key={version.id} className="rounded-xl border border-gray-200 p-4 text-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -318,12 +323,12 @@ export function BillingContractsPanel({
                     <th className="px-4 py-2.5">Version</th>
                     <th className="px-4 py-2.5">Usage markup</th>
                     <th className="px-4 py-2.5">Effective</th>
-                    <th className="px-4 py-2.5">Services</th>
+                    <th className="px-4 py-2.5">Products</th>
                     <th className="px-4 py-2.5 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedContract.versions.map((version) => (
+                  {versions.pageItems.map((version) => (
                     <tr key={version.id} className="border-t border-gray-100">
                       <td className="px-4 py-3 font-medium text-gray-900">v{version.version}</td>
                       <td className="px-4 py-3">{version.usage_markup_percent}%</td>
@@ -343,6 +348,7 @@ export function BillingContractsPanel({
                 </tbody>
               </table>
             </div>
+            <PaginationFooter {...versions.pagination} />
           </div>
         ) : null}
       </Card>

@@ -25,7 +25,7 @@ test('platform operator reviews exact over-bound receipt and records a capped wa
   await expect(panel).toContainText('a'.repeat(64));
   await panel.getByLabel('Operator reason').fill('Provider exceeded its original authorized cost bound.');
   await panel.getByRole('button', { name: 'Cap charge and waive excess' }).click();
-  await expect(panel).toContainText('No over-bound paid usage needs a decision.');
+  await expect(panel).toContainText('No paid usage needs an operator decision.');
   expect(fixture.paidUsageDecisions).toHaveLength(1);
   expect(fixture.unexpected).toEqual([]);
   expect(fixture.errors).toEqual([]);

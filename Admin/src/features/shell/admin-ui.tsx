@@ -6,7 +6,11 @@ type Confirmation = {
   onConfirm?: () => Promise<void> | void;
   requiredText?: string;
   failureMessage?: string;
+  tone: ConfirmationTone;
 } | null;
+
+/** `danger` for destructive actions (the default); `primary` for a routine change. */
+export type ConfirmationTone = 'danger' | 'primary';
 
 type AdminUiContextValue = {
   confirmation: Confirmation;
@@ -19,6 +23,7 @@ type AdminUiContextValue = {
     onConfirm?: () => Promise<void> | void,
     requiredText?: string,
     failureMessage?: string,
+    tone?: ConfirmationTone,
   ) => void;
   toggleSidebar: () => void;
 };
@@ -35,8 +40,8 @@ export function AdminUiProvider({ children }: PropsWithChildren) {
       isSidebarOpen,
       closeConfirmation: () => setConfirmation(null),
       closeSidebar: () => setIsSidebarOpen(false),
-      confirm: (title, body, onConfirm, requiredText, failureMessage) =>
-        setConfirmation({ title, body, onConfirm, requiredText, failureMessage }),
+      confirm: (title, body, onConfirm, requiredText, failureMessage, tone = 'danger') =>
+        setConfirmation({ title, body, onConfirm, requiredText, failureMessage, tone }),
       toggleSidebar: () => setIsSidebarOpen((current) => !current),
     }),
     [confirmation, isSidebarOpen],

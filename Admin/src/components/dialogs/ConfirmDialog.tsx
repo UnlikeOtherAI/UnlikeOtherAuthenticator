@@ -45,7 +45,7 @@ export function ConfirmDialog() {
       footer={
         <>
           <Button disabled={isPending} onClick={closeDialog}>Cancel</Button>
-          <Button disabled={!isConfirmed || isPending || !confirmation?.onConfirm} variant="danger" onClick={confirmAction}>
+          <Button disabled={!isConfirmed || isPending || !confirmation?.onConfirm} variant={confirmation?.tone ?? 'danger'} onClick={confirmAction}>
             {isPending ? 'Saving...' : confirmation?.title.replace(/\?$/, '') ?? 'Confirm'}
           </Button>
         </>

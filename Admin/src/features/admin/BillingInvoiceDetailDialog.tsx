@@ -6,6 +6,7 @@ import { Badge, type BadgeVariant } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { FieldShell, SelectField, TextAreaField, TextField } from '../../components/ui/FormFields';
 import { Modal } from '../../components/ui/Modal';
+import { PaginationFooter, usePagination } from '../../components/ui/Table';
 import {
   BillingInvoicePaymentFormSchema,
   type BillingInvoice,
@@ -19,6 +20,7 @@ import {
   useVoidBillingInvoiceMutation,
 } from './billing-contract-queries';
 import { BillingManualCreditNotePanel } from './BillingManualCreditNotePanel';
+import { billingDateTime, billingLabel, billingUtcDate } from './billing-format';
 
 function nowForInput(): string {
   const date = new Date();
@@ -47,20 +49,6 @@ function paymentKindLabel(kind: PaymentKind): string {
   return kind[0].toUpperCase() + kind.slice(1);
 }
 
-function displayUtcDate(value: string | null): string {
-  if (!value) return '—';
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(
-    new Date(value),
-  );
-}
-
-function displayInstant(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}
-
 function ActionError({ value }: { value: unknown }) {
   if (!value) return null;
   return (
@@ -82,6 +70,7 @@ export function BillingInvoiceDetailDialog({
   const issue = useIssueBillingInvoiceMutation();
   const voidInvoice = useVoidBillingInvoiceMutation();
   const recordPayment = useRecordBillingInvoicePaymentMutation();
+  const payments = usePagination(invoice?.payments ?? [], 10, { key: 'invoice_payments_page' });
   const [voidReason, setVoidReason] = useState('');
   const [showVoid, setShowVoid] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
@@ -202,7 +191,7 @@ export function BillingInvoiceDetailDialog({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3">
           <div>
             <div className="flex items-center gap-2">
-              <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
+              <Badge variant={statusVariant(invoice.status)}>{billingLabel(invoice.status)}</Badge>
               <Badge variant={invoice.payment_status === 'paid' ? 'green' : 'slate'}>
                 {invoice.payment_status.replace('_', ' ')}
               </Badge>
@@ -211,7 +200,7 @@ export function BillingInvoiceDetailDialog({
               {invoice.buyer.legal_name} · revision {invoice.revision}
             </p>
             <p className="mt-1 text-xs text-gray-500">
-              Issued {displayUtcDate(invoice.issue_date)} · Due {displayUtcDate(invoice.due_date)}
+              Issued {billingUtcDate(invoice.issue_date)} · Due {billingUtcDate(invoice.due_date)}
             </p>
           </div>
           <div className="text-right">
@@ -242,7 +231,7 @@ export function BillingInvoiceDetailDialog({
 
         {invoice.status === 'void' ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-            <p className="font-semibold">Voided {displayUtcDate(invoice.voided_at)}</p>
+            <p className="font-semibold">Voided {billingUtcDate(invoice.voided_at)}</p>
             <p className="mt-1">{invoice.void_reason ?? 'No reason was recorded.'}</p>
           </div>
         ) : null}
@@ -281,7 +270,7 @@ export function BillingInvoiceDetailDialog({
           <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-2.5">Service</th>
+                <th className="px-4 py-2.5">Product</th>
                 <th className="px-4 py-2.5 text-right">Calculated price</th>
               </tr>
             </thead>
@@ -324,7 +313,7 @@ export function BillingInvoiceDetailDialog({
               <p className="text-sm font-semibold text-gray-900">Payment activity</p>
             </div>
             <div className="divide-y divide-gray-100">
-              {invoice.payments.map((payment) => (
+              {payments.pageItems.map((payment) => (
                 <div
                   key={payment.id}
                   className="flex flex-wrap justify-between gap-2 px-4 py-3 text-sm"
@@ -332,7 +321,7 @@ export function BillingInvoiceDetailDialog({
                   <div>
                     <p className="font-medium text-gray-900">{paymentKindLabel(payment.kind)}</p>
                     <p className="text-xs text-gray-500">
-                      {displayInstant(payment.occurred_at)}
+                      {billingDateTime(payment.occurred_at)}
                       {payment.reference ? ` · ${payment.reference}` : ''}
                     </p>
                   </div>
@@ -340,6 +329,7 @@ export function BillingInvoiceDetailDialog({
                 </div>
               ))}
             </div>
+            <PaginationFooter {...payments.pagination} />
           </div>
         ) : null}
 

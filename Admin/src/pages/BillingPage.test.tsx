@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 
+import { ApiRequestError } from '../services/api-client';
 import { BillingPage } from './BillingPage';
 
 const mocks = vi.hoisted(() => ({
@@ -20,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   revokeAppKey: vi.fn(),
   createAdjustment: vi.fn(),
   deactivateAdjustment: vi.fn(),
+  retireTariff: vi.fn(),
+  restoreTariff: vi.fn(),
 }));
 
 const service = {
@@ -44,8 +47,52 @@ const service = {
         seat_policy: null, seat_charge_timing: null,
       },
       is_default: true,
+      retired_at: null,
+      retire_blocked_by: ['default', 'assignments', 'subscriptions'],
       created_by_email: 'operator@example.com',
       created_at: '2026-07-20T00:00:00.000Z',
+    },
+    {
+      id: 'tariff-2',
+      service_id: 'service-1',
+      key: 'team',
+      version: 1,
+      name: 'Team',
+      mode: 'free' as const,
+      collection_mode: 'none' as const,
+      markup_bps: 0,
+      markup_percent: '0.00',
+      usage_payment_mode: 'prepaid',
+      monthly_subscription: {
+        amount_minor: '0', currency: 'GBP', charge_basis: 'flat',
+        seat_policy: null, seat_charge_timing: null,
+      },
+      is_default: false,
+      retired_at: null,
+      retire_blocked_by: [],
+      created_by_email: 'system:migration',
+      created_at: '2026-07-20T00:00:00.000Z',
+    },
+    {
+      id: 'tariff-3',
+      service_id: 'service-1',
+      key: 'legacy',
+      version: 4,
+      name: 'Legacy',
+      mode: 'standard' as const,
+      collection_mode: 'manual' as const,
+      markup_bps: 1000,
+      markup_percent: '10.00',
+      usage_payment_mode: 'pay_as_you_go',
+      monthly_subscription: {
+        amount_minor: '500', currency: 'GBP', charge_basis: 'flat',
+        seat_policy: null, seat_charge_timing: null,
+      },
+      is_default: false,
+      retired_at: '2026-09-01T00:00:00.000Z',
+      retire_blocked_by: [],
+      created_by_email: 'operator@example.com',
+      created_at: '2026-01-20T00:00:00.000Z',
     },
   ],
   assignments: [
@@ -55,6 +102,7 @@ const service = {
       scope: 'team' as const,
       organisation: { id: 'org-1', name: 'Example Org' },
       team: { id: 'team-1', name: 'Research' },
+      effective_from_month: '2026-07',
       tariff: {
         id: 'tariff-1',
         service_id: 'service-1',
@@ -159,6 +207,13 @@ vi.mock('../features/admin/billing-admin-queries', () => ({
   useRevokeBillingAppKeyMutation: () => mutation(mocks.revokeAppKey),
   useCreateBillingAdjustmentMutation: () => mutation(mocks.createAdjustment),
   useDeactivateBillingAdjustmentMutation: () => mutation(mocks.deactivateAdjustment),
+  useRetireBillingTariffMutation: () => mutation(mocks.retireTariff),
+  useRestoreBillingTariffMutation: () => mutation(mocks.restoreTariff),
+}));
+
+vi.mock('../features/admin/billing-ledger-runtime-key-queries', () => ({
+  useBillingLedgerRuntimeKeysQuery: () => ({ data: [], isError: false, isLoading: false }),
+  useRevokeBillingLedgerRuntimeKeyMutation: () => mutation(vi.fn()),
 }));
 
 vi.mock('../features/admin/admin-queries', () => ({
@@ -179,6 +234,7 @@ function mutation(mutateAsync: ReturnType<typeof vi.fn>) {
     error: null,
     isError: false,
     isPending: false,
+    mutate: mutateAsync,
     mutateAsync,
   };
 }
@@ -217,13 +273,17 @@ describe('BillingPage', () => {
     render(<BillingPage />);
 
     expect(screen.getByRole('heading', { name: 'Billing' })).toBeTruthy();
-    expect(screen.getByText('20.00%')).toBeTruthy();
-    expect(screen.getByText('20.00 GBP')).toBeTruthy();
-    expect(screen.getAllByText('Default')).toHaveLength(2);
+    expect(screen.getByText('20.00 GBP per month · usage +20%, pay as you go · card (Stripe)'))
+      .toBeTruthy();
+    expect(screen.getAllByText('Default')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: '1 assignment' }).getAttribute('href'))
+      .toBe('/billing?product=service-1&tab=assignments');
+    // Created is the date alone; who created it is in the detail dialog.
+    expect(screen.queryByText('System')).toBeNull();
 
     await user.click(screen.getByRole('button', { name: /App keys/ }));
     expect(screen.getByText('DeepWater production')).toBeTruthy();
-    expect(screen.getByText('customer lifecycle')).toBeTruthy();
+    expect(screen.getByText('Customer lifecycle')).toBeTruthy();
     expect(screen.getByText('uoa_app_abcd…')).toBeTruthy();
     expect(screen.queryByText(/^uoa_app_[A-Za-z0-9_-]{20,}$/)).toBeNull();
 
@@ -243,15 +303,16 @@ describe('BillingPage', () => {
     const link = screen.getByRole('link', { name: 'DeepWater' });
     expect(link.getAttribute('href')).toBe('/billing?product=service-1');
     await user.click(link);
-    expect(screen.getByText('20.00 GBP')).toBeTruthy();
+    expect(screen.getByText(/^20\.00 GBP per month/)).toBeTruthy();
     await user.click(screen.getByRole('button', { name: /Assignments/ }));
     expect(screen.getByTestId('location').textContent).toContain('tab=assignments');
     expect(screen.getByRole('link', { name: 'Research' }).getAttribute('href')).toBe(
       '/organisations/org-1/teams/team-1',
     );
-    expect(screen.queryByRole('button', { name: 'Tariff version' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'New tariff' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Assign tariff' })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Browser back' }));
-    expect(screen.getByText('20.00 GBP')).toBeTruthy();
+    expect(screen.getByText(/^20\.00 GBP per month/)).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Browser back' }));
     expect(screen.getByRole('link', { name: 'DeepWater' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /App keys/ })).toBeNull();
@@ -266,10 +327,10 @@ describe('BillingPage', () => {
 
   it('opens standard prepaid service terms with no automatic collection by default', async () => {
     const user = userEvent.setup();
-    render(<BillingPage />);
+    render(<BillingPage />, '/billing');
 
-    await user.click(screen.getByRole('button', { name: 'Add service' }));
-    const dialog = screen.getByRole('dialog', { name: 'Add billing service' });
+    await user.click(screen.getByRole('button', { name: 'Add product' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add product' });
     expect(dialog).toBeTruthy();
     expect((screen.getByRole('combobox', { name: 'Mode' }) as HTMLSelectElement).value).toBe(
       'standard',
@@ -295,6 +356,59 @@ describe('BillingPage', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Close modal' }));
     await user.click(screen.getByRole('button', { name: 'Discard changes' }));
-    expect(screen.queryByRole('dialog', { name: 'Add billing service' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Add product' })).toBeNull();
+  });
+
+  it('retires a version nobody is on after confirmation, hides it, and restores it on request', async () => {
+    const user = userEvent.setup();
+    render(<BillingPage />);
+    expect(screen.queryByText('Legacy')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Retire' })).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Retire' }));
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      'Retire Team · team v1?',
+      'Nobody can be put on this tariff any more. Its invoices, usage and history stay as they are. You can restore it later.',
+      expect.any(Function),
+    );
+    expect(mocks.retireTariff).not.toHaveBeenCalled();
+    await mocks.confirm.mock.calls[0]?.[2]?.();
+    expect(mocks.retireTariff).toHaveBeenCalledWith('tariff-2');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Show retired (1)' }));
+    expect(screen.getByTestId('location').textContent).toContain('retired=1');
+    expect(screen.getByText('Legacy')).toBeTruthy();
+    expect(screen.getByText(/^Retired 1 Sept? 2026$/)).toBeTruthy();
+    expect(screen.getByRole('row', { name: /Legacy/ }).textContent).toContain('Nobody');
+    await user.click(screen.getByRole('button', { name: 'Restore' }));
+    expect(mocks.restoreTariff).toHaveBeenCalledWith('tariff-3');
+    expect(mocks.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirms Set default as a routine change and says why a refused change was refused', async () => {
+    const user = userEvent.setup();
+    mocks.setDefault.mockRejectedValueOnce(new ApiRequestError(409, 'STRIPE_TARIFF_PINNED'));
+    render(<BillingPage />);
+    await user.click(screen.getByRole('button', { name: 'Set default' }));
+    expect(mocks.confirm.mock.calls[0]?.[0]).toBe('Make Team v1 the default?');
+    expect(mocks.confirm.mock.calls[0]?.[5]).toBe('primary');
+    await mocks.confirm.mock.calls[0]?.[2]?.();
+    expect(mocks.setDefault).toHaveBeenCalledWith('tariff-2');
+    expect((await screen.findByRole('alert')).textContent)
+      .toBe('An active Stripe subscription keeps the current tariff until it ends.');
+  });
+
+  it('never offers a retired version for assignment and clears record and paging on tab change', async () => {
+    const user = userEvent.setup();
+    render(<BillingPage />, '/billing?product=service-1&tab=tariffs&retired=1&tariffs_page=2&record=tariff-1');
+    await user.click(screen.getByRole('button', { name: 'Close modal' }));
+    await user.click(screen.getByRole('button', { name: /Assignments/ }));
+    expect(screen.getByTestId('location').textContent)
+      .toBe('/billing?product=service-1&tab=assignments');
+    await user.click(screen.getByRole('button', { name: 'Assign tariff' }));
+    const tariffs = screen.getByRole('combobox', { name: 'Tariff version' });
+    const labels = [...tariffs.querySelectorAll('option')].map((option) => option.textContent);
+    // Names are unique among the active tariffs, so each option is the name alone.
+    expect(labels).toEqual(['Select tariff', 'Standard · default', 'Team']);
   });
 });
