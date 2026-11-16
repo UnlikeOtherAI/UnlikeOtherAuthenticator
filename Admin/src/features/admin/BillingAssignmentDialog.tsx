@@ -13,6 +13,7 @@ import {
 } from '../../schemas/billing';
 import { useOrganisationsQuery, useTeamsQuery } from './admin-queries';
 import { useSaveBillingAssignmentMutation } from './billing-admin-queries';
+import { billingRefusal, billingTariffLabel } from './billing-format';
 
 const defaults: BillingAssignmentFormValues = {
   organisationId: '',
@@ -134,7 +135,7 @@ export function BillingAssignmentDialog({
             <option value="">Select tariff</option>
             {activeTariffs.map((tariff) => (
               <option key={tariff.id} value={tariff.id}>
-                {tariff.name} · {tariff.key} v{tariff.version}
+                {billingTariffLabel(tariff, service.tariffs)}
                 {tariff.is_default ? ' · default' : ''}
               </option>
             ))}
@@ -146,7 +147,7 @@ export function BillingAssignmentDialog({
         </div>
         {save.isError ? (
           <p className="text-sm text-red-600">
-            {save.error instanceof Error ? save.error.message : 'Could not save assignment.'}
+            {billingRefusal(save.error)}
           </p>
         ) : null}
       </form>

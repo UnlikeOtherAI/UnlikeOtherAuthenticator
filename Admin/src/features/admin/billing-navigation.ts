@@ -17,16 +17,22 @@ export function useBillingNavigation() {
   function update(changes: Record<string, string | null>) {
     setParams(new URLSearchParams(href(changes).split('?')[1] ?? ''), { state: location.state });
   }
-  /** Opens a product tab: no record, no table position and no tab-local filter carries over. */
-  function openTab(tab: string) {
+  /** A product tab: no record, no table position and no tab-local filter carries over. */
+  function tabChanges(tab: string): Record<string, string | null> {
     const cleared = Object.fromEntries([...params.keys()]
       .filter((key) => key.endsWith('_page') || tabLocalParams.includes(key))
       .map((key) => [key, null]));
-    update({ ...cleared, tab, record: null });
+    return { ...cleared, tab, record: null };
+  }
+  function tabHref(tab: string) {
+    return href(tabChanges(tab));
+  }
+  function openTab(tab: string) {
+    update(tabChanges(tab));
   }
   /** Opens a top-level billing section with none of another section's selection or paging. */
   function openSection(section: string | null) {
     setParams(new URLSearchParams(section ? { section } : {}), { state: location.state });
   }
-  return { params, href, update, openTab, openSection };
+  return { params, href, update, tabHref, openTab, openSection };
 }

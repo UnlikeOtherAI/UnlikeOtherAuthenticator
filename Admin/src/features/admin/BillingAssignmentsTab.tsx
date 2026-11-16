@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router';
 
 import { Button } from '../../components/ui/Button';
@@ -5,13 +6,12 @@ import { DataTable, PaginationFooter, Td, usePagination } from '../../components
 import type { BillingAssignment, BillingService } from '../../schemas/billing';
 import { useAdminUi } from '../shell/admin-ui';
 import { useRemoveBillingAssignmentMutation } from './billing-admin-queries';
-import { billingActor, billingMonthIsFuture, billingMonthStart } from './billing-format';
+import { billingActor, billingMonthIsFuture, billingMonthStart, billingRefusal } from './billing-format';
 import { useBillingNavigation } from './billing-navigation';
 import { BillingDate } from './BillingDate';
 
 function Starts({ month }: { month: string | null }) {
-  if (!month) return <>—</>;
-  if (billingMonthIsFuture(month)) {
+  if (month && billingMonthIsFuture(month)) {
     return <span className="text-amber-600">{billingMonthStart(month)}</span>;
   }
   return <>In effect</>;
@@ -27,6 +27,7 @@ export function BillingAssignmentsTab({ service }: { service: BillingService }) 
   const { href } = useBillingNavigation();
   const { confirm } = useAdminUi();
   const removeAssignment = useRemoveBillingAssignmentMutation(service.id);
+  const [refusal, setRefusal] = useState<string | null>(null);
   const rows = [...service.assignments].sort(byScope);
   const { pageItems, pagination } = usePagination(rows, 10, { key: 'assignments_page' });
   return (
@@ -89,7 +90,14 @@ export function BillingAssignmentsTab({ service }: { service: BillingService }) 
                       confirm(
                         'Remove tariff assignment?',
                         'The subject falls back to the next applicable tariff next UTC month. Active Stripe subscriptions may block this change.',
-                        () => removeAssignment.mutateAsync(assignment.id),
+                        async () => {
+                          setRefusal(null);
+                          try {
+                            await removeAssignment.mutateAsync(assignment.id);
+                          } catch (error) {
+                            setRefusal(billingRefusal(error));
+                          }
+                        },
                       )
                     }
                   >
@@ -108,6 +116,7 @@ export function BillingAssignmentsTab({ service }: { service: BillingService }) 
           </tr>
         ) : null}
       </DataTable>
+      {refusal ? <p role="alert" className="px-5 py-3 text-sm text-red-600">{refusal}</p> : null}
       <PaginationFooter {...pagination} />
     </>
   );

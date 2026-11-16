@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 
+import { ApiRequestError } from '../services/api-client';
 import { BillingPage } from './BillingPage';
 
 const mocks = vi.hoisted(() => ({
@@ -275,8 +276,10 @@ describe('BillingPage', () => {
     expect(screen.getByText('20.00 GBP per month · usage +20%, pay as you go · card (Stripe)'))
       .toBeTruthy();
     expect(screen.getAllByText('Default')).toHaveLength(1);
-    expect(screen.getByText('1 assignment')).toBeTruthy();
-    expect(screen.getByText('System')).toBeTruthy();
+    expect(screen.getByRole('link', { name: '1 assignment' }).getAttribute('href'))
+      .toBe('/billing?product=service-1&tab=assignments');
+    // Created is the date alone; who created it is in the detail dialog.
+    expect(screen.queryByText('System')).toBeNull();
 
     await user.click(screen.getByRole('button', { name: /App keys/ }));
     expect(screen.getByText('DeepWater production')).toBeTruthy();
@@ -376,9 +379,23 @@ describe('BillingPage', () => {
     expect(screen.getByTestId('location').textContent).toContain('retired=1');
     expect(screen.getByText('Legacy')).toBeTruthy();
     expect(screen.getByText(/^Retired 1 Sept? 2026$/)).toBeTruthy();
+    expect(screen.getByRole('row', { name: /Legacy/ }).textContent).toContain('Nobody');
     await user.click(screen.getByRole('button', { name: 'Restore' }));
     expect(mocks.restoreTariff).toHaveBeenCalledWith('tariff-3');
     expect(mocks.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirms Set default as a routine change and says why a refused change was refused', async () => {
+    const user = userEvent.setup();
+    mocks.setDefault.mockRejectedValueOnce(new ApiRequestError(409, 'STRIPE_TARIFF_PINNED'));
+    render(<BillingPage />);
+    await user.click(screen.getByRole('button', { name: 'Set default' }));
+    expect(mocks.confirm.mock.calls[0]?.[0]).toBe('Make Team v1 the default?');
+    expect(mocks.confirm.mock.calls[0]?.[5]).toBe('primary');
+    await mocks.confirm.mock.calls[0]?.[2]?.();
+    expect(mocks.setDefault).toHaveBeenCalledWith('tariff-2');
+    expect((await screen.findByRole('alert')).textContent)
+      .toBe('An active Stripe subscription keeps the current tariff until it ends.');
   });
 
   it('never offers a retired version for assignment and clears record and paging on tab change', async () => {
@@ -391,7 +408,7 @@ describe('BillingPage', () => {
     await user.click(screen.getByRole('button', { name: 'Assign tariff' }));
     const tariffs = screen.getByRole('combobox', { name: 'Tariff version' });
     const labels = [...tariffs.querySelectorAll('option')].map((option) => option.textContent);
-    expect(labels.some((label) => label?.includes('legacy v4'))).toBe(false);
-    expect(labels.some((label) => label?.includes('team v1'))).toBe(true);
+    // Names are unique among the active tariffs, so each option is the name alone.
+    expect(labels).toEqual(['Select tariff', 'Standard · default', 'Team']);
   });
 });
