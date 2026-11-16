@@ -6,6 +6,7 @@ import { FieldShell, TextAreaField } from '../../components/ui/FormFields';
 import { ApiRequestError } from '../../services/api-client';
 import { billingSmsPolicyService as service } from '../../services/billing-sms-policy-service';
 import type { SmsFxPreview } from '../../schemas/billing-sms-policies';
+import { billingDateTime } from './billing-format';
 
 /** The ECB card: one Refresh and accept, with the reviewed manual flow kept behind a disclosure. */
 export function BillingSmsFxCard({ onAccepted, onReview }: {
@@ -22,7 +23,7 @@ export function BillingSmsFxCard({ onAccepted, onReview }: {
     <Button variant="primary" disabled={accept.isPending} onClick={() => accept.mutate()}>
       {accept.isPending ? 'Accepting...' : 'Refresh and accept'}</Button>
     {accept.data ? <p role="status" className="text-sm text-green-700">Accepted ECB {accept.data.rate_date} · USD/EUR {accept.data.usd_per_eur},
-      valid until {new Date(accept.data.expires_at).toLocaleString()}.</p> : null}
+      valid until {billingDateTime(accept.data.expires_at)}.</p> : null}
     {accept.isError ? <p role="alert" className="text-sm text-red-600">{refusal(code)}</p> : null}
     <details><summary className="cursor-pointer text-sm text-blue-600">Review manually</summary>
       <div className="mt-3 space-y-3">

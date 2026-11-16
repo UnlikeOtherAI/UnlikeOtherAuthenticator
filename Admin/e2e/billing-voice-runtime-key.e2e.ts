@@ -21,13 +21,16 @@ test('operator can inspect and revoke an API-issued Voice runtime key', async ({
   await page.goto('/billing');
   await page.getByRole('link', { name: 'Nessie', exact: true }).click();
   await page.getByRole('button', { name: /App keys/ }).click();
-  await expect(page.getByText('voice runtime', { exact: true })).toBeVisible();
+  await expect(page.getByText('Voice runtime', { exact: true })).toBeVisible();
   await expect(page.getByText('uoa_fixture_voice', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Revoke', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('Voice call admission and settlement access');
   await page.screenshot({ path: test.info().outputPath('voice-runtime-revoke.png'), fullPage: true });
   await page.getByRole('dialog').getByRole('button', { name: 'Revoke Telephone service', exact: true }).click();
+  await expect(page.getByText('This product has no active app key.')).toBeVisible();
+  await page.getByRole('button', { name: 'Revoked (1)', exact: true }).click();
   await expect(page.getByText('Revoked', { exact: true })).toBeVisible();
+  await expect(page.getByText('uoa_fixture_voice', { exact: true })).toBeVisible();
   expect(fixture.unexpected).toEqual([]);
   expect(fixture.errors).toEqual([]);
 });

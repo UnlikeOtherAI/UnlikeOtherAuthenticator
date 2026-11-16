@@ -1,5 +1,6 @@
 import { createLifecycleFixtures } from './lifecycle-fixtures';
 import { createBillingFixtures } from './billing-fixtures';
+import { createBillingServiceFixtures } from './billing-service-fixtures';
 import type { Page } from '@playwright/test';
 import { mockAdminData } from '../src/features/admin/__mocks__/mock-data';
 import type { NativeApp } from '../src/schemas/native-app';
@@ -73,6 +74,7 @@ export async function installFixtures(page: Page) {
     org.teams.map((team) => ({ ...team, orgName: org.name })),
   );
   const billing = createBillingFixtures();
+  const products = createBillingServiceFixtures();
   const creditNoteInvoice = structuredClone(billing.invoice);
   creditNoteInvoice.id = 'invoice-credit-note';
   creditNoteInvoice.invoice_number = 'UOA-2026-000002';
@@ -131,6 +133,8 @@ export async function installFixtures(page: Page) {
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path.startsWith('/lifecycle/')) return lifecycle.handle(route, path);
     if (req.method() !== 'GET') {
+      const tariffWrite = products.handleTariffWrite(req.method(), path);
+      if (tariffWrite) return json(tariffWrite.body, tariffWrite.status);
       if (path === '/billing/paid-usage-exceptions/dispatch-overbound-1/write-off'
         && req.method() === 'POST') {
         const input = req.postDataJSON();
@@ -319,23 +323,8 @@ export async function installFixtures(page: Page) {
       return json([
         { userId: 'u101', email: 'alice@acme.com', name: 'Alice Chen', createdAt: now },
       ]);
-    if (path === '/billing/services')
-      return json([
-        {
-          id: 'billing-1',
-          name: 'Fixture product',
-          identifier: 'fixture',
-          active: true,
-          tariffs: [],
-          assignments: [],
-          app_keys: [],
-          adjustments: [],
-          stripe_catalogs: [],
-          stripe_subscriptions: [],
-          created_at: now,
-          updated_at: now,
-        },
-      ]);
+    if (path === '/billing/services') return json(products.services);
+    if (path === '/billing/ledger-runtime-keys') return json({ keys: products.ledgerKeys });
     if (path === '/billing/services/billing-1/seat-subscriptions')
       return json([seatSubscription]);
     if (path === '/billing/contracts') return json(billing.contracts);
@@ -370,6 +359,7 @@ export async function installFixtures(page: Page) {
     seatCapacityWrites,
     taxPolicies,
     memberships,
+    tariffWrites: products.tariffWrites,
     failNextNativeSave: () => {
       nativeFailures = 1;
     },

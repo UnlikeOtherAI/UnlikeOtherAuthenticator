@@ -50,7 +50,7 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
       onClose={onClose}
       isPending={create.isPending}
       isDirty={form.formState.isDirty}
-      title="Add billing service"
+      title="Add product"
       widthClassName="max-w-2xl"
       footer={
         <>
@@ -60,7 +60,7 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
             disabled={create.isPending}
             onClick={form.handleSubmit(submit)}
           >
-            {create.isPending ? 'Creating...' : 'Create service'}
+            {create.isPending ? 'Creating...' : 'Create product'}
           </Button>
         </>
       }
@@ -86,7 +86,7 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
           <p className="text-sm font-semibold text-gray-900">Initial immutable tariff</p>
           <p className="mt-1 text-xs text-gray-500">
-            This becomes version 1 and the service default. New terms are added as later versions.
+            This becomes version 1 and the product default. New terms are added as later versions.
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <FieldShell label="Tariff key" error={form.formState.errors.key?.message}>
@@ -178,7 +178,7 @@ export function BillingServiceDialog({ onClose, open }: { onClose: () => void; o
         </div>
         {create.isError ? (
           <p className="text-sm text-red-600">
-            {create.error instanceof Error ? create.error.message : 'Could not create service.'}
+            {create.error instanceof Error ? create.error.message : 'Could not create product.'}
           </p>
         ) : null}
       </form>

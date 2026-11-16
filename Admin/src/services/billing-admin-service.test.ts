@@ -171,4 +171,20 @@ describe('billingAdminService', () => {
       },
     );
   });
+
+  it('retires and restores one exact tariff version and parses the returned version', async () => {
+    const retired = { ...tariff, usage_currency: 'GBP', is_default: false,
+      retired_at: '2026-11-16T10:00:00.000Z', retire_blocked_by: [] };
+    api.post.mockResolvedValueOnce(retired).mockResolvedValueOnce({ ...retired, retired_at: null });
+
+    await expect(billingAdminService.retireTariff('service 1', 'tariff/1')).resolves
+      .toMatchObject({ retired_at: '2026-11-16T10:00:00.000Z' });
+    await expect(billingAdminService.restoreTariff('service 1', 'tariff/1')).resolves
+      .toMatchObject({ retired_at: null });
+
+    expect(api.post).toHaveBeenNthCalledWith(1,
+      '/internal/admin/billing/services/service%201/tariffs/tariff%2F1/retire', {});
+    expect(api.post).toHaveBeenNthCalledWith(2,
+      '/internal/admin/billing/services/service%201/tariffs/tariff%2F1/restore', {});
+  });
 });
