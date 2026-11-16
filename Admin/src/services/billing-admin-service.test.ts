@@ -24,6 +24,7 @@ const tariff = {
   markup_bps: 2000,
   markup_percent: '20.00',
   usage_payment_mode: 'prepaid',
+  usage_currency: 'GBP',
   monthly_subscription: {
     amount_minor: '2000', currency: 'GBP', charge_basis: 'per_seat',
     seat_policy: 'automatic', seat_charge_timing: 'prorated',
@@ -63,6 +64,7 @@ describe('billingAdminService', () => {
       collection_mode: 'stripe',
       markup_percent: '20.00',
       usage_payment_mode: 'prepaid',
+      usage_currency: 'GBP',
       monthly_subscription: {
         amount_minor: '2000', currency: 'GBP', charge_basis: 'per_seat',
         seat_policy: 'automatic', seat_charge_timing: 'prorated',
@@ -173,7 +175,7 @@ describe('billingAdminService', () => {
   });
 
   it('retires and restores one exact tariff version and parses the returned version', async () => {
-    const retired = { ...tariff, usage_currency: 'GBP', is_default: false,
+    const retired = { ...tariff, is_default: false,
       retired_at: '2026-11-16T10:00:00.000Z', retire_blocked_by: [] };
     api.post.mockResolvedValueOnce(retired).mockResolvedValueOnce({ ...retired, retired_at: null });
 
