@@ -28,6 +28,8 @@ import {
   nextUtcBillingMonth,
   utcBillingMonth,
 } from './billing-tariff-history.service.js';
+import { assertTariffNotRetired, tariffRetireBlockers } from './billing-tariff-retirement.service.js';
+import { assignmentEffectiveFromMonths } from './billing-tariff-read.service.js';
 
 type MutationActor = {
   userId?: string | null;
@@ -36,6 +38,13 @@ type MutationActor = {
 
 function client(deps?: { prisma?: PrismaClient }): PrismaClient {
   return deps?.prisma ?? getAdminPrisma();
+}
+
+/** Every tariff a mutation returns carries the same retire blockers as the read model. */
+async function describeTariff<T extends { id: string; isDefault: boolean }>(
+  tx: Prisma.TransactionClient, tariff: T,
+): Promise<T & { retireBlockedBy: string[] }> {
+  return { ...tariff, retireBlockedBy: (await tariffRetireBlockers(tx, [tariff])).get(tariff.id) ?? [] };
 }
 
 function auditActor(actor: MutationActor) {
@@ -105,7 +114,7 @@ export async function createBillingService(
           },
         },
       });
-      return { ...service, tariffs: [createdTariff] };
+      return { ...service, tariffs: [await describeTariff(tx, createdTariff)] };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
@@ -187,7 +196,7 @@ export async function createBillingTariffVersion(
               },
             },
           });
-          return created;
+          return describeTariff(tx, created);
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
@@ -215,10 +224,11 @@ export async function setDefaultBillingTariff(
             where: { id: params.tariffId, serviceId: params.serviceId },
           });
           if (!tariff) throw new AppError('NOT_FOUND', 404, 'BILLING_TARIFF_NOT_FOUND');
+          assertTariffNotRetired(tariff);
           const service = await tx.billingService.findUniqueOrThrow({ where: { id: params.serviceId },
             select: { identifier: true } });
           assertNessieDefaultTariff(service.identifier, tariff);
-          if (tariff.isDefault) return tariff;
+          if (tariff.isDefault) return describeTariff(tx, tariff);
           await lockTariffHistoryService(tx, params.serviceId);
           await assertDefaultTariffChangeAllowed(tx, params.serviceId, tariff.id);
           await tx.billingTariff.updateMany({
@@ -245,7 +255,7 @@ export async function setDefaultBillingTariff(
               metadata: { service_id: params.serviceId, tariff_id: tariff.id },
             },
           });
-          return updated;
+          return describeTariff(tx, updated);
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
@@ -275,7 +285,7 @@ export async function upsertBillingTariffAssignment(
       }),
       tx.billingTariff.findFirst({
         where: { id: params.tariffId, serviceId: params.serviceId },
-        select: { id: true },
+        select: { id: true, retiredAt: true },
       }),
       tx.organisation.findUnique({
         where: { id: params.organisationId },
@@ -291,6 +301,7 @@ export async function upsertBillingTariffAssignment(
     if (!service?.active || !tariff || !org || (params.teamId && !team)) {
       throw new AppError('BAD_REQUEST', 400, 'INVALID_TARIFF_ASSIGNMENT');
     }
+    assertTariffNotRetired(tariff);
     await assertContractAssignmentWriteAllowed(tx, {
       serviceId: params.serviceId,
       organisationId: params.organisationId,
@@ -370,7 +381,9 @@ export async function upsertBillingTariffAssignment(
         },
       },
     });
-    return assignment;
+    const effectiveFrom = await assignmentEffectiveFromMonths(tx, [assignment.id]);
+    return { ...assignment, tariff: await describeTariff(tx, assignment.tariff),
+      effectiveFromMonth: effectiveFrom.get(assignment.id) ?? null };
   });
 }
 

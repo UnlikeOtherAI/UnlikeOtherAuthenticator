@@ -21,7 +21,11 @@ describe('operator tariff response', () => {
       isDefault: false,
       createdByEmail: 'admin@example.com',
       createdAt: new Date('2026-10-04T00:00:00.000Z'),
+      retiredAt: new Date('2026-11-16T10:00:00.000Z'),
+      retireBlockedBy: [],
     });
+    expect(serialized.retired_at).toBe('2026-11-16T10:00:00.000Z');
+    expect(serialized.retire_blocked_by).toEqual([]);
     expect(serialized.markup_percent).toBe('30.01');
     expect(serialized.usage_payment_mode).toBe('prepaid');
     expect(serialized.monthly_subscription).toEqual({

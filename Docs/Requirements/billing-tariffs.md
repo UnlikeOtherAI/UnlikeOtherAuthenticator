@@ -677,6 +677,8 @@ slice.
 | `POST /internal/admin/billing/services`                                        | Create a service and its initial default tariff                                                                          |
 | `POST /internal/admin/billing/services/:serviceId/tariffs`                     | Append a tariff version; optionally make it default                                                                      |
 | `PUT /internal/admin/billing/services/:serviceId/default-tariff`               | Move the service default pointer                                                                                         |
+| `POST /internal/admin/billing/services/:serviceId/tariffs/:tariffId/retire`     | Retire a tariff version (soft delete); refused while it is in use                                                        |
+| `POST /internal/admin/billing/services/:serviceId/tariffs/:tariffId/restore`    | Make a retired tariff version available again                                                                            |
 | `PUT /internal/admin/billing/services/:serviceId/assignments`                  | Upsert an organisation or team assignment                                                                                |
 | `DELETE /internal/admin/billing/services/:serviceId/assignments/:assignmentId` | Remove an override and fall back through precedence                                                                      |
 | `GET /internal/admin/billing/services/:serviceId/app-keys`                     | List credential metadata, never plaintext secrets                                                                        |
@@ -694,6 +696,50 @@ purpose-bound app keys, Stripe catalog readiness, and test/live subscription
 state. It can create services with a safe `at_cost + none` default, append
 versions, move defaults, assign org/team tariffs, and mint/revoke keys. A new
 key's plaintext appears once in a non-recoverable reveal dialog.
+
+### Retired tariff versions (16 November 2026)
+
+Tariff versions stay immutable and are never deleted. Retirement is a soft delete stored in
+`billing_tariffs.retired_at` and `retired_by_email`, both null for an active version. Neither is a
+commercial term, so `uoa_enforce_billing_tariff_immutability` lets an update of only those two
+columns through while still refusing every term change and every delete. A check
+(`billing_tariffs_default_not_retired`) keeps the default from ever being retired; a second
+(`billing_tariffs_retirement_actor`) keeps the two columns set together.
+
+Retire and restore are idempotent, run in one serializable transaction that takes
+`lockTariffHistoryService` first, answer `404 BILLING_TARIFF_NOT_FOUND` for a tariff outside the
+service, and write `billing.tariff_version_retired` / `billing.tariff_version_restored` audit rows
+with `service_id`, `tariff_id`, `tariff_key`, `tariff_version` and `tariff_name`.
+
+A version cannot be retired while somebody is on it (`409 BILLING_TARIFF_IN_USE`). One function,
+`tariffRetireBlockers` in `billing-tariff-retirement.service.ts`, computes the blockers for the
+retire call and for every serialised tariff (`retire_blocked_by`), in this order:
+
+| Value | Means |
+| --- | --- |
+| `default` | It is the product's default tariff. |
+| `assignments` | An organisation or team is assigned to it. |
+| `subscriptions` | A Stripe subscription whose status is not `canceled`/`incomplete_expired`, or a seat subscription without `ended_at`, names it. |
+| `contract_terms` | A service term of a contract that is not `TERMINATED` names it. |
+
+History never blocks: term events, settlements, reservations, ended subscriptions and terminated
+contracts keep pointing at a retired version, and `resolveBillingTariffForMonth` still resolves it
+for every month whose terms name it.
+
+A retired version is refused or skipped for new business:
+
+- `setDefaultBillingTariff`, `upsertBillingTariffAssignment` and Stripe Checkout creation answer
+  `409 BILLING_TARIFF_RETIRED`;
+- the Nessie regional `standard-<currency>` lookups skip it: `resolveCurrentBillingTariff`,
+  new-organisation region onboarding (`409 NESSIE_REGIONAL_SEAT_TERMS_INVALID` when every regional
+  version is retired), the seat-catalog provisioning CLI, and the SQL fallback in
+  `billing_nessie_paid_seat_scope` (replaced by `20261116120000_billing_tariff_retirement`);
+- contract service terms always point at a version the activation creates for that contract, and a
+  non-terminated contract's terms block retirement, so they never name a retired version.
+
+A new version of a key is numbered after the highest existing version, retired or not. Every
+serialised assignment also carries `effective_from_month` (`YYYY-MM`): the month of the newest term
+event (highest `sequence`) whose `assignment_id` is that assignment.
 
 ## Stripe collection foundation
 

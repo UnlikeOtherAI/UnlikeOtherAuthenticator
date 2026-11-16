@@ -48,8 +48,8 @@ import {
   assertStripeObjectLivemode,
   resolveStripeAccountContext,
 } from './billing-stripe-client.service.js';
-
 import { normalizeStripeReturnUrl } from './billing-stripe-return-url.service.js';
+import { assertTariffNotRetired } from './billing-tariff-retirement.service.js';
 
 type CheckoutRequest = {
   billingContext?: string;
@@ -194,9 +194,7 @@ export async function createStripeCheckoutSession(
             select: { teamRole: true, status: true },
           })
         : null,
-      tx.billingTariff.findFirst({
-        where: { id: payload.tariff.id, serviceId: params.credential.service.id },
-      }),
+      tx.billingTariff.findFirst({ where: { id: payload.tariff.id, serviceId: params.credential.service.id } }),
       tx.billingStripeSubscription.findFirst({
         where: overlappingSubscriptionScope(
           account.id,
@@ -234,6 +232,7 @@ export async function createStripeCheckoutSession(
   ) {
     throw new AppError('INTERNAL', 500, 'STRIPE_TARIFF_MISMATCH');
   }
+  assertTariffNotRetired(details.tariff);
   const fixedSeatQuantity = params.request.fixedSeatQuantity ?? null;
   const fixedSeats = details.tariff.monthlyChargeBasis === BillingMonthlyChargeBasis.PER_SEAT &&
     details.tariff.seatPolicy === BillingSeatPolicy.FIXED;

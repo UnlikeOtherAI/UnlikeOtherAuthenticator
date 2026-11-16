@@ -6305,6 +6305,64 @@ paths:
         '403':
           description: Caller is not a platform superuser.
 
+  /internal/admin/billing/services/{serviceId}/tariffs/{tariffId}/retire:
+    post:
+      tags: [Billing, Internal Admin]
+      summary: Retire a billing tariff version (soft delete)
+      operationId: adminRetireBillingTariff
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tariffId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Retired tariff with retired_at and retire_blocked_by; idempotent.
+        '401':
+          description: Missing or invalid admin token.
+        '403':
+          description: Caller is not a platform superuser.
+        '404':
+          description: BILLING_TARIFF_NOT_FOUND; the tariff is not in that service.
+        '409':
+          description: BILLING_TARIFF_IN_USE; retire_blocked_by names default, assignments, subscriptions or contract_terms.
+
+  /internal/admin/billing/services/{serviceId}/tariffs/{tariffId}/restore:
+    post:
+      tags: [Billing, Internal Admin]
+      summary: Restore a retired billing tariff version
+      operationId: adminRestoreBillingTariff
+      security:
+        - adminBearer: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tariffId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Restored tariff; idempotent.
+        '401':
+          description: Missing or invalid admin token.
+        '403':
+          description: Caller is not a platform superuser.
+        '404':
+          description: BILLING_TARIFF_NOT_FOUND; the tariff is not in that service.
+
   /internal/admin/billing/services/{serviceId}/default-tariff:
     put:
       tags: [Billing, Internal Admin]
@@ -6333,7 +6391,7 @@ paths:
         '200':
           description: New default tariff.
         '409':
-          description: A live Stripe projection pins conflicting tariff terms.
+          description: A live Stripe projection pins conflicting tariff terms, or BILLING_TARIFF_RETIRED.
 
   /internal/admin/billing/services/{serviceId}/assignments:
     put:
@@ -6366,9 +6424,9 @@ paths:
                   nullable: true
       responses:
         '200':
-          description: Exact immutable assignment.
+          description: Exact immutable assignment, with effective_from_month.
         '409':
-          description: A live Stripe projection pins conflicting tariff terms.
+          description: A live Stripe projection pins conflicting tariff terms, or BILLING_TARIFF_RETIRED.
 
   /internal/admin/billing/services/{serviceId}/assignments/{assignmentId}:
     delete:

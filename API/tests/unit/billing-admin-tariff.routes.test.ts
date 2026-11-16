@@ -50,6 +50,7 @@ describe('admin tariff write contract', () => {
       seatChargeTiming: 'PRORATED', usagePaymentMode: 'PREPAID',
       isDefault: false, createdByEmail: 'admin@example.com',
       createdAt: new Date('2026-10-04T00:00:00.000Z'),
+      retiredAt: null, retireBlockedBy: [],
     });
     const app = await createApp();
     try {
@@ -82,6 +83,7 @@ describe('admin tariff write contract', () => {
         }),
       );
       expect(response.json().monthly_subscription.seat_policy).toBe('fixed');
+      expect(response.json()).toMatchObject({ retired_at: null, retire_blocked_by: [] });
       for (const invalid of [
         { ...payload, markup_bps: 3001 },
         { ...payload, markup_percent: '30.001' },
