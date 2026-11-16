@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BillingAssignment, BillingService, BillingTariff } from '../../schemas/billing';
-import { ApiRequestError } from '../../services/api-client';
 import {
   billingActiveProducts,
   billingAssignableTariffs,
@@ -10,7 +9,6 @@ import {
   billingOrganisationListRows,
   billingOrganisationTariffRows,
   billingTariffChange,
-  billingTariffRefusal,
 } from './billing-organisation-tariffs';
 
 const now = new Date('2026-11-16T12:00:00.000Z');
@@ -84,9 +82,9 @@ describe('billingOrganisationListRows', () => {
     ]);
   });
 
-  it('describes one product: the full tariff name, its default and each team', () => {
+  it('describes one product: the tariff, its default and each team', () => {
     expect(rows({ productId: 'nessie' })).toEqual([
-      expect.objectContaining({ id: 'o1', tariffLines: ['Free · free v1'], teamLines: ['Hugo: Standard'] }),
+      expect.objectContaining({ id: 'o1', tariffLines: ['Free'], teamLines: ['Hugo: Standard'] }),
       expect.objectContaining({ id: 'o2', tariffLines: [], tariffFallback: 'Product default — Standard',
         teamLines: [] }),
     ]);
@@ -115,7 +113,7 @@ describe('the organisation view', () => {
   it('labels the fallback through the organisation, else the product default', () => {
     const { organisationRow, teamRows } = billingOrganisationTariffRows(nessie, acme, teams);
     expect(organisationRow.options.map((option) => option.label)).toEqual([
-      'Product default — Standard', 'Free · free v1', 'Standard · standard v1',
+      'Product default — Standard', 'Free', 'Standard',
     ]);
     expect(organisationRow.savedValue).toBe('free');
     expect(teamRows.map((row) => [row.name, row.savedValue, row.options[0]?.label])).toEqual([
@@ -167,10 +165,21 @@ describe('billingTariffChange', () => {
   });
 });
 
-describe('billingTariffRefusal', () => {
-  it('shows what the server said', () => {
-    expect(billingTariffRefusal(new ApiRequestError(409, 'BILLING_TARIFF_RETIRED')))
-      .toBe('The change was refused: BILLING_TARIFF_RETIRED.');
-    expect(billingTariffRefusal(new ApiRequestError(503))).toBe('The change was refused (HTTP 503).');
+describe('two active tariffs with one name', () => {
+  const standardV2 = tariff('standard-2', 'Standard', { key: 'standard', version: 2 });
+  const twins = service('nessie', 'Nessie', [standard, standardV2, free], [
+    assignment('a1', standardV2, acme),
+  ]);
+
+  it('tells them apart by key and version wherever the organisation picks or sees one', () => {
+    const { organisationRow, teamRows } = billingOrganisationTariffRows(twins, acme, teams);
+    expect(organisationRow.options.map((option) => option.label)).toEqual([
+      'Product default — Standard · standard v1', 'Free', 'Standard · standard v2', 'Standard · standard v1',
+    ]);
+    expect(teamRows[0]?.options[0]?.label).toBe('Same as organisation — Standard · standard v2');
+    expect(billingOrganisationListRows({ organisations, teams, services: [twins], productId: 'nessie',
+      query: '', customOnly: false })[0]?.tariffLines).toEqual(['Standard · standard v2']);
+    expect(billingTariffChange(twins, organisationRow, 'standard', now)?.title)
+      .toBe('Move Acme to Standard · standard v1?');
   });
 });

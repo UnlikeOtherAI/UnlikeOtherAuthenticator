@@ -1,9 +1,8 @@
 import type { BillingAssignment, BillingService, BillingTariff } from '../../schemas/billing';
-import { ApiRequestError } from '../../services/api-client';
 import {
   billingMonthIsFuture,
   billingMonthStart,
-  billingTariffName,
+  billingTariffLabel,
   nextBillingMonth,
 } from './billing-format';
 
@@ -38,6 +37,11 @@ function organisationAssignment(service: BillingService, organisationId: string)
 function teamAssignments(service: BillingService, organisationId: string) {
   return service.assignments.filter((assignment) =>
     assignment.scope === 'team' && assignment.organisation.id === organisationId && assignment.team);
+}
+
+/** The short tariff label within its product (see `billingTariffLabel`); "—" when there is none. */
+function label(tariff: BillingTariff | null, service: BillingService): string {
+  return tariff ? billingTariffLabel(tariff, service.tariffs) : '—';
 }
 
 function plural(count: number, word: string): string {
@@ -86,11 +90,11 @@ export function billingOrganisationListRows(input: {
         const own = organisationAssignment(product, organisation.id);
         return {
           ...base,
-          tariffLines: own ? [billingTariffName(own.tariff)] : [],
-          tariffFallback: `Product default — ${billingDefaultTariff(product)?.name ?? '—'}`,
+          tariffLines: own ? [label(own.tariff, product)] : [],
+          tariffFallback: `Product default — ${label(billingDefaultTariff(product), product)}`,
           teamLines: teamAssignments(product, organisation.id)
             .sort((a, b) => (a.team?.name ?? '').localeCompare(b.team?.name ?? ''))
-            .map((assignment) => `${assignment.team?.name}: ${assignment.tariff.name}`),
+            .map((assignment) => `${assignment.team?.name}: ${label(assignment.tariff, product)}`),
         };
       }
       const customTeams = new Set(products.flatMap((service) =>
@@ -99,7 +103,7 @@ export function billingOrganisationListRows(input: {
         ...base,
         tariffLines: products.flatMap((service) => {
           const own = organisationAssignment(service, organisation.id);
-          return own ? [`${service.name}: ${own.tariff.name}`] : [];
+          return own ? [`${service.name}: ${label(own.tariff, service)}`] : [];
         }),
         tariffFallback: 'Product defaults',
         teamLines: customTeams.size ? [plural(customTeams.size, 'team')] : [],
@@ -137,7 +141,7 @@ export function billingOrganisationTariffRows(
   const own = organisationAssignment(service, organisation.id);
   const organisationResolves = own?.tariff ?? productDefault;
   const tariffOptions = billingAssignableTariffs(service)
-    .map((tariff) => ({ value: tariff.id, label: billingTariffName(tariff) }));
+    .map((tariff) => ({ value: tariff.id, label: label(tariff, service) }));
   const teamOwn = teamAssignments(service, organisation.id);
   return {
     organisationRow: {
@@ -149,7 +153,7 @@ export function billingOrganisationTariffRows(
       savedValue: own?.tariff_id ?? '',
       fallback: productDefault,
       options: [
-        { value: '', label: `Product default — ${productDefault?.name ?? '—'}` },
+        { value: '', label: `Product default — ${label(productDefault, service)}` },
         ...tariffOptions,
       ],
     },
@@ -167,7 +171,7 @@ export function billingOrganisationTariffRows(
           savedValue: assignment?.tariff_id ?? '',
           fallback: organisationResolves,
           options: [
-            { value: '', label: `Same as organisation — ${organisationResolves?.name ?? '—'}` },
+            { value: '', label: `Same as organisation — ${label(organisationResolves, service)}` },
             ...tariffOptions,
           ],
         };
@@ -203,24 +207,17 @@ export function billingTariffChange(
       kind: 'remove',
       assignmentId: row.assignment.id,
       title: `Remove ${row.name}'s own tariff?`,
-      body: `From ${starts} (UTC) ${row.name} uses ${row.fallback?.name ?? 'no tariff'}.`,
+      body: `From ${starts} (UTC) ${row.name} uses ${row.fallback ? label(row.fallback, service) : 'no tariff'}.`,
     };
   }
   const tariff = service.tariffs.find((entry) => entry.id === value);
   if (!tariff) return null;
+  const name = label(tariff, service);
   return {
     kind: 'save',
     tariffId: tariff.id,
-    title: `Move ${row.name} to ${tariff.name}?`,
-    body: `${row.name} uses ${tariff.name} for ${service.name} from ${starts} (UTC). This month keeps its current terms.${
+    title: `Move ${row.name} to ${name}?`,
+    body: `${row.name} uses ${name} for ${service.name} from ${starts} (UTC). This month keeps its current terms.${
       row.teamId === null ? ' Teams with their own tariff are not affected.' : ''}`,
   };
-}
-
-/** The server's refusal, shown under the select. */
-export function billingTariffRefusal(error: unknown): string {
-  if (error instanceof ApiRequestError) {
-    return error.code ? `The change was refused: ${error.code}.` : `The change was refused (HTTP ${error.status}).`;
-  }
-  return error instanceof Error ? error.message : 'The change could not be saved.';
 }

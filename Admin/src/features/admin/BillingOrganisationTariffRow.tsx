@@ -75,7 +75,7 @@ export function BillingOrganisationTariffRow({
         {error ? <p className="mt-1 text-xs text-red-600" role="alert">{error}</p> : null}
       </Td>
       <Td className="min-w-56">{selected ? billingTariffSummary(selected) : '—'}</Td>
-      <Td className="whitespace-nowrap">
+      <Td className="hidden whitespace-nowrap md:table-cell">
         {row.assignment ? (
           <>
             <span title={billingDateTime(row.assignment.updated_at)}>
@@ -87,7 +87,7 @@ export function BillingOrganisationTariffRow({
           </>
         ) : '—'}
       </Td>
-      <Td className="whitespace-nowrap">
+      <Td className="w-48 min-w-48 whitespace-nowrap">
         {changed ? (
           <div className="flex gap-2">
             <Button disabled={pending} size="sm" variant="primary" onClick={onSave}>

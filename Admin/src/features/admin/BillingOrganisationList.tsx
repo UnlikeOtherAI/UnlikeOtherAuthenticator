@@ -30,7 +30,7 @@ export function BillingOrganisationList({
     organisations, teams, services: products, productId: product?.id ?? null, query, customOnly,
   }), [customOnly, organisations, product, products, query, teams]);
   const { pageItems, pagination } = usePagination(rows, 10, { key: 'organisations_page' });
-  const headers = ['Organisation', 'Teams', product ? 'Tariff' : 'Organisation tariff', 'Team tariffs'];
+  const headers = ['Organisation', 'Teams', 'Organisation tariff', 'Team tariffs'];
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 p-4">

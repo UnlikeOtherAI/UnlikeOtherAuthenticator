@@ -75,7 +75,7 @@ describe('BillingOrganisationView', () => {
   it('offers active tariffs only, with the fallback named through the organisation', () => {
     renderView();
     expect([...select('Tariff for Zeta').options].map((option) => option.text)).toEqual([
-      'Same as organisation — Standard', 'Free · free v1', 'Standard · standard v1',
+      'Same as organisation — Standard', 'Free', 'Standard',
     ]);
     expect(select('Tariff for the entire organisation').options[0]?.text).toBe('Product default — Standard');
     expect(screen.getByRole('button', { name: /Nessie/ }).textContent).toContain('1');
@@ -90,13 +90,17 @@ describe('BillingOrganisationView', () => {
     expect(select('Tariff for Hugo').disabled).toBe(true);
     expect(select('Tariff for the entire organisation').disabled).toBe(true);
 
-    mutations.save.mockRejectedValueOnce(new ApiRequestError(409, 'BILLING_TARIFF_RETIRED'));
+    mutations.save.mockRejectedValueOnce(new ApiRequestError(409, 'STRIPE_TARIFF_PINNED'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
     const dialog = screen.getByRole('dialog', { name: 'Move Zeta to Standard?' });
     expect(dialog.textContent).toContain('This month keeps its current terms.');
-    await user.click(within(dialog).getByRole('button', { name: 'Move Zeta to Standard' }));
-    expect(await screen.findByText('The change was refused: BILLING_TARIFF_RETIRED.')).toBeTruthy();
-    expect(screen.getByRole('alert').textContent).toBe('The change was refused: BILLING_TARIFF_RETIRED.');
+    // A routine move is confirmed with the primary button, never the destructive one.
+    const move = within(dialog).getByRole('button', { name: 'Move Zeta to Standard' });
+    expect(move.className).toContain('bg-indigo');
+    await user.click(move);
+    const refusal = 'An active Stripe subscription keeps the current tariff until it ends.';
+    expect(await screen.findByText(refusal)).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toBe(refusal);
     expect(select('Tariff for Zeta').value).toBe('standard');
 
     mutations.save.mockResolvedValueOnce(undefined);
@@ -127,7 +131,9 @@ describe('BillingOrganisationView', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
     const dialog = screen.getByRole('dialog', { name: "Remove Hugo's own tariff?" });
     expect(dialog.textContent).toContain('(UTC) Hugo uses Standard.');
-    await user.click(within(dialog).getByRole('button', { name: "Remove Hugo's own tariff" }));
+    const removeButton = within(dialog).getByRole('button', { name: "Remove Hugo's own tariff" });
+    expect(removeButton.className).toContain('bg-red');
+    await user.click(removeButton);
     await waitFor(() => expect(mutations.remove).toHaveBeenCalledWith('a-hugo'));
     expect(mutations.save).not.toHaveBeenCalled();
   });

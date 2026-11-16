@@ -7,14 +7,13 @@ import { UnderlineTabs } from '../../components/ui/Tabs';
 import type { BillingService } from '../../schemas/billing';
 import { useAdminUi } from '../shell/admin-ui';
 import { useRemoveBillingAssignmentMutation, useSaveBillingAssignmentMutation } from './billing-admin-queries';
-import { billingTariffName } from './billing-format';
+import { billingRefusal, billingTariffName } from './billing-format';
 import { useBillingNavigation } from './billing-navigation';
 import {
   billingDefaultTariff,
   billingOrganisationAssignmentCount,
   billingOrganisationTariffRows,
   billingTariffChange,
-  billingTariffRefusal,
   type BillingTariffRowModel,
 } from './billing-organisation-tariffs';
 import { BillingOrganisationTariffRow } from './BillingOrganisationTariffRow';
@@ -136,11 +135,11 @@ function OrganisationProductTariffs({
         setDraft(null);
       } catch (error) {
         // The selection stays so the operator can see what was refused and retry or cancel.
-        setErrors((current) => ({ ...current, [row.key]: billingTariffRefusal(error) }));
+        setErrors((current) => ({ ...current, [row.key]: billingRefusal(error) }));
       } finally {
         setPendingKey(null);
       }
-    });
+    }, undefined, undefined, pendingChange.kind === 'save' ? 'primary' : 'danger');
   }
 
   function renderRow(row: BillingTariffRowModel) {
@@ -172,7 +171,8 @@ function OrganisationProductTariffs({
         overrides its organisation&apos;s, which overrides the product default. A change starts on the
         1st of next month (UTC).
       </p>
-      <DataTable headers={['Applies to', 'Tariff', 'What they pay', 'Changed', '']}>
+      <DataTable headers={['Applies to', 'Tariff', 'What they pay',
+        { label: 'Changed', className: 'hidden md:table-cell' }, { label: '', className: 'w-48' }]}>
         {renderRow(organisationRow)}
         {pageItems.map(renderRow)}
       </DataTable>

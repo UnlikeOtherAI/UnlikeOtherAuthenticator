@@ -90,7 +90,7 @@ export async function installOrganisationBillingFixtures(page: Page) {
       writes.push({ method: 'PUT', path, body });
       if (refuseNextSave) {
         refuseNextSave = false;
-        return json(route, { error: 'Request failed', code: 'BILLING_TARIFF_RETIRED' }, 409);
+        return json(route, { error: 'Request failed', code: 'STRIPE_TARIFF_PINNED' }, 409);
       }
       const assigned = target.tariffs.find((entry) => entry.id === body.tariff_id);
       const directory = mockAdminData.organisations.find((entry) => entry.id === body.organisation_id);
