@@ -86,6 +86,28 @@ load products". The "Add product" button shows only on the product list.
 
 Retired tariffs never appear in a control that picks a tariff.
 
+Where a tariff is picked or listed for an organisation (the Organisations section and the "Assign
+tariff" dialog), it is named by `billingTariffLabel`: its name alone, or "{name} · {key}
+v{version}" when another active tariff of the same product has that name. The product Tariffs and
+Assignments tables keep the name with `key vN` below it.
+
+A refused tariff or assignment change (in the Organisations rows, and on retire, restore, set
+default, assign and remove in the product view) is shown in plain words by `billingRefusal`:
+
+| Code | Shown |
+| --- | --- |
+| `BILLING_TARIFF_RETIRED` | This tariff is retired. Pick another one. |
+| `BILLING_TARIFF_IN_USE` | Somebody is still on this tariff. Move them first. |
+| `STRIPE_TARIFF_PINNED` | An active Stripe subscription keeps the current tariff until it ends. |
+| `BILLING_CONTRACT_ASSIGNMENT_LOCKED` | A contract sets this tariff. Change the contract instead. |
+| `INVALID_TARIFF_ASSIGNMENT` | This tariff cannot be assigned here. |
+| any other code | The change was refused ({code}). |
+| no code | The change was refused (HTTP {status}). |
+
+A routine confirmation (saving an organisation or team tariff, "Set default") uses the primary
+button; removing an assignment and retiring keep the destructive one. `confirm()` takes the tone
+as an optional last argument, destructive by default.
+
 ## 4. Admin: Organisations section
 
 ### 4.1 List (`?section=organisations`)
@@ -102,16 +124,17 @@ Table, sorted by name. With **All products**:
 | --- | --- |
 | Organisation | Name, a link to `?section=organisations&organisation=<id>`. Slug below in grey. |
 | Teams | Number of teams. |
-| Organisation tariff | One line per product where the organisation itself is assigned: "Nessie: Free". None: "Product defaults" in grey. |
+| Organisation tariff | One line per product where the organisation itself is assigned: "Nessie: Free" (the tariff label, §3). None: "Product defaults" in grey. |
 | Team tariffs | "2 teams" when teams have their own assignment, otherwise "—". |
 
-With one product selected, the two tariff columns describe that product only:
+With one product selected, the two tariff columns describe that product only; the column keeps
+the heading "Organisation tariff":
 
 | Column | Content |
 | --- | --- |
 | Organisation | As above; the link also carries `product=<service id>`. |
 | Teams | Number of teams. |
-| Tariff | The organisation's own tariff for the product, "{name} · {key} v{version}". Without one: "Product default — {default name}" in grey. |
+| Organisation tariff | The organisation's own tariff for the product, by its label (§3). Without one: "Product default — {default label}" in grey. |
 | Team tariffs | One line per team with its own tariff: "Hugo: Free". None: "—". |
 
 "With custom tariffs" keeps the organisations that hold any assignment, in the selected product
@@ -139,20 +162,24 @@ browser. No new endpoint.
 | Column | Content |
 | --- | --- |
 | Applies to | First row: **Entire organisation**, below it "Every team without its own tariff". Then one row per team, sorted by name: team name linking to the team's directory page, below it "{n} members". |
-| Tariff | A select. Organisation row: "Product default — {default name}" then every active tariff of the product as "{name} · {key} v{version}". Team row: "Same as organisation — {name of what the organisation resolves to}" then every active tariff. When the saved assignment has `effective_from_month` later than the current UTC month, amber text below: "Starts 1 December 2026". |
+| Tariff | A select with a minimum width, so its text is never cut off on a phone. Organisation row: "Product default — {default label}" then every active tariff of the product by its label (§3). Team row: "Same as organisation — {label of what the organisation resolves to}" then every active tariff. When the saved assignment has `effective_from_month` later than the current UTC month, amber text below: "Starts 1 December 2026". |
 | What they pay | A plain summary of the selected tariff (§4.3). |
-| Changed | Date and who, when an assignment exists; otherwise "—". |
-| (actions) | Empty until the select differs from the saved value, then **Save** (primary, small) and **Cancel**. |
+| Changed | Date and who, when an assignment exists; otherwise "—". Hidden below the `md` breakpoint. |
+| (actions) | Empty header and a fixed width that fits Save and Cancel from the start, so nothing moves when they appear. Empty until the select differs from the saved value, then **Save** (primary, small) and **Cancel**. |
 
-- **Save** asks for confirmation, then calls the existing assignment endpoint.
-  - Title: "Move {team or organisation} to {tariff name}?"
-  - Body: "{Team} uses {tariff name} for {product} from {1 December 2026} (UTC). This month
+The table scrolls inside its card, as the other admin tables do.
+
+- **Save** asks for confirmation (primary button), then calls the existing assignment endpoint.
+  - Title: "Move {team or organisation} to {tariff label}?"
+  - Body: "{Team} uses {tariff label} for {product} from {1 December 2026} (UTC). This month
     keeps its current terms." For the organisation row add: "Teams with their own tariff are
     not affected."
-- Choosing the first option when an assignment exists removes it, after confirmation.
+- Choosing the first option when an assignment exists removes it, after confirmation (destructive
+  button).
   - Title: "Remove {team or organisation}'s own tariff?"
-  - Body: "From {1 December 2026} (UTC) {team} uses {name of the fallback}."
-- A refused change shows the server's message in red under the select and keeps the selection.
+  - Body: "From {1 December 2026} (UTC) {team} uses {label of the fallback}."
+- A refused change shows the refusal in plain words (§3) in red under the select and keeps the
+  selection.
 - Only one row is edited at a time; the other selects are disabled while one is unsaved or
   saving.
 - `PaginationFooter` under the table, key `organisation_teams_page`. The organisation row is on
@@ -183,7 +210,8 @@ Tariffs table. The same file holds the one date, month, label and actor formatte
 - The precedence sentence shows on Tariffs and Assignments only, with the wording from §4.2.
 - One header action per tab, primary, small: "New tariff", "Assign tariff", "Add add-on or
   credit", "Issue app key". The Ledger keys panel keeps its own "Issue runtime key" button.
-- Changing tab clears `record` and every `*_page` parameter.
+- Changing tab clears `record`, every `*_page` parameter and the tab-local filters `retired` and
+  `key_status`.
 
 ### 5.2 Tariffs
 
@@ -195,17 +223,18 @@ Sorted: default first, then name, key, newest version first; retired last in the
 
 | Column | Content |
 | --- | --- |
-| Tariff | Name linking to the detail, `key vN` below. A blue "Default" badge beside the name; a grey "Retired" badge on a retired row. |
-| What customers pay | The §4.3 summary. |
-| Used by | "{n} assignments" when assigned; "Active subscriptions" or "Active contract" when those block; "Nobody" otherwise. A retired row: "Retired {date}". |
-| Created | Date; below it who, with `system:*` shown as "System". |
-| (actions) | Active row: "Set default" when it is not the default; "Retire" when `retire_blocked_by` is empty. Retired row: "Restore" only. |
+| Tariff | Name linking to the detail, `key vN` below. A blue "Default" badge beside the name, on the same line; a grey "Retired {date}" badge on a retired row ("Retired 1 Sept 2026", the table date). |
+| What customers pay | The §4.3 summary, with a minimum width so it does not collapse to one word per line on a phone. |
+| Used by | "{n} assignments", a link to the product's Assignments tab, when assigned; "Active subscriptions" or "Active contract" when those block; "Everyone without their own tariff" for the default; "Nobody" otherwise, and on a retired row. |
+| Created | The date only (who created it is in the detail dialog). Hidden below the `md` breakpoint. |
+| (actions) | Side by side on one line, right-aligned. Active row that is not the default: "Set default" and "Retire"; Retire is disabled when `retire_blocked_by` is not empty. Retired row: "Restore" only. |
 
 Retire confirmation — title: "Retire {name} · {key} v{version}?"; body: "Nobody can be put on
 this tariff any more. Its invoices, usage and history stay as they are. You can restore it
 later."
 
-Restore needs no confirmation.
+Set default asks for confirmation with the primary button; Retire with the destructive one.
+Restore needs no confirmation. A refusal is shown under the table in plain words (§3).
 
 ### 5.3 Assignments
 
@@ -213,21 +242,23 @@ Restore needs no confirmation.
 | --- | --- |
 | Applies to | Organisation name, and the team name or "Entire organisation" below it. |
 | Tariff | Name linking to the detail, `key vN` below. |
-| Starts | "1 December 2026" in amber when `effective_from_month` is in the future; "In effect" otherwise; "—" when null. |
+| Starts | "1 December 2026" in amber when `effective_from_month` is in the future; "In effect" otherwise, including when it is null. |
 | Changed | Date and who. |
-| (actions) | "Edit" linking to `?section=organisations&organisation=<id>&product=<service id>`; "Remove" (danger) as today. |
+| (actions) | "Edit" linking to `?section=organisations&organisation=<id>&product=<service id>`; "Remove" (danger) as today. A refused removal is shown under the table in plain words (§3). |
 
 The "Assign tariff" dialog picks its organisation with the existing `AutocompleteSelect` and
-offers active tariffs only.
+offers active tariffs only, each by its label (§3). A refused save is shown in plain words.
 
 ### 5.4 App keys and Ledger keys
 
 A segmented filter above each table: **Active (n)** · **Revoked (n)**, Active by default. Expired
-app keys count as revoked for this filter. The tab count is the number of active keys.
+app keys count as revoked for this filter. The tab count is the number of active keys. A revoked
+key has no Revoke button.
 
 ### 5.5 Subscriptions
 
-Two titled tables: "Stripe subscriptions" and "Seat subscriptions". Status badges are title case.
+Two titled tables: "Stripe subscriptions" and "Seat subscriptions". Status badges are sentence case
+("Past due").
 The "Stripe mode" column is "Mode".
 
 ### 5.6 Product list
@@ -237,7 +268,8 @@ Columns: Product · Status · Default tariff · Assignments (count).
 ## 6. Rules for every billing table
 
 - `usePagination` and `PaginationFooter` from `components/ui/Table`, each with its own URL key.
-  This covers every table and every list that can pass ten rows, in all five sections.
+  This covers every table and every list that can pass ten rows, in all five sections. An
+  invoice's lines are not paginated; its payment activity is (`invoice_payments_page`).
 - Dates: one helper. In tables "16 Nov 2026", with the full local date and time in `title`. In
   detail dialogs the full local date and time. No raw ISO strings and no per-file `date()`.
 - Missing values are "—".
