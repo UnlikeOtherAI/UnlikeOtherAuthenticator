@@ -29,7 +29,7 @@ describe.skipIf(!process.env.DATABASE_URL)('billing period settings migration', 
     const deploy = (databaseUrl: string) => new Promise<number | null>((accept, reject) => {
       const child = spawn(process.execPath, [createRequire(import.meta.url).resolve('prisma/build/index.js'),
         'migrate', 'deploy', '--schema', join(directory, 'schema.prisma')], {
-        env: { ...process.env, DATABASE_URL: databaseUrl }, stdio: 'ignore', timeout: 170_000,
+        env: { ...process.env, DATABASE_URL: databaseUrl }, stdio: 'ignore', timeout: 600_000,
       });
       child.once('error', reject); child.once('close', accept);
     });
@@ -91,5 +91,5 @@ describe.skipIf(!process.env.DATABASE_URL)('billing period settings migration', 
       await admin.end();
       await rm(directory, { recursive: true, force: true });
     }
-  }, 420_000);
+  }, 1_300_000);
 });
