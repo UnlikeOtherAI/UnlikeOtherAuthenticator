@@ -10,8 +10,11 @@ const tablePageSizeOptionValues = ['5', '10', '25', '50'] as const;
 
 type TablePageSizeOption = (typeof tablePageSizeOptionValues)[number];
 
+/** A column header; the object form carries classes for that column (a width, `hidden md:table-cell`). */
+export type DataTableHeader = string | { label: string; className?: string };
+
 type DataTableProps = {
-  headers: string[];
+  headers: DataTableHeader[];
   children: ReactNode;
   className?: string;
 };
@@ -22,11 +25,14 @@ export function DataTable({ children, className, headers }: DataTableProps) {
       <table className="w-full border-collapse">
         <thead>
           <tr>
-            {headers.map((header) => (
-              <th key={header} scope="col" className="border-b border-gray-200 bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 sm:px-5">
-                {header}
-              </th>
-            ))}
+            {headers.map((header, index) => {
+              const { label, className: headerClassName } = typeof header === 'string' ? { label: header, className: undefined } : header;
+              return (
+                <th key={`${index}-${label}`} scope="col" className={cn('border-b border-gray-200 bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 sm:px-5', headerClassName)}>
+                  {label}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>{children}</tbody>
