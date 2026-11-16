@@ -336,8 +336,8 @@ export async function installFixtures(page: Page) {
     });
     if (path === '/billing/invoices') return json(invoices);
     if (path === '/billing/cycle-corrections') return json({ corrections: [] });
-    if (path === '/billing/invoices/invoice-credit-note/credit-note')
-      return json({ credit_note: creditNote });
+    if (/^\/billing\/invoices\/[^/]+\/credit-note$/.test(path))
+      return json({ credit_note: path.includes('/invoice-credit-note/') ? creditNote : null });
     if (path === '/billing/paid-usage-exceptions')
       return json({ exceptions: paidUsageExceptions, has_more: false });
     if (path.endsWith('/invoice-profile'))

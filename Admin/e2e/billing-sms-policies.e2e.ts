@@ -194,11 +194,11 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   if (proof) await page.screenshot({ path: path.join(proof, `sms-recovery-${info.project.name}.png`), fullPage: true });
   await page.keyboard.press('Escape'); await page.reload();
   await expect(page.getByText('IE · outbound · USD', { exact: true })).toBeVisible();
-  await page.getByText('uncollected · SM_fixture', { exact: true }).click();
+  await page.getByText('Uncollected · SM_fixture', { exact: true }).click();
   await expect(page.getByText('Uncollected credits: 1.234567', { exact: true })).toBeVisible();
   await expect(page.getByText('Consumed credits: Unknown', { exact: true })).toBeVisible();
   await page.getByLabel('Recovery direction').selectOption('outbound');
-  await page.getByText('uncertain · SM_fixture', { exact: true }).click();
+  await page.getByText('Uncertain · SM_fixture', { exact: true }).click();
   await expect(page.getByText('Held credits: 10.000001', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } })
     .includes('synthetic-route-preview'))).toBe(false);
@@ -252,7 +252,7 @@ test('operator verifies existing full refund after a refusal and sees exact reso
   if (proof) { await mkdir(proof, { recursive: true });
     await page.screenshot({ path: path.join(proof, `sms-refund-review-${info.project.name}.png`), fullPage: true }); }
   await dialog.getByRole('button', { name: 'Verify refund evidence' }).click();
-  await expect(dialog.getByText('+441234567890 · ended', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('+441234567890 · Ended', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Verify refund evidence' })).toHaveCount(0);
   await page.keyboard.press('Escape'); await expect(page.getByText('No resources awaiting recovery.')).toBeVisible();
   expect(writes).toHaveLength(2); expect(fixture.unexpected).toEqual([]); expect(fixture.errors).toEqual([]);

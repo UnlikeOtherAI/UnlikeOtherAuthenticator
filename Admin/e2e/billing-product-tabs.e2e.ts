@@ -31,7 +31,8 @@ test('a tariff version is retired, shown on request and restored', async ({ page
   await expect(row('team v1')).toHaveCount(0);
   await expect(tab(page, 'Tariffs', 3)).toBeVisible();
 
-  await page.getByRole('checkbox', { name: 'Show retired (2)' }).check();
+  await page.getByRole('checkbox', { name: 'Show retired (2)' }).click();
+  await expect(page.getByRole('checkbox', { name: 'Show retired (2)' })).toBeChecked();
   await expect(page).toHaveURL(/retired=1/);
   await expect(row('team v1')).toContainText('Retired');
   await expect(row('standard v1')).toContainText(/Retired \d+ \w+ 2026/);
@@ -66,9 +67,9 @@ test('assignments start next month and never offer a retired tariff', async ({ p
   await expect(tariff).toHaveValue('tariff-standard-2');
   await expect(tariff.locator('option', { hasText: 'standard v1' })).toHaveCount(0);
   await expect(tariff.locator('option', { hasText: 'team v1' })).toHaveCount(1);
-  await dialog.getByLabel('Organisation').fill('Design');
+  await dialog.getByRole('textbox', { name: 'Organisation' }).fill('Design');
   await dialog.getByRole('button', { name: 'Acme Design', exact: true }).click();
-  await expect(dialog.getByLabel('Organisation')).toHaveValue('Acme Design');
+  await expect(dialog.getByRole('textbox', { name: 'Organisation' })).toHaveValue('Acme Design');
   await dialog.getByRole('button', { name: 'Close modal' }).click();
   await dialog.getByRole('button', { name: 'Discard changes' }).click();
   await expect(dialog).toHaveCount(0);
