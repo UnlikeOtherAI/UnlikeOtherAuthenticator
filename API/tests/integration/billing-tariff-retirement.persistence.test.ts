@@ -221,7 +221,8 @@ describe.skipIf(!process.env.DATABASE_URL)('tariff version retirement with Postg
     await db.prisma.billingAppKey.create({ data: { serviceId: nessie.id, purpose: 'CUSTOMER_LIFECYCLE',
       name: 'Nessie lifecycle', keyPrefix: 'uoa_app_retire', secretDigest: 'retire-nessie-digest',
       actorIssuer: `https://${holder.domain}`, actorAudience: 'https://authentication.unlikeotherai.com',
-      actorKeyId: 'retire-key', actorPublicJwk: { kty: 'RSA', kid: 'retire-key', n: 'AQAB', e: 'AQAB' } } });
+      actorKeyId: 'retire-key', actorPublicJwk: { kty: 'RSA', kid: 'retire-key', n: 'AQAB', e: 'AQAB' },
+      checkoutReturnOrigins: [`https://${holder.domain}`] } });
     const scope = { serviceId: nessie.id, organisationId: holder.id, teamId: null, billingMonth: thisMonth };
     const seatScope = () => db.prisma.$queryRaw<Array<{ tariff_id: string }>>`
       SELECT tariff_id FROM billing_nessie_paid_seat_scope(${holder.id}, NULL)`;
