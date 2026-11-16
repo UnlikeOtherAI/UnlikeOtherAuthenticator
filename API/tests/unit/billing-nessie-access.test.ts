@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 import { nessieBillingAccess } from '../../src/services/billing-nessie-access.service.js';
 
 const mocks = vi.hoisted(() => ({ authorize: vi.fn(), seats: vi.fn(), reserved: vi.fn() }));
@@ -12,7 +13,7 @@ const context = { request: { product: 'nessie', organisationId: 'org', teamId: '
 const wallet = { id: 'wallet', orgId: 'org', teamId: null, scope: 'ORGANISATION', balanceMicrocredits: 100n };
 function db(value: unknown = wallet) {
   const tx = { billingCreditAccount: { findUnique: vi.fn().mockResolvedValue(value) } };
-  return { $transaction: (work: (tx: unknown) => Promise<unknown>) => work(tx) };
+  return { $transaction: vi.fn<(work: (tx: unknown) => Promise<unknown>, options?: unknown) => Promise<unknown>>(work => work(tx)) };
 }
 beforeEach(() => {
   vi.clearAllMocks();
@@ -21,6 +22,26 @@ beforeEach(() => {
   mocks.reserved.mockResolvedValue(100n);
 });
 describe('member-safe billing admission', () => {
+  it('restarts a conflicted snapshot and returns the fresh denial without manager details', async () => {
+    const database = db();
+    mocks.seats.mockRejectedValueOnce({ code: 'P2010', meta: { code: '40001' } })
+      .mockResolvedValueOnce({ allowed: false, status: 'payment_required', deadline: null, reason: 'transition_ended' });
+    mocks.authorize.mockResolvedValueOnce({ billingManager: true }).mockResolvedValueOnce({ billingManager: false });
+    const value = await nessieBillingAccess(context as never, { prisma: database as never });
+    expect(database.$transaction).toHaveBeenCalledTimes(2);
+    for (const call of database.$transaction.mock.calls) expect(call[1]).toEqual({
+      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+    });
+    expect(mocks.seats).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), expect.any(Date), 'projection');
+    expect(value).toMatchObject({ access: { allowed: false }, consumables: { available: false }, can_manage_billing: false });
+    expect(value).not.toHaveProperty('manager_reason');
+  });
+  it('does not replay an unrelated database failure', async () => {
+    const database = db(), failure = { code: 'P2010', meta: { code: '42501' } };
+    mocks.seats.mockRejectedValueOnce(failure);
+    await expect(nessieBillingAccess(context as never, { prisma: database as never })).rejects.toBe(failure);
+    expect(database.$transaction).toHaveBeenCalledOnce();
+  });
   it('shows no payment diagnosis, card or amounts to a member or team administrator', async () => {
     const value = await nessieBillingAccess(context as never, { prisma: db() as never });
     expect(value.can_manage_billing).toBe(false);

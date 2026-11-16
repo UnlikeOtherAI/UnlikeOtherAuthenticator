@@ -20,7 +20,7 @@ const hold = (reason: NessieSeatAccess['reason'], deadline: Date | null = null):
 /** Current financial evidence, shared by the product access projection and paid dispatch gates. */
 export async function readNessieSeatAccess(tx: Prisma.TransactionClient, scope: {
   serviceId: string; organisationId: string; teamId: string | null; userId?: string;
-}, now = new Date()): Promise<NessieSeatAccess> {
+}, now = new Date(), intent: 'projection' | 'admission' = 'admission'): Promise<NessieSeatAccess> {
   const effective = await resolveCurrentBillingTariff(tx, { ...scope, billingMonth: utcBillingMonth(now) }, 'nessie');
   if (!effective.tariff.anniversarySeats) return effective.source === 'SERVICE_DEFAULT' ? hold('setup_required')
     : { allowed: true, status: 'agreement', deadline: null, reason: null };
@@ -54,7 +54,7 @@ export async function readNessieSeatAccess(tx: Prisma.TransactionClient, scope: 
   if (subscriptions.length || await tx.billingStripeSubscription.count({ where: {
     serviceId: scope.serviceId, orgId: scope.organisationId, teamId,
   } })) return hold('payment_required');
-  const transition = await nessieSeatTransition(tx, scope.organisationId);
+  const transition = await nessieSeatTransition(tx, scope.organisationId, intent);
   if (!transition) return hold('setup_required');
   if (!transition.endedAt && transition.endsAt > now &&
     (scope.userId === undefined || transition.cohortUserIds.includes(scope.userId))) {
