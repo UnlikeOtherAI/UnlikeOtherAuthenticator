@@ -19,6 +19,7 @@ import { BillingServiceDialog } from '../features/admin/BillingServiceDialog';
 import { BillingServicePanel } from '../features/admin/BillingServicePanel';
 import { BillingTariffDialog } from '../features/admin/BillingTariffDialog';
 import { BillingContractsPanel } from '../features/admin/BillingContractsPanel';
+import { BillingOrganisationsSection } from '../features/admin/BillingOrganisationsSection';
 import { BillingCreditInvoiceTaxPolicyPanel } from '../features/admin/BillingCreditInvoiceTaxPolicyPanel';
 import { BillingPaidUsageExceptionsPanel } from '../features/admin/BillingPaidUsageExceptionsPanel';
 import { BillingSmsPoliciesPanel } from '../features/admin/BillingSmsPoliciesPanel';
@@ -27,7 +28,7 @@ import type { CreatedBillingAppKey } from '../schemas/billing';
 export function BillingPage() {
   const modeCopy = billingOrganisationModeCopy();
   const { data: services = [], isError, isLoading, refetch } = useBillingServicesQuery();
-  const { params, href, update } = useBillingNavigation();
+  const { params, href, update, openSection } = useBillingNavigation();
   const selectedServiceId = params.get('product') ?? '';
   const query = params.get('q') ?? '';
   const visibleServices = services
@@ -42,9 +43,9 @@ export function BillingPage() {
   const [appKeyOpen, setAppKeyOpen] = useState(false);
   const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedBillingAppKey | null>(null);
-  const section = params.get('section') === 'contracts' ? 'contracts'
-    : params.get('section') === 'exceptions' ? 'exceptions'
-    : params.get('section') === 'sms' ? 'sms' : 'products';
+  const requestedSection = params.get('section');
+  const section = requestedSection === 'organisations' || requestedSection === 'contracts' ||
+    requestedSection === 'exceptions' || requestedSection === 'sms' ? requestedSection : 'products';
   const selectedService = useMemo(
     () => services.find((service) => service.id === selectedServiceId) ?? null,
     [selectedServiceId, services],
@@ -68,9 +69,10 @@ export function BillingPage() {
 
       <UnderlineTabs
         value={section}
-        onChange={(value) => update({ section: value })}
+        onChange={(value) => openSection(value === 'products' ? null : value)}
         options={[
           { label: 'Product billing', value: 'products' },
+          { label: 'Organisations', value: 'organisations' },
           { label: 'Contracts & invoices', value: 'contracts' },
           { label: 'Usage exceptions', value: 'exceptions' },
           { label: 'SMS policies', value: 'sms' },
@@ -176,6 +178,12 @@ export function BillingPage() {
             </div>
           ) : null}
         </>
+      ) : section === 'organisations' ? (
+        <BillingOrganisationsSection
+          services={services}
+          servicesError={isError}
+          servicesLoading={isLoading}
+        />
       ) : section === 'contracts' ? (
         <div className="space-y-4">
           <BillingContractsPanel

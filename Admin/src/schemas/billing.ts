@@ -27,6 +27,8 @@ export const BillingTariffSchema = z.object({
     seat_charge_timing: z.enum(['full_month', 'prorated']).nullable(),
   }),
   is_default: z.boolean(),
+  // Why this version cannot be deleted; empty means nothing refers to it.
+  delete_blocked_by: z.array(z.string()).default([]),
   created_by_email: z.string().nullable(),
   created_at: z.string(),
 });
@@ -55,6 +57,8 @@ export const BillingAssignmentSchema = z.object({
   organisation: z.object({ id: z.string(), name: z.string() }),
   team: z.object({ id: z.string(), name: z.string() }).nullable(),
   tariff: BillingTariffSchema,
+  // First UTC month (YYYY-MM) the assignment applies to; null for rows older than tariff history.
+  effective_from_month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).nullable().default(null),
   created_by_email: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),

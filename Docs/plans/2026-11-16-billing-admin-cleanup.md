@@ -147,8 +147,9 @@ One line, three parts joined by " · ":
    "usage +{markup}%". Then ", prepaid" or ", pay as you go" unless the tariff is free.
 3. Collection: "card (Stripe)", "invoice" or "not collected".
 
-Example: "$3.99 per seat · usage +30%, prepaid · card (Stripe)". This is one function, used by
-the Organisations table and the product Tariffs table.
+Example: "3.99 USD per seat · usage +30%, prepaid · card (Stripe)". This is `billingTariffSummary`
+in `Admin/src/features/admin/billing-format.ts`, used by the Organisations table and the product
+Tariffs table. The same file holds the one date, month, label and actor formatter (§6).
 
 ## 5. Admin: product view
 

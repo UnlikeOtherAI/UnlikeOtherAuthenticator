@@ -14,5 +14,9 @@ export function useBillingNavigation() {
   function update(changes: Record<string, string | null>) {
     setParams(new URLSearchParams(href(changes).split('?')[1] ?? ''), { state: location.state });
   }
-  return { params, href, update };
+  /** Opens a top-level billing section with none of another section's selection or paging. */
+  function openSection(section: string | null) {
+    setParams(new URLSearchParams(section ? { section } : {}), { state: location.state });
+  }
+  return { params, href, update, openSection };
 }
