@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ApiRequestError } from '../../services/api-client';
 import {
   billingActor,
   billingDate,
@@ -8,6 +9,8 @@ import {
   billingMonth,
   billingMonthIsFuture,
   billingMonthStart,
+  billingRefusal,
+  billingTariffLabel,
   billingTariffName,
   billingTariffSummary,
   billingUtcDate,
@@ -78,5 +81,36 @@ describe('billing presentation', () => {
     expect(billingActor('system:seed')).toBe('System');
     expect(billingActor(null)).toBe('—');
     expect(billingTariffName({ name: 'Free', key: 'free', version: 2 })).toBe('Free · free v2');
+  });
+});
+
+describe('billingTariffLabel', () => {
+  const tariff = (id: string, name: string, version = 1, retired_at: string | null = null) =>
+    ({ id, name, key: name.toLowerCase(), version, retired_at });
+  const standard = tariff('s1', 'Standard');
+
+  it('is the name alone while no other active tariff of the product shares it', () => {
+    expect(billingTariffLabel(standard, [standard, tariff('f1', 'Free')])).toBe('Standard');
+    expect(billingTariffLabel(standard, [standard, tariff('s0', 'Standard', 0, '2026-09-01T00:00:00.000Z')]))
+      .toBe('Standard');
+  });
+
+  it('adds the key and version when another active tariff has the same name', () => {
+    expect(billingTariffLabel(standard, [standard, tariff('s2', 'Standard', 2)])).toBe('Standard · standard v1');
+  });
+});
+
+describe('billingRefusal', () => {
+  it('says why a tariff change was refused, in plain words', () => {
+    const refused = (code?: string) => billingRefusal(new ApiRequestError(409, code));
+    expect(refused('BILLING_TARIFF_RETIRED')).toBe('This tariff is retired. Pick another one.');
+    expect(refused('BILLING_TARIFF_IN_USE')).toBe('Somebody is still on this tariff. Move them first.');
+    expect(refused('STRIPE_TARIFF_PINNED'))
+      .toBe('An active Stripe subscription keeps the current tariff until it ends.');
+    expect(refused('BILLING_CONTRACT_ASSIGNMENT_LOCKED'))
+      .toBe('A contract sets this tariff. Change the contract instead.');
+    expect(refused('INVALID_TARIFF_ASSIGNMENT')).toBe('This tariff cannot be assigned here.');
+    expect(refused('SOMETHING_NEW')).toBe('The change was refused (SOMETHING_NEW).');
+    expect(billingRefusal(new ApiRequestError(503))).toBe('The change was refused (HTTP 503).');
   });
 });

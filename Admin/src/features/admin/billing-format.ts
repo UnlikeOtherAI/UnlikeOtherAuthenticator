@@ -1,4 +1,5 @@
 import type { BillingTariff } from '../../schemas/billing';
+import { ApiRequestError } from '../../services/api-client';
 import { billingMoney } from './billing-money';
 
 // One presentation vocabulary for every billing table and dialog.
@@ -69,6 +70,35 @@ export function billingActor(email: string | null | undefined): string {
 
 export function billingTariffName(tariff: Pick<BillingTariff, 'name' | 'key' | 'version'>): string {
   return `${tariff.name} · ${tariff.key} v${tariff.version}`;
+}
+
+type LabelTerms = Pick<BillingTariff, 'id' | 'name' | 'key' | 'version' | 'retired_at'>;
+
+/**
+ * A tariff where it is picked or listed for an organisation: its name alone, unless another
+ * active tariff of the same product has that name, then "{name} · {key} v{version}".
+ */
+export function billingTariffLabel(tariff: LabelTerms, siblings: LabelTerms[]): string {
+  const shared = siblings.some((sibling) =>
+    sibling.id !== tariff.id && sibling.retired_at === null && sibling.name === tariff.name);
+  return shared ? billingTariffName(tariff) : tariff.name;
+}
+
+const refusals: Record<string, string> = {
+  BILLING_TARIFF_RETIRED: 'This tariff is retired. Pick another one.',
+  BILLING_TARIFF_IN_USE: 'Somebody is still on this tariff. Move them first.',
+  STRIPE_TARIFF_PINNED: 'An active Stripe subscription keeps the current tariff until it ends.',
+  BILLING_CONTRACT_ASSIGNMENT_LOCKED: 'A contract sets this tariff. Change the contract instead.',
+  INVALID_TARIFF_ASSIGNMENT: 'This tariff cannot be assigned here.',
+};
+
+/** A refused tariff or assignment change, in plain words. */
+export function billingRefusal(error: unknown): string {
+  if (error instanceof ApiRequestError) {
+    if (!error.code) return `The change was refused (HTTP ${error.status}).`;
+    return refusals[error.code] ?? `The change was refused (${error.code}).`;
+  }
+  return error instanceof Error ? error.message : 'The change could not be saved.';
 }
 
 type SummaryTerms = Pick<BillingTariff,
