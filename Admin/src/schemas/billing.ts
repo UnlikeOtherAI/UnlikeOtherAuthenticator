@@ -27,8 +27,10 @@ export const BillingTariffSchema = z.object({
     seat_charge_timing: z.enum(['full_month', 'prorated']).nullable(),
   }),
   is_default: z.boolean(),
-  // Why this version cannot be deleted; empty means nothing refers to it.
-  delete_blocked_by: z.array(z.string()).default([]),
+  // A retired version is hidden and can no longer be given to anybody; its records stay.
+  retired_at: z.string().nullable().default(null),
+  // Why this version cannot be retired yet; empty means nobody is on it.
+  retire_blocked_by: z.array(z.string()).default([]),
   created_by_email: z.string().nullable(),
   created_at: z.string(),
 });

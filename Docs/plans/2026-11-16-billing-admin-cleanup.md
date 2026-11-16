@@ -1,4 +1,4 @@
-# Billing admin: organisation tariffs, unused-tariff deletion, tab cleanup
+# Billing admin: organisation tariffs, tariff retirement, tab cleanup
 
 Status: contract for the 16 November 2026 work. Where this document and the code disagree while
 building, report the deviation; do not silently pick one.
@@ -7,56 +7,63 @@ building, report the deviation; do not silently pick one.
 
 1. **Organisations** is a new section of Admin → Billing. An operator picks an organisation and
    edits the tariff of the organisation and of each of its teams, per product.
-2. A tariff version that nothing refers to can be **deleted**. A version anything refers to stays
-   immutable, as before.
+2. A tariff version can be **retired**. A retired version is hidden unless the operator asks to see
+   retired ones, and can no longer be given to anybody. Nothing is deleted: every financial record
+   that names it stays as it is. A retired version can be restored.
 3. The product view is reorganised: fewer, clearer columns, one date format, one action style,
    and the standard pagination footer under every table.
 
 Nothing here changes how tariffs are resolved or when a change starts. An assignment still starts
-on the first day of the next UTC month.
+on the first day of the next UTC month. There is no hard delete.
 
 ## 2. API
 
-### 2.1 Delete an unused tariff version
+### 2.1 Retire and restore a tariff version
 
-`DELETE /internal/admin/billing/services/:serviceId/tariffs/:tariffId` — admin superuser, `204`.
+- `POST /internal/admin/billing/services/:serviceId/tariffs/:tariffId/retire`
+- `POST /internal/admin/billing/services/:serviceId/tariffs/:tariffId/restore`
+
+Admin superuser. Both answer `200` with the serialised tariff and are idempotent.
 
 - `404 BILLING_TARIFF_NOT_FOUND` when the tariff is not in that service.
-- `409 BILLING_TARIFF_IN_USE` when any blocker below applies.
-- Runs in one serializable transaction that takes `lockTariffHistoryService` first.
-- Removes the tariff's Stripe price mappings that never reached Stripe
-  (`stripe_monthly_price_id IS NULL`) and then the tariff row.
-- Writes `billing.tariff_version_deleted` to the admin audit log with `service_id`, `tariff_id`,
-  `tariff_key`, `tariff_version`, `tariff_name` and `removed_price_mappings`.
+- Retire: `409 BILLING_TARIFF_IN_USE` when any blocker below applies.
+- One transaction that takes `lockTariffHistoryService` first.
+- Stored as `billing_tariffs.retired_at` and `retired_by_email`, both null for an active version.
+  A new migration adds the columns and a check that the default tariff is never retired. The
+  immutability trigger keeps refusing every change to a version's terms, and every delete.
+- Audit log: `billing.tariff_version_retired` and `billing.tariff_version_restored`, with
+  `service_id`, `tariff_id`, `tariff_key`, `tariff_version` and `tariff_name`.
 
-Blockers, in this order. The same function computes them for the delete and for the read model:
+A version cannot be retired while somebody is on it. Blockers, in this order; one function
+computes them for the retire call and for the read model:
 
 | Value | Means |
 | --- | --- |
 | `default` | It is the product's default tariff. |
 | `assignments` | An organisation or team is assigned to it. |
-| `tariff_history` | A tariff term event names it: it was a default or an assignment at some time. |
-| `stripe_prices` | A price mapping with a real Stripe price id exists. |
-| `checkouts` | A Stripe checkout session names it. |
-| `subscriptions` | A Stripe subscription names it. |
-| `seat_subscriptions` | A seat subscription names it. |
-| `contract_terms` | A contract service term names it. |
-| `usage` | Any usage or funding record names it: credit usage settlements, prepaid reservations, paid-usage liabilities, and every other table with a `tariff_id` column. |
+| `subscriptions` | A Stripe subscription that has not ended, or a seat subscription that has not ended, names it. |
+| `contract_terms` | A service term of a contract that is not terminated names it. |
 
-The implementer enumerates **every** column that stores a tariff id in `API/prisma/schema.prisma`,
-including the ones with no foreign key, and maps each to one of the values above. A test fails
-when a new `tariff_id` column is added without a mapping.
+History does not block: term events, settlements, reservations, ended subscriptions and
+terminated contracts keep pointing at a retired version.
 
-The database trigger `uoa_enforce_billing_tariff_immutability` refuses every delete today. A new
-migration replaces the function so a delete is refused only for the default tariff; the existing
-`ON DELETE RESTRICT` foreign keys keep refusing a referenced one. Updates stay exactly as
-restricted as they are.
+A retired version:
+
+- cannot become the default (`409 BILLING_TARIFF_RETIRED`);
+- cannot be assigned to an organisation or team (`409 BILLING_TARIFF_RETIRED`);
+- cannot be chosen for a new contract service term, checkout or subscription;
+- is skipped by every lookup that picks a tariff for new business, including the Nessie regional
+  lookups by `standard-<currency>` key;
+- still resolves for every past month and every existing record.
+
+Creating a new version of a key numbers it after the highest existing version, retired or not.
 
 ### 2.2 Read model additions
 
 `GET /internal/admin/billing/services`:
 
-- every tariff gains `delete_blocked_by: string[]` (values above; empty means deletable);
+- every tariff gains `retired_at: string | null` and `retire_blocked_by: string[]` (values above;
+  empty means it can be retired);
 - every assignment gains `effective_from_month: string | null` (`YYYY-MM`), the
   `effective_from_month` of the newest term event whose `assignment_id` is that assignment.
 
@@ -77,15 +84,19 @@ Organisations section (§4.2).
 User-visible copy says **product**, never "service": "Add product", "No products yet", "Could not
 load products". The "Add product" button shows only on the product list.
 
+Retired tariffs never appear in a control that picks a tariff.
+
 ## 4. Admin: Organisations section
 
 ### 4.1 List (`?section=organisations`)
 
-One card.
+One card. Controls, in one row:
 
 - Search field, placeholder "Search organisations", matching name and slug, in `q`.
+- Product dropdown: **All products**, then every active product by name (`product=<service id>`).
 - Segmented filter: **All** · **With custom tariffs** (`filter=custom`).
-- Table, sorted by name:
+
+Table, sorted by name. With **All products**:
 
 | Column | Content |
 | --- | --- |
@@ -94,7 +105,19 @@ One card.
 | Organisation tariff | One line per product where the organisation itself is assigned: "Nessie: Free". None: "Product defaults" in grey. |
 | Team tariffs | "2 teams" when teams have their own assignment, otherwise "—". |
 
-- Empty search: "No organisations match this search."
+With one product selected, the two tariff columns describe that product only:
+
+| Column | Content |
+| --- | --- |
+| Organisation | As above; the link also carries `product=<service id>`. |
+| Teams | Number of teams. |
+| Tariff | The organisation's own tariff for the product, "{name} · {key} v{version}". Without one: "Product default — {default name}" in grey. |
+| Team tariffs | One line per team with its own tariff: "Hugo: Free". None: "—". |
+
+"With custom tariffs" keeps the organisations that hold any assignment, in the selected product
+when one is selected.
+
+- Empty result: "No organisations match."
 - `PaginationFooter`, key `organisations_page`.
 
 Data comes from the existing organisations, teams and billing services queries, joined in the
@@ -102,7 +125,7 @@ browser. No new endpoint.
 
 ### 4.2 One organisation (`?section=organisations&organisation=<id>`)
 
-- Link back: "All organisations".
+- Link back: "All organisations", keeping the list's search, product and filter.
 - Card header: organisation name, slug as a code chip, and a link "Organisation details" to
   `/organisations/<id>`.
 - Product tabs (`UnderlineTabs`, `product=<service id>`), active products only, sorted by name.
@@ -116,7 +139,7 @@ browser. No new endpoint.
 | Column | Content |
 | --- | --- |
 | Applies to | First row: **Entire organisation**, below it "Every team without its own tariff". Then one row per team, sorted by name: team name linking to the team's directory page, below it "{n} members". |
-| Tariff | A select. Organisation row: "Product default — {default name}" then every tariff of the product as "{name} · {key} v{version}". Team row: "Same as organisation — {name of what the organisation resolves to}" then every tariff. When the saved assignment has `effective_from_month` later than the current UTC month, amber text below: "Starts 1 December 2026". |
+| Tariff | A select. Organisation row: "Product default — {default name}" then every active tariff of the product as "{name} · {key} v{version}". Team row: "Same as organisation — {name of what the organisation resolves to}" then every active tariff. When the saved assignment has `effective_from_month` later than the current UTC month, amber text below: "Starts 1 December 2026". |
 | What they pay | A plain summary of the selected tariff (§4.3). |
 | Changed | Date and who, when an assignment exists; otherwise "—". |
 | (actions) | Empty until the select differs from the saved value, then **Save** (primary, small) and **Cancel**. |
@@ -156,7 +179,7 @@ Tariffs table. The same file holds the one date, month, label and actor formatte
 ### 5.1 Header and tabs
 
 - Tab order: **Tariffs · Assignments · Add-ons & credits · Subscriptions · Time periods · Cloud
-  browsers · App keys · Ledger keys**.
+  browsers · App keys · Ledger keys**. The Tariffs count is the number of active versions.
 - The precedence sentence shows on Tariffs and Assignments only, with the wording from §4.2.
 - One header action per tab, primary, small: "New tariff", "Assign tariff", "Add add-on or
   credit", "Issue app key". The Ledger keys panel keeps its own "Issue runtime key" button.
@@ -164,18 +187,25 @@ Tariffs table. The same file holds the one date, month, label and actor formatte
 
 ### 5.2 Tariffs
 
-Sorted: default first, then name, key, newest version first.
+Retired versions are hidden. When the product has any, a checkbox above the table, right-aligned:
+"Show retired ({n})" (`retired=1`). Checked, the retired rows join the same table, greyed, after
+the active ones.
+
+Sorted: default first, then name, key, newest version first; retired last in the same order.
 
 | Column | Content |
 | --- | --- |
-| Tariff | Name linking to the detail, `key vN` below. A blue "Default" badge beside the name. |
+| Tariff | Name linking to the detail, `key vN` below. A blue "Default" badge beside the name; a grey "Retired" badge on a retired row. |
 | What customers pay | The §4.3 summary. |
-| Used by | "{n} assignments" when assigned; "Billing history" when blocked by anything else; "Not used" otherwise. |
+| Used by | "{n} assignments" when assigned; "Active subscriptions" or "Active contract" when those block; "Nobody" otherwise. A retired row: "Retired {date}". |
 | Created | Date; below it who, with `system:*` shown as "System". |
-| (actions) | "Set default" when it is not the default. "Delete" (danger) when `delete_blocked_by` is empty. |
+| (actions) | Active row: "Set default" when it is not the default; "Retire" when `retire_blocked_by` is empty. Retired row: "Restore" only. |
 
-Delete confirmation — title: "Delete {name} · {key} v{version}?"; body: "Nothing refers to this
-tariff version. Deleting it cannot be undone."
+Retire confirmation — title: "Retire {name} · {key} v{version}?"; body: "Nobody can be put on
+this tariff any more. Its invoices, usage and history stay as they are. You can restore it
+later."
+
+Restore needs no confirmation.
 
 ### 5.3 Assignments
 
@@ -187,7 +217,8 @@ tariff version. Deleting it cannot be undone."
 | Changed | Date and who. |
 | (actions) | "Edit" linking to `?section=organisations&organisation=<id>&product=<service id>`; "Remove" (danger) as today. |
 
-The "Assign tariff" dialog picks its organisation with the existing `AutocompleteSelect`.
+The "Assign tariff" dialog picks its organisation with the existing `AutocompleteSelect` and
+offers active tariffs only.
 
 ### 5.4 App keys and Ledger keys
 
@@ -216,10 +247,11 @@ Columns: Product · Status · Default tariff · Assignments (count).
 
 ## 7. Verification
 
-- API: service and migration tests against a real database for every blocker, the delete, the
-  audit row and the two read-model fields.
+- API: service and migration tests against a real database for every blocker, retire, restore,
+  the refusals a retired version causes, the audit rows and the read-model fields.
 - Admin: unit tests for the summary function, the date helper and the Organisations section;
-  Playwright fixtures and journeys for the list, one organisation (save, remove, refused change),
-  tariff delete and the key filters, at 1440×1000 and Pixel 7.
+  Playwright fixtures and journeys for the list (search, product dropdown, filter), one
+  organisation (save, remove, refused change), retire, show retired, restore and the key filters,
+  at 1440×1000 and Pixel 7.
 - Before/after screenshots of the Tariffs tab, the Assignments tab and the new section for the
   pull request.
