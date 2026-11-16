@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 
 import { Button } from '../../components/ui/Button';
-import { DataTable, Td } from '../../components/ui/Table';
+import { DataTable, PaginationFooter, Td, usePagination } from '../../components/ui/Table';
 import type { BillingSeatSubscription } from '../../schemas/billing-seat-capacity';
 import { billingAdminService } from '../../services/billing-admin-service';
 import { useAdminUi } from '../shell/admin-ui';
+import { billingLabel, billingUtcDate } from './billing-format';
 
 function CapacityRow({ subscription, onChanged }: {
   subscription: BillingSeatSubscription;
@@ -36,11 +37,11 @@ function CapacityRow({ subscription, onChanged }: {
           {subscription.organisation.name}
         </Link>
         <span className="block text-xs text-gray-500">
-          {subscription.team?.name ?? 'Entire organisation'} · {subscription.source}
+          {subscription.team?.name ?? 'Entire organisation'} · {billingLabel(subscription.source)}
         </span>
       </Td>
-      <Td className="capitalize">{subscription.seat_policy}</Td>
-      <Td className="capitalize">{subscription.seat_charge_timing.replace('_', ' ')}</Td>
+      <Td>{billingLabel(subscription.seat_policy)}</Td>
+      <Td>{billingLabel(subscription.seat_charge_timing)}</Td>
       <Td>{subscription.baseline_member_count ?? 'Pending evidence'}</Td>
       <Td>{subscription.current_capacity ?? '—'}</Td>
       <Td>
@@ -51,8 +52,7 @@ function CapacityRow({ subscription, onChanged }: {
               inputMode="numeric" value={quantity} disabled={Boolean(pending)}
               onChange={(event) => setQuantity(event.target.value)} />
             {pending ? <span className="text-xs text-gray-600">
-              {pending.quantity} seats scheduled for {new Date(pending.effective_at)
-                .toLocaleDateString(undefined, { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })}.
+              {pending.quantity} seats scheduled for {billingUtcDate(pending.effective_at)}.
             </span> : null}
             <Button size="sm" disabled={!valid || change.isPending}
               onClick={() => confirm('Change purchased seat capacity?', timing,
@@ -75,22 +75,24 @@ export function BillingSeatCapacityPanel({ serviceId }: { serviceId: string }) {
   const { data = [], isLoading, error } = useQuery({
     queryKey: key, queryFn: () => billingAdminService.listSeatSubscriptions(serviceId),
   });
+  const { pageItems, pagination } = usePagination(data, 10, { key: 'seat_subscriptions_page' });
   return (
-    <section className="mt-6 space-y-2 px-5 pb-5">
-      <h3 className="text-sm font-semibold text-gray-900">Seat subscriptions</h3>
-      <p className="text-xs text-gray-500">
+    <section className="mt-6 space-y-2 pb-5">
+      <h3 className="px-5 text-sm font-semibold text-gray-900">Seat subscriptions</h3>
+      <p className="px-5 text-xs text-gray-500">
         Fixed capacity applies to active members and pending invitations in this team or organisation.
       </p>
-      {error ? <p className="text-sm text-red-600">Seat subscriptions could not be loaded.</p> : null}
+      {error ? <p className="px-5 text-sm text-red-600">Seat subscriptions could not be loaded.</p> : null}
       <DataTable headers={['Scope', 'Policy', 'Timing', 'Baseline', 'Purchased', 'Capacity']}>
-        {data.map((subscription) => (
+        {pageItems.map((subscription) => (
           <CapacityRow key={subscription.id} subscription={subscription}
             onChanged={() => queryClient.invalidateQueries({ queryKey: key })} />
         ))}
-        {!isLoading && data.length === 0 ? <tr><Td colSpan={6} className="text-gray-500">
-          No seat subscriptions for this service.
+        {!isLoading && data.length === 0 ? <tr><Td colSpan={6} className="text-gray-400">
+          This product has no seat subscription.
         </Td></tr> : null}
       </DataTable>
+      <PaginationFooter {...pagination} />
     </section>
   );
 }

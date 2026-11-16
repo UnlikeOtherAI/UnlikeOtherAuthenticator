@@ -5,7 +5,9 @@ import { z } from 'zod';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { FieldShell, TextAreaField } from '../../components/ui/FormFields';
+import { PaginationFooter, usePagination } from '../../components/ui/Table';
 import { createApiClient } from '../../services/api-client';
+import { BillingDate } from './BillingDate';
 
 const api = createApiClient();
 const Exception = z.object({
@@ -38,6 +40,8 @@ export function BillingPaidUsageExceptionsPanel() {
   const [decisionKey, setDecisionKey] = useState(randomDecisionKey);
   const list = useQuery({ queryKey: key, queryFn: async () => List.parse(
     await api.get<unknown>('/internal/admin/billing/paid-usage-exceptions')) });
+  const { pageItems, pagination } = usePagination(list.data?.exceptions ?? [], 10,
+    { key: 'exceptions_page' });
   const writeOff = useMutation({
     mutationFn: async (input: { dispatchId: string; digest: string; reason: string }) =>
       Decision.parse(await api.post<unknown>(
@@ -69,11 +73,14 @@ export function BillingPaidUsageExceptionsPanel() {
         No paid usage needs an operator decision.
       </p> : null}
       <div className="space-y-3">
-        {list.data?.exceptions.map((item) => (
+        {pageItems.map((item) => (
           <div key={item.dispatch_id} className="rounded-lg border border-gray-200 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-gray-900">{item.product}</p>
+                <p className="text-xs text-gray-500">
+                  Received <BillingDate value={item.created_at} />
+                </p>
                 <p className="break-all text-xs text-gray-500">Dispatch {item.dispatch_id}</p>
                 <p className="break-all text-xs text-gray-500">Receipt {item.receipt_id}</p>
                 <p className="text-xs text-gray-500">
@@ -111,6 +118,7 @@ export function BillingPaidUsageExceptionsPanel() {
           </div>
         ))}
       </div>
+      <PaginationFooter {...pagination} />
       {list.data?.has_more ? <p className="mt-4 text-xs text-gray-500">
         Showing the oldest 100 exceptions. Resolve them to reveal more.
       </p> : null}

@@ -42,8 +42,7 @@ test('platform operator reaches team billing from the directory and billing door
   await expect(page.getByRole('heading', { name: 'Billing', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Fixture product', exact: true })).toBeVisible();
   await capture('billing');
-  if (phase === 'before') await page.goto('/teams');
-  else await page.getByRole('link', { name: 'Choose a team to manage sandbox billing' }).click();
+  await page.goto('/teams');
   await page.getByRole('link', { name: team.name, exact: true }).first().click();
   await expect(page).toHaveURL(new RegExp(`/organisations/${org.id}/teams/${team.id}`));
   await expect(page.getByRole('heading', { name: team.name, exact: true })).toBeVisible();

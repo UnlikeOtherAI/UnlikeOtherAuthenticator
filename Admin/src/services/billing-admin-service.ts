@@ -113,6 +113,24 @@ export const billingAdminService = {
     );
   },
 
+  async retireTariff(serviceId: string, tariffId: string) {
+    return BillingTariffSchema.parse(
+      await api.post<unknown>(
+        `/internal/admin/billing/services/${encodeURIComponent(serviceId)}/tariffs/${encodeURIComponent(tariffId)}/retire`,
+        {},
+      ),
+    );
+  },
+
+  async restoreTariff(serviceId: string, tariffId: string) {
+    return BillingTariffSchema.parse(
+      await api.post<unknown>(
+        `/internal/admin/billing/services/${encodeURIComponent(serviceId)}/tariffs/${encodeURIComponent(tariffId)}/restore`,
+        {},
+      ),
+    );
+  },
+
   async saveAssignment(serviceId: string, input: BillingAssignmentFormValues) {
     return BillingAssignmentSchema.parse(
       await api.put<unknown>(

@@ -48,6 +48,22 @@ export function useSetDefaultBillingTariffMutation(serviceId: string) {
   });
 }
 
+export function useRetireBillingTariffMutation(serviceId: string) {
+  const refresh = useRefreshBillingServices();
+  return useMutation({
+    mutationFn: (tariffId: string) => billingAdminService.retireTariff(serviceId, tariffId),
+    onSuccess: refresh,
+  });
+}
+
+export function useRestoreBillingTariffMutation(serviceId: string) {
+  const refresh = useRefreshBillingServices();
+  return useMutation({
+    mutationFn: (tariffId: string) => billingAdminService.restoreTariff(serviceId, tariffId),
+    onSuccess: refresh,
+  });
+}
+
 export function useSaveBillingAssignmentMutation(serviceId: string) {
   const refresh = useRefreshBillingServices();
   return useMutation({

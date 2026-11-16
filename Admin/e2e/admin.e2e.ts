@@ -253,6 +253,7 @@ test('billing product and contract selection, invoice guards and retry preserve 
   await page.getByRole('link', { name: 'Second contract', exact: true }).click();
   await expect(page.locator('input[name="contractId"]')).toHaveValue('contract-2');
   await page.locator('input[name="billingMonth"]').fill('2026-07');
+  await page.locator('input[name="taxLegalBasis"]').fill('Outside the scope of UK VAT');
   await page.getByRole('button', { name: 'Calculate draft', exact: true }).click();
   await expect(page).toHaveURL(/invoice=draft-2/);
   await expect(page.getByRole('dialog', { name: 'Draft invoice · 2026-07' })).toBeVisible();
@@ -261,7 +262,9 @@ test('billing product and contract selection, invoice guards and retry preserve 
   const dialog = page.getByRole('dialog', { name: 'UOA-2026-000001', exact: true });
   await expect(dialog).toBeVisible();
   expect(fixture.calculations).toEqual([
-    { contract_id: 'contract-2', issuer_profile_id: 'issuer-1', billing_month: '2026-07' },
+    { contract_id: 'contract-2', issuer_profile_id: 'issuer-1', billing_month: '2026-07',
+      tax_treatment: 'no_tax_charged', tax_rate_percent: '0',
+      tax_legal_basis: 'Outside the scope of UK VAT' },
   ]);
   await expect(dialog.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Void invoice', exact: true })).toHaveCount(0);
@@ -286,7 +289,9 @@ test('billing product and contract selection, invoice guards and retry preserve 
   await expect(dialog.getByRole('button', { name: 'Record activity', exact: true })).toHaveCount(0);
   expect(fixture.payments).toHaveLength(2);
   expect(fixture.payments[1]).toEqual(fixture.payments[0]);
+  await expect(dialog).not.toHaveAttribute('aria-busy', 'true');
   await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
   await page.getByRole('link', { name: 'UOA-2026-000001', exact: true }).click();
   await expect(dialog).toBeVisible();
   expect(fixture.errors).toEqual([]);
@@ -330,8 +335,8 @@ test('future manual seat terms activate from the contract doorway without changi
 test('new billing terms show the prospective 30 percent default', async ({ page }, testInfo) => {
   const fixture = await installFixtures(page);
   await page.goto('/billing?section=products');
-  await page.getByRole('button', { name: 'Add service' }).click();
-  const serviceDialog = page.getByRole('dialog', { name: 'Add billing service' });
+  await page.getByRole('button', { name: 'Add product' }).click();
+  const serviceDialog = page.getByRole('dialog', { name: 'Add product' });
   await expect(serviceDialog).toBeVisible();
   await expect(serviceDialog.getByLabel('Markup (%)')).toHaveValue('30.00');
   await expect(serviceDialog.getByLabel('Usage payment')).toHaveValue('prepaid');
@@ -348,12 +353,12 @@ test('new billing terms show the prospective 30 percent default', async ({ page 
   await page.keyboard.press('Escape');
   await serviceDialog.getByRole('button', { name: 'Discard changes' }).click();
   await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
-  await expect(page.getByText(/Default and assignment changes take effect next UTC month/))
-    .toBeVisible();
+  await expect(page.getByText(/A change starts on the 1st of next month \(UTC\)/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add product' })).toHaveCount(0);
   await page.screenshot({
     path: `e2e/artifacts/billing-effective-month-${testInfo.project.name}.png`,
   });
-  await page.getByRole('button', { name: 'Tariff version' }).click();
+  await page.getByRole('button', { name: 'New tariff' }).click();
   const tariffDialog = page.getByRole('dialog', { name: /Add tariff version/ });
   await expect(tariffDialog).toBeVisible();
   await expect(tariffDialog.getByLabel('Markup (%)')).toHaveValue('30.00');
@@ -372,7 +377,8 @@ test('fixed seat capacity is reachable from the service subscription doorway', a
   const fixture = await installFixtures(page);
   await page.goto('/billing?section=products');
   await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
-  await page.getByRole('button', { name: 'Subscriptions' }).click();
+  await page.getByRole('button', { name: /^Subscriptions/ }).click();
+  await expect(page.getByRole('heading', { name: 'Stripe subscriptions' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Seat subscriptions' })).toBeVisible();
   await expect(page.getByText('Acme Research').last()).toBeVisible();
   const capacity = page.getByRole('textbox', { name: 'Purchased seats for Acme Research' });

@@ -96,7 +96,7 @@ it('switching selected products unmounts a pending issuance and never reveals it
   rendered.rerender(view({ ...product, id: 'deepwater-1', identifier: 'deepwater', name: 'DeepWater' }));
   await act(async () => finish(result));
   expect(screen.queryByRole('dialog')).toBeNull(); expect(screen.queryByText(secret)).toBeNull();
-  expect(await screen.findByText('No Ledger runtime keys have been issued for DeepWater.')).toBeTruthy();
+  expect(await screen.findByText('DeepWater has no active Ledger runtime key.')).toBeTruthy();
   expect(client.getMutationCache().getAll()).toHaveLength(0);
   expect(JSON.stringify(client.getQueryCache().getAll().map((query) => query.state.data)))
     .not.toContain(secret);

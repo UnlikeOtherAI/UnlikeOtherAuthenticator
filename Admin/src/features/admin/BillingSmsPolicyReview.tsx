@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/Button';
 import { FieldShell, TextAreaField } from '../../components/ui/FormFields';
 import { Modal } from '../../components/ui/Modal';
 import type { SmsFxPreview, SmsRoutePreview } from '../../schemas/billing-sms-policies';
+import { billingDateTime } from './billing-format';
 
 export function BillingSmsPolicyReview({ preview, kind, pending, error, onClose, onAccept }: {
   preview: SmsFxPreview | SmsRoutePreview | null; kind: 'fx' | 'route'; pending: boolean;
@@ -27,7 +28,7 @@ export function BillingSmsPolicyReview({ preview, kind, pending, error, onClose,
           <dt className="text-gray-500">{label.replaceAll('_', ' ')}</dt>
           <dd className="break-all font-mono text-xs text-gray-900">{value}</dd>
         </div>)}</dl>
-      <p className="text-xs text-gray-500">Review expires {new Date(preview.preview_expires_at).toLocaleString()}.
+      <p className="text-xs text-gray-500">Review expires {billingDateTime(preview.preview_expires_at)}.
         Acceptance records your UOA subject, time and reason. Existing evidence cannot be edited.</p>
       <label className="flex items-start gap-2 text-sm text-gray-700"><input type="checkbox"
         checked={understood} onChange={(event) => setUnderstood(event.target.checked)} />

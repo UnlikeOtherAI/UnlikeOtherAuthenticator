@@ -176,7 +176,7 @@ export function BillingTariffDialog({
           />
           <span>
             <span className="block text-sm font-medium text-gray-700">
-              Make this the service default
+              Make this the product default
             </span>
             <span className="mt-0.5 block text-xs text-gray-500">
               The default changes next UTC month. Existing Stripe subscriptions pin their

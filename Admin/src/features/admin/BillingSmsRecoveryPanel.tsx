@@ -8,6 +8,8 @@ import { Modal } from '../../components/ui/Modal';
 import { FieldShell, TextField } from '../../components/ui/FormFields';
 import { createApiClient } from '../../services/api-client';
 import { BillingSmsRefundVerificationForm } from './BillingSmsRefundVerificationForm';
+import { PaginationFooter, usePagination } from '../../components/ui/Table';
+import { billingDateTime, billingLabel } from './billing-format';
 
 const api = createApiClient(); const base = '/internal/admin/billing/sms-policies/recovery';
 const Resource = z.object({ id: z.string(), service_id: z.string(), organisation_id: z.string(),
@@ -27,6 +29,8 @@ export function BillingSmsRecoveryPanel() {
   const [selected, setSelected] = useState(''); const [lookup, setLookup] = useState('');
   const rows = useQuery({ queryKey: ['admin', 'billing', 'sms-recovery', cursor],
     queryFn: async () => List.parse(await api.get<unknown>(`${base}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, { cache: 'no-store' })) });
+  const { pageItems, pagination } = usePagination(rows.data?.resources ?? [], 10,
+    { key: 'sms_recovery_page', resetKey: cursor ?? '' });
   const detail = useQuery({ queryKey: ['admin', 'billing', 'sms-recovery-detail', selected], enabled: Boolean(selected),
     queryFn: async () => Detail.parse(await api.get<unknown>(`${base}/${encodeURIComponent(selected)}`, { cache: 'no-store' })) });
   return <Card className="space-y-4 p-5"><h3 className="font-semibold text-gray-900">Number payment recovery</h3>
@@ -40,29 +44,30 @@ export function BillingSmsRecoveryPanel() {
     </form>
     {rows.isLoading ? <p className="text-sm text-gray-500">Loading recovery resources...</p> : null}
     {rows.isError ? <p role="alert" className="text-sm text-red-600">Could not load recovery resources. Reload to retry.</p> : null}
-    {rows.data?.resources.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3 text-sm">
-      <div><p className="font-medium">{row.phone_number} · {row.country} · {row.state.replaceAll('_', ' ')}</p>
-        <p className="break-all text-xs text-gray-500">{row.id} · {row.recovery_reason ?? 'Reason unavailable'}</p></div>
+    {pageItems.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3 text-sm">
+      <div><p className="font-medium">{row.phone_number} · {row.country} · {billingLabel(row.state)}</p>
+        <p className="break-all text-xs text-gray-500">{row.id} · {row.recovery_reason ? billingLabel(row.recovery_reason) : 'Reason unavailable'}</p></div>
       <Button onClick={() => setSelected(row.id)}>Review resource</Button>
     </div>)}
     {rows.data?.resources.length === 0 ? <p className="text-sm text-gray-500">No resources awaiting recovery.</p> : null}
+    <PaginationFooter {...pagination} />
     <div className="flex gap-2">{cursor ? <Button onClick={() => setCursor(null)}>First page</Button> : null}
       {rows.data?.next_cursor ? <Button onClick={() => setCursor(rows.data?.next_cursor ?? null)}>Older resources</Button> : null}</div>
     <Modal isOpen={Boolean(selected)} onClose={() => setSelected('')} title="SMS number recovery" widthClassName="max-w-2xl">
       {detail.isLoading ? <p>Loading exact resource...</p> : null}
       {detail.isError ? <p role="alert" className="text-sm text-red-600">Resource unavailable. <Button onClick={() => void detail.refetch()}>Retry</Button></p> : null}
       {detail.data ? <div className="space-y-3 text-sm">
-        <p className="font-medium">{detail.data.phone_number} · {detail.data.state.replaceAll('_', ' ')}</p>
+        <p className="font-medium">{detail.data.phone_number} · {billingLabel(detail.data.state)}</p>
         <p className="break-all font-mono text-xs">Resource {detail.data.id}</p>
         <Link className="text-blue-600 hover:underline" to={`/organisations/${encodeURIComponent(detail.data.organisation_id)}`}>
           Organisation {detail.data.organisation_id}</Link>
-        <p>{detail.data.recovery_reason ?? 'No recovery reason recorded'}</p>
+        <p>{detail.data.recovery_reason ? billingLabel(detail.data.recovery_reason) : 'No recovery reason recorded'}</p>
         <p>Frozen customer quote: {detail.data.quote.final_currency} {detail.data.quote.final_amount} per month</p>
         <p className="break-all text-xs">Provider account {detail.data.account_sid ?? 'Not attached'} · number SID {detail.data.phone_number_sid ?? 'Not attached'}</p>
         {detail.data.subscriptions.map((item) => <div key={item.id} className="space-y-1 rounded-lg border border-gray-200 p-3 text-xs">
           <p>{item.livemode ? 'Live' : 'Test'} Stripe account {item.stripe_account_id}</p>
-          <p className="break-all">Subscription {item.stripe_subscription_id} · {item.status} · cancellation at period end {item.cancel_at_period_end ? 'yes' : 'no'}</p>
-          <p className="break-all">Initial invoice {item.initial_invoice_id ?? 'Unavailable'} · paid {item.initial_invoice_paid_at ?? 'Unverified'}</p>
+          <p className="break-all">Subscription {item.stripe_subscription_id} · {billingLabel(item.status)} · cancellation at period end {item.cancel_at_period_end ? 'yes' : 'no'}</p>
+          <p className="break-all">Initial invoice {item.initial_invoice_id ?? 'Unavailable'} · paid {item.initial_invoice_paid_at ? billingDateTime(item.initial_invoice_paid_at) : 'Unverified'}</p>
         </div>)}
         {detail.data.subscriptions.length === 0 ? <p>Verified payment references unavailable.</p> : null}
         <p className="rounded-lg bg-amber-50 p-3 text-amber-900">{detail.data.operator_next_step}</p>

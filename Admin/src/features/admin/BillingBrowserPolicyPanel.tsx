@@ -2,9 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../../components/ui/Button';
 import { FieldShell, TextField } from '../../components/ui/FormFields';
+import { PaginationFooter, usePagination } from '../../components/ui/Table';
 import type { BillingService } from '../../schemas/billing';
 import { useBrowserPolicies, usePublishBrowserPolicy } from './billing-browser-policy-queries';
 import { useBillingNavigation } from './billing-navigation';
+import { billingDateTime } from './billing-format';
 
 export function BillingBrowserPolicyPanel({ service }: { service: BillingService }) {
   const { href } = useBillingNavigation();
@@ -15,6 +17,8 @@ export function BillingBrowserPolicyPanel({ service }: { service: BillingService
     [source, setSource] = useState('');
   const [until, setUntil] = useState(''),
     [error, setError] = useState('');
+  const current = list.data?.policies.filter((row) => !row.retired_at) ?? [];
+  const { pageItems, pagination } = usePagination(current, 10, { key: 'browser_policies_page' });
   const active = list.data?.policies.find((row) => row.project_id === project.trim() && !row.retired_at);
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -68,9 +72,7 @@ export function BillingBrowserPolicyPanel({ service }: { service: BillingService
           <p>
             {list.data.pending} sessions awaiting settlement · {list.data.reconciliation} need reconciliation
           </p>
-          {list.data.policies
-            .filter((row) => !row.retired_at)
-            .map((row) => (
+          {pageItems.map((row) => (
               <div key={row.policy_id} className="rounded-lg border border-gray-200 p-3">
                 <p className="font-medium">Project {row.project_id}</p>
                 <p>
@@ -78,7 +80,7 @@ export function BillingBrowserPolicyPanel({ service }: { service: BillingService
                   {Number(row.customer_price_per_minute).toFixed(6)}/minute customer rate
                 </p>
                 <p>
-                  Valid until {new Date(row.valid_until).toLocaleString()} · Started minute, one-minute
+                  Valid until {billingDateTime(row.valid_until)} · Started minute, one-minute
                   minimum
                 </p>
                 <a className="text-blue-600 underline" href={row.source_url} target="_blank" rel="noreferrer">
@@ -86,6 +88,7 @@ export function BillingBrowserPolicyPanel({ service }: { service: BillingService
                 </a>
               </div>
             ))}
+          <PaginationFooter {...pagination} />
         </div>
       ) : null}
       <form onSubmit={(event) => void save(event)} className="grid max-w-2xl gap-4 sm:grid-cols-2">

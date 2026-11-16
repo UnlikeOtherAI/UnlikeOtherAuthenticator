@@ -6,6 +6,8 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { SelectField } from '../../components/ui/FormFields';
 import { createApiClient } from '../../services/api-client';
+import { PaginationFooter, usePagination } from '../../components/ui/Table';
+import { billingDateTime, billingLabel } from './billing-format';
 
 const api = createApiClient();
 const Schema = z.object({ kind: z.enum(['inbound', 'outbound']), next_cursor: z.string().nullable(),
@@ -20,6 +22,8 @@ export function BillingSmsLiabilityPanel() {
   const [cursor, setCursor] = useState<string | null>(null);
   const query = useQuery({ queryKey: ['admin', 'billing', 'sms-liabilities', kind, cursor],
     queryFn: async () => Schema.parse(await api.get<unknown>(`/internal/admin/billing/sms-policies/liabilities?kind=${kind}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { cache: 'no-store' })) });
+  const { pageItems, pagination } = usePagination(query.data?.liabilities ?? [], 10,
+    { key: 'sms_liabilities_page', resetKey: `${kind}:${cursor ?? ''}` });
   return <Card className="space-y-4 p-5"><h3 className="font-semibold text-gray-900">SMS dispatch and inbound recovery</h3>
     <p className="text-sm text-gray-500">Provider uncertainty keeps outbound funds held. Inbound charges without a
       funded standing reserve remain uncollected liability. Missing prices are unknown; reconciliation never
@@ -30,8 +34,8 @@ export function BillingSmsLiabilityPanel() {
     </SelectField><Button onClick={() => void query.refetch()}>Reload liabilities</Button></div>
     {query.isLoading ? <p>Loading SMS liabilities...</p> : null}
     {query.isError ? <p role="alert" className="text-sm text-red-600">Could not load SMS liabilities. Reload to retry.</p> : null}
-    {query.data?.liabilities.map((row) => <details key={row.id} className="rounded-lg border border-gray-200 p-3 text-sm">
-      <summary className="cursor-pointer break-all font-medium">{row.state.replaceAll('_', ' ')} · {row.message_sid ?? row.dispatch_id ?? row.id}</summary>
+    {pageItems.map((row) => <details key={row.id} className="rounded-lg border border-gray-200 p-3 text-sm">
+      <summary className="cursor-pointer break-all font-medium">{billingLabel(row.state)} · {row.message_sid ?? row.dispatch_id ?? row.id}</summary>
       <div className="mt-3 space-y-1 break-all text-xs text-gray-500">
         <p>Product {row.service_id} · receipt/reservation {row.id}</p>
         <p>Number {row.number_id} · frozen allocation {row.allocation_id}</p>
@@ -40,12 +44,13 @@ export function BillingSmsLiabilityPanel() {
         <p>Held credits: {row.reserved_credits ?? 'Not applicable'}</p>
         <p>Consumed credits: {row.consumed_credits ?? 'Unknown'}</p>
         <p>Uncollected credits: {row.uncollected_credits ?? 'Unknown'}</p>
-        <p>Updated {new Date(row.updated_at).toLocaleString()}</p>
+        <p>Updated {billingDateTime(row.updated_at)}</p>
         <p>Recover the original provider receipt through the approved product SMS runtime workflow.
           Review above-bound charges explicitly before any financial resolution. This operator view performs no financial write.</p>
       </div>
     </details>)}
     {query.data?.liabilities.length === 0 ? <p className="text-sm text-gray-500">No {kind} liabilities awaiting recovery.</p> : null}
+    <PaginationFooter {...pagination} />
     <div className="flex gap-2">{cursor ? <Button onClick={() => setCursor(null)}>First page</Button> : null}
       {query.data?.next_cursor ? <Button onClick={() => setCursor(query.data?.next_cursor ?? null)}>Older liabilities</Button> : null}</div>
   </Card>;

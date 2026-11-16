@@ -24,6 +24,16 @@ export function billingDateTime(value: string | null | undefined): string {
   }) ?? '—';
 }
 
+/**
+ * A UTC calendar day (an invoice's issue or due date, a capacity change that starts at a UTC
+ * midnight): "16 Nov 2026", the same day wherever the operator is.
+ */
+export function billingUtcDate(value: string | null | undefined): string {
+  return parsed(value)?.toLocaleDateString(locale, {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+  }) ?? '—';
+}
+
 /** The UTC billing month of an instant, as the API writes it: "2026-11". */
 export function billingMonth(now: Date = new Date()): string {
   return now.toISOString().slice(0, 7);

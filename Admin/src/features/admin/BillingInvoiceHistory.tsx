@@ -5,6 +5,7 @@ import { useBillingNavigation } from './billing-navigation';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { DataTable, Td, PaginationFooter, usePagination } from '../../components/ui/Table';
 import type { BillingInvoice } from '../../schemas/billing-contracts';
+import { billingLabel } from './billing-format';
 
 function statusVariant(status: BillingInvoice['status']) {
   if (status === 'issued') return 'green' as const;
@@ -46,7 +47,7 @@ export function BillingInvoiceHistory({ invoices }: { invoices: BillingInvoice[]
                       {invoice.buyer.legal_name} · {invoice.billing_month}
                     </p>
                   </div>
-                  <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
+                  <Badge variant={statusVariant(invoice.status)}>{billingLabel(invoice.status)}</Badge>
                 </div>
                 <div className="flex items-end justify-between gap-3">
                   <p className="text-xs text-gray-500">
@@ -84,7 +85,7 @@ export function BillingInvoiceHistory({ invoices }: { invoices: BillingInvoice[]
                   </Td>
                   <Td>{invoice.billing_month}</Td>
                   <Td>
-                    <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
+                    <Badge variant={statusVariant(invoice.status)}>{billingLabel(invoice.status)}</Badge>
                   </Td>
                   <Td>{invoice.totals.total.display}</Td>
                   <Td>{invoice.totals.outstanding.display}</Td>
