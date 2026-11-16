@@ -108,11 +108,7 @@ function OrganisationProductTariffs({
   const productDefault = billingDefaultTariff(service);
 
   function clearError(key: string) {
-    setErrors((current) => {
-      const next = { ...current };
-      delete next[key];
-      return next;
-    });
+    setErrors((current) => Object.fromEntries(Object.entries(current).filter(([entry]) => entry !== key)));
   }
 
   function change(row: BillingTariffRowModel, value: string) {

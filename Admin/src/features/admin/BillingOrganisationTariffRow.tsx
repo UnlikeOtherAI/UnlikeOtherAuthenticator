@@ -38,7 +38,7 @@ export function BillingOrganisationTariffRow({
   const changed = value !== row.savedValue;
   return (
     <tr>
-      <Td>
+      <Td className="min-w-44">
         {row.teamId === null ? (
           <>
             <p className="font-medium text-gray-800">Entire organisation</p>
