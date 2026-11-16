@@ -93,11 +93,13 @@ test('operator moves a team, retries a refused change and removes a team tariff'
   await noHorizontalOverflow(page);
   await capture(page, info.project.name, 'organisation');
 
-  // Save and Cancel appear in a column that already has their width: nothing moves.
-  const before = await frontend.boundingBox();
+  // Save and Cancel appear in a column that already has their width.
+  const actionsWidth = async () => (await page.getByRole('columnheader').last().boundingBox())?.width;
+  const before = await actionsWidth();
+  expect(before).toBeGreaterThanOrEqual(192);
   await frontend.selectOption({ label: 'Standard' });
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
-  expect(await frontend.boundingBox()).toEqual(before);
+  expect(await actionsWidth()).toBe(before);
   await expect(page.getByRole('combobox', { name: 'Tariff for Backend' })).toBeDisabled();
   await capture(page, info.project.name, 'organisation-unsaved');
 
@@ -131,7 +133,8 @@ test('operator moves a team, retries a refused change and removes a team tariff'
   await expect(removal.getByRole('button', { name: "Remove Backend's own tariff" })).toHaveClass(/bg-red-600/);
   await removal.getByRole('button', { name: "Remove Backend's own tariff" }).click();
   await expect(backend).toHaveValue('');
-  await expect(page.getByRole('row').filter({ hasText: 'Backend' }).getByRole('cell').nth(3)).toHaveText('—');
+  // Changed is the fourth column; it is hidden below md, so it is read from the DOM.
+  await expect(page.getByRole('row').filter({ hasText: 'Backend' }).locator('td').nth(3)).toHaveText('—');
 
   expect(billing.writes.map((write) => write.method)).toEqual(['PUT', 'PUT', 'DELETE']);
   expect(billing.writes[1]?.body).toEqual({ tariff_id: 'standard', organisation_id: 'o1', team_id: 't13' });
