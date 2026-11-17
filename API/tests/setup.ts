@@ -46,6 +46,13 @@ process.env.ADMIN_ACCESS_TOKEN_SECRET =
 process.env.ENTERPRISE_SSO_CUSTODY_PROVIDER ??= 'local';
 process.env.ENTERPRISE_SSO_KEYRING ??= JSON.stringify({ current: 'vitest', keys: { vitest: randomBytes(32).toString('base64') } });
 
+// Suites sign with a new key pair per case under one `kid`; a product never does. Kept partner
+// keys are covered by tests/unit/partner-jwks-cache.test.ts, which turns the cache on itself.
+process.env.PARTNER_JWKS_CACHE_SECONDS ??= '0';
+// Suites count fetches and stub the transport per case; kept connections are covered by
+// tests/unit/config-fetch-kept-connection.test.ts.
+process.env.CONFIG_FETCH_KEEP_ALIVE_SECONDS ??= '0';
+
 let jwksServer: Server | undefined;
 
 beforeAll(async () => {

@@ -7,6 +7,26 @@ import { lockAndAssertAuthenticationEpochShared } from './authentication-epoch.s
 import { verifyConfidentialSubjectToken } from './confidential-token-exchange.service.js';
 import { validateSessionAssurance } from './session-assurance.service.js';
 
+type ValidatedAssurance = Awaited<ReturnType<typeof validateSessionAssurance>>;
+
+/**
+ * What a product is told about a proof UOA just validated. One shape for
+ * `POST /org/assurance/validate` and the `assurance` block of `GET /org/me`, so a product
+ * that reads either cannot be told two different things about the same proof.
+ */
+export function assuranceValidationAnswer(proof: ValidatedAssurance, now = Date.now()) {
+  return {
+    active: true as const,
+    assurance_id: proof.id, method: proof.method, expires_at: proof.expiresAt.toISOString(),
+    client_domain: proof.clientDomain,
+    recheck_by: new Date(Math.min(now + 1800000, proof.expiresAt.getTime())).toISOString(),
+    policy_generation: proof.policyGeneration,
+    connection_generation: proof.connectionGeneration, connection_revision: proof.connectionRevision,
+    authenticated_at: proof.authenticatedAt?.toISOString() ?? null, observed_at: proof.observedAt.toISOString(),
+    ...(proof.connectionId ? { connection_id: proof.connectionId } : {}),
+  };
+}
+
 export type AssuranceValidationInput = { assurance_ref: string; org_id?: string; team_id?: string };
 function invalid(): never { throw new AppError('UNAUTHORIZED', 401, 'INVALID_SESSION_ASSURANCE'); }
 

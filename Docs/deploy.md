@@ -228,6 +228,8 @@ Set via Cloud Run service config:
 | `BILLING_ACTOR_AUDIENCE_MODE`               | Plain `warn` (default) or `enforce`. Whether an `X-UOA-Actor` assertion naming only the legacy constant audience is accepted-and-logged or refused with `BILLING_ACTOR_AUDIENCE_MISMATCH`. An assertion naming the exact endpoint is accepted in both modes; anything else is refused in both. Flip to `enforce` only once the legacy-audience warning has been silent for every product — see `Docs/Auth/billing-actor-assertions.md`                                                     |
 | `PRODUCT_API_MAX_CONCURRENCY`               | Plain per-instance cap on concurrently executing product data-API requests (`/org/*`, `/domain/*`, `/settings/*`, `/internal/org/*`, `/avatar/*`, `/email/*`); default `2`. Sized from the pool caps below: two in flight always leave at least one app and one admin connection for `/auth/*`. Never limits sign-in, `/oauth/*`, `/2fa/*`, `/integrations/*`, `/internal/admin/*` or billing |
 | `PRODUCT_API_QUEUE_WAIT_MS`                 | Plain wait budget for an excess product-API request before `503 PRODUCT_API_BUSY` + `Retry-After: 1`; default `3000`, must stay well under the 30 s request timeout                                                                                                                                                                                                                                                                                                  |
+| `CONFIG_FETCH_KEEP_ALIVE_SECONDS`           | Plain number of seconds an idle connection to a product's config URL is kept for the next config fetch; default `30`, `0` opens a new connection for every fetch. The config itself is still fetched and verified on every request |
+| `PARTNER_JWKS_CACHE_SECONDS`                | Plain number of seconds a product's public signing keys (its JWKS) are kept between subject assertions; default `60`, `0` fetches them for every assertion. See "Kept partner signing keys" below |
 | `PRODUCT_API_MAX_QUEUE`                     | Plain queue depth beyond which excess product-API requests are refused at once; default `32` (what two slots can drain inside the wait budget)                                                                                                                                                                                                                                                                                                                                                |
 | `STRIPE_BILLING_ENABLED`                    | Plain safety gate. Production default is `false`; Stripe and Ledger collection calls are forbidden until every launch prerequisite below is verified                                                                                                                                                                                                                                                                                                              |
 | `STRIPE_SECRET_KEY`                         | Secret Manager: dedicated Stripe restricted/live key for UOA billing. Presence alone does not enable billing                                                                                                                                                                                                                                                                                                                                                      |
@@ -278,6 +280,36 @@ product data-API requests per instance (default 2) and answers the excess with
 `503 PRODUCT_API_BUSY` + `Retry-After: 1` after a short FIFO wait, so `/auth/*`
 always finds a connection. Raise `PRODUCT_API_MAX_CONCURRENCY` only together
 with the pool caps: it must stay below `connection_limit` on `DATABASE_URL`.
+
+Every product-API answer reports `Server-Timing: queue;dur=<ms>, total;dur=<ms>`:
+the wait for a slot and the whole time on this instance. With two slots, what a
+request does while it holds one is the instance's throughput, so a caller's
+latency under a burst is mostly `queue`.
+
+### Kept partner signing keys
+
+A product-signed subject assertion is verified against the product's JWKS. UOA
+keeps that key set in process memory for `PARTNER_JWKS_CACHE_SECONDS` (default
+60) instead of fetching it for every assertion, which used to cost a DNS lookup
+and a new TLS connection to the product inside a held slot. Every assertion is
+still verified. A token the kept keys do not match (unknown `kid` or a
+signature mismatch) reads the JWKS again before it is refused, at most once
+every five seconds, so a rotation works on the first token signed by the new
+key; a key the product removed can verify for up to the keep window. A failed
+read keeps nothing and is never answered from an older copy. Set the variable to
+`0` to fetch for every assertion again (`API/src/services/partner-jwks-cache.service.ts`).
+
+### Kept config connections
+
+The config JWT is fetched from the product and verified on every request; that
+has not changed. What `CONFIG_FETCH_KEEP_ALIVE_SECONDS` (default 30) keeps is
+the connection: the pinned agent for one host at one vetted address is reused
+for the next fetch instead of opening TCP and TLS again. The hostname is
+resolved and checked against the public-destination rules before every request,
+and a host that resolves to another address gets a new agent. A kept connection
+that the product closed in the meantime fails once; that fetch is repeated on a
+new connection before it is reported as `CONFIG_URL_NETWORK_ERROR`. A fetch that
+ran out of time is not repeated. `0` restores a connection per fetch.
 
 Production requires two genuinely distinct principals. `DATABASE_URL` must
 report `current_user = 'uoa_app'`; `DATABASE_ADMIN_URL` must report

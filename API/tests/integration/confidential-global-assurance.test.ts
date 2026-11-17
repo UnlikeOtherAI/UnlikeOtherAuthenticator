@@ -113,6 +113,21 @@ describe('confidential original global assurance with PostgreSQL', () => {
         payload: { assurance_ref: a.reference, org_id: org.id, team_id: team.id } });
       expect(match.statusCode, `${match.body} ${failureCode}`).toBe(200);
       expect(match.json()).toMatchObject({ active: true, assurance_id: a.assurance.id });
+      // The identity read validated the same proof and says so in the same words.
+      const me = await app.inject({ method: 'GET', headers,
+        url: `/org/me?domain=${encodeURIComponent(f.domain)}&config_url=${encodeURIComponent(configUrl)}` });
+      expect(me.statusCode, me.body).toBe(200);
+      const { recheck_by: _validated, ...validated } = match.json() as Record<string, unknown>;
+      const { recheck_by: reported, ...assurance } = (me.json() as { assurance: Record<string, unknown> }).assurance;
+      expect(assurance).toEqual({ ...validated, ok: undefined, org_id: org.id, team_id: team.id });
+      expect(Date.parse(String(reported))).toBeGreaterThan(Date.now());
+      // Without a role on the domain the validate route refuses, so the read reports nothing.
+      await f.db.domainRole.delete({ where: { domain_userId: { domain: f.domain, userId: f.user.id } } });
+      const roleless = await app.inject({ method: 'GET', headers,
+        url: `/org/me?domain=${encodeURIComponent(f.domain)}&config_url=${encodeURIComponent(configUrl)}` });
+      expect(roleless.statusCode, roleless.body).toBe(200);
+      expect((roleless.json() as { assurance?: unknown }).assurance).toBeUndefined();
+      await f.db.domainRole.create({ data: { domain: f.domain, userId: f.user.id, role: 'USER' } });
       const swapped = await app.inject({ method: 'POST', url, headers,
         payload: { assurance_ref: b.reference, org_id: org.id, team_id: team.id } });
       expect(swapped.statusCode, swapped.body).toBe(401);

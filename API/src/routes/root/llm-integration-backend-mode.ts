@@ -42,6 +42,12 @@ product session and retry with backoff and a fresh assertion. A genuine invalid
 signature, missing key, expired assertion or unsafe JWKS destination remains a
 401 refusal. Never substitute local membership records for UOA’s answer.
 
+UOA keeps those public keys for up to 60 seconds between assertions, and verifies
+every assertion against them. Publish a new key in your JWKS before you sign with
+it: a token whose \`kid\` or signature the kept keys do not match makes UOA read
+your JWKS again (at most once every five seconds) before it refuses. A key you
+remove can keep verifying for up to those 60 seconds.
+
 Send exactly one user credential. A request with both headers, a blank or
 repeated assertion, a stale epoch, invalid signature/audience/lifetime, or a
 different active organisation is refused; it never falls through to backend mode.

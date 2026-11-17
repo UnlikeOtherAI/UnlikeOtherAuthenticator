@@ -123,6 +123,7 @@ export function createBulkhead(options: BulkheadOptions): Bulkhead {
 const RETRY_AFTER_SECONDS = '1';
 
 const heldSlots = new WeakMap<FastifyRequest, () => void>();
+const slotWaits = new WeakMap<FastifyRequest, number>();
 
 function releaseSlot(request: FastifyRequest): void {
   const release = heldSlots.get(request);
@@ -144,6 +145,7 @@ export function registerProductApiBulkhead(
 
   app.addHook('onRequest', async (request, reply) => {
     if (!isProductApiPath(pathnameOf(request))) return;
+    const arrivedAt = performance.now();
 
     // A client that drops the connection while queued must not be handed a slot later.
     const clientGone = new AbortController();
@@ -161,10 +163,25 @@ export function registerProductApiBulkhead(
     }
     reply.raw.off('close', onCloseWhileQueued);
 
+    slotWaits.set(request, performance.now() - arrivedAt);
     heldSlots.set(request, release);
     // `onResponse` releases on the normal and error paths; the raw 'close' covers a
     // client that disconnects mid-handler, which Fastify never reports as a response.
     reply.raw.once('close', () => releaseSlot(request));
+  });
+
+  // What the caller cannot see from outside: how long this request waited for its slot and how
+  // long the instance spent on it in all. Durations only, so a product can tell a slow answer
+  // from a busy instance (Docs/deploy.md, product-API bulkhead).
+  app.addHook('onSend', async (request, reply, payload) => {
+    const waited = slotWaits.get(request);
+    if (waited !== undefined) {
+      reply.header(
+        'Server-Timing',
+        `queue;dur=${waited.toFixed(1)}, total;dur=${reply.elapsedTime.toFixed(1)}`,
+      );
+    }
+    return payload;
   });
 
   app.addHook('onResponse', async (request) => releaseSlot(request));

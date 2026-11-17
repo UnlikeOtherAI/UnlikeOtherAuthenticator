@@ -1,18 +1,37 @@
-import { fetch as undiciFetch } from 'undici';
+import { fetch as undiciFetch, type Agent } from 'undici';
 
+import { getEnv } from '../config/env.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import {
   closeSsrfAgent,
   createPinnedAgent,
+  dropKeptPinnedAgent,
+  keptPinnedAgent,
   parseHttpsUrl,
   resolvePublicDestinations,
+  type PublicDestination,
 } from '../utils/ssrf.js';
 import { configFetchFailure, errorName, responseDiagnostics } from './config-fetch-diagnostics.service.js';
 
 const DEFAULT_CONFIG_FETCH_TIMEOUT_MS = 5_000;
 const MAX_CONFIG_JWT_RESPONSE_BYTES = 64 * 1024;
 const MAX_CONFIG_FETCH_REDIRECTS = 3;
+
+type ConfigConnection = { agent: Agent; kept: boolean };
+
+/**
+ * The config is fetched for every request (brief 22.2). What may be reused between those
+ * fetches is the connection: with `CONFIG_FETCH_KEEP_ALIVE_SECONDS` above zero the pinned agent
+ * for this host and vetted address is kept, so a product backend's calls do not each pay TCP
+ * and TLS setup while holding a product-API slot.
+ */
+function configConnection(url: URL, destination: PublicDestination): ConfigConnection {
+  const keepAliveMs = getEnv().CONFIG_FETCH_KEEP_ALIVE_SECONDS * 1000;
+  return keepAliveMs > 0
+    ? { agent: keptPinnedAgent(url, destination, keepAliveMs), kept: true }
+    : { agent: createPinnedAgent(url, destination), kept: false };
+}
 
 async function cancelResponseBody(res: Response): Promise<void> {
   try {
@@ -107,16 +126,28 @@ export async function fetchConfigJwtFromUrl(
       let lastNetworkError: unknown;
 
       for (const destination of destinations) {
-        const agent = createPinnedAgent(url, destination);
-
-        try {
-          const res = await undiciFetch(url.toString(), {
+        let connection = configConnection(url, destination);
+        const get = (agent: Agent) =>
+          undiciFetch(url.toString(), {
             method: 'GET',
             headers: { accept: 'text/plain, application/json' },
             redirect: 'manual',
             signal: controller.signal,
             dispatcher: agent,
           });
+
+        try {
+          let res;
+          try {
+            res = await get(connection.agent);
+          } catch (error) {
+            // A kept connection the product closed in the meantime fails once. Ask again on a
+            // new one before this counts as a network error.
+            if (!connection.kept || controller.signal.aborted) throw error;
+            await dropKeptPinnedAgent(url, destination);
+            connection = configConnection(url, destination);
+            res = await get(connection.agent);
+          }
 
           if ([301, 302, 303, 307, 308].includes(res.status)) {
             const location = res.headers.get('location');
@@ -189,7 +220,7 @@ export async function fetchConfigJwtFromUrl(
           if (err instanceof AppError) throw err;
           lastNetworkError = err;
         } finally {
-          await closeSsrfAgent(agent);
+          if (!connection.kept) await closeSsrfAgent(connection.agent);
         }
       }
 

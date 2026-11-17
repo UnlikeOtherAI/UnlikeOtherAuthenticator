@@ -3608,3 +3608,45 @@ existing seat cohort or taking its roster write lock. First creation retains
 locked cohort capture and bounded whole-transaction serialization retries.
 Paid dispatch admission keeps its roster fence; conflicts never grant access or
 extend the allowance. See [payment admission](Billing/nessie-payment-admission.md).
+
+
+## Partner signing keys between assertions (17 November 2026)
+
+Clarifies "2026-10-14 Subject verification dependency outages" and the
+subject-assertion rules above; nothing there is withdrawn.
+
+UOA may keep a product's public JWKS in process memory for a bounded time
+(default 60 seconds, `PARTNER_JWKS_CACHE_SECONDS`; `0` disables it) rather than
+fetch it for every subject assertion. This is public key material, not a trust
+decision:
+
+- Every assertion is still verified in full: signature, issuer, audience,
+  lifetime, `jti`, the live credential epoch and current membership.
+- A token the kept keys do not match (unknown `kid` or signature mismatch) reads
+  the JWKS again before it is refused, at most once every five seconds per key
+  set. A product's rotation therefore takes effect on the first token signed by
+  the new key.
+- A key the product removed can keep verifying for at most the keep window.
+  Disabling the domain or its secret in UOA still takes effect on the next
+  request, because those are read from the database every time.
+- Keys are "unavailable" when they have to be read and cannot be. A failed read
+  keeps nothing, is never answered from an older copy, and returns
+  `INTEGRATION_JWKS_UNAVAILABLE` exactly as before. No negative result is kept.
+
+Config JWTs are unchanged: fetched and verified on every request (22.2, 22.4).
+Between those fetches UOA may reuse an idle connection to the product's config
+host (`CONFIG_FETCH_KEEP_ALIVE_SECONDS`, default 30; `0` disables it). The
+destination is still resolved and vetted before every request, and a kept
+connection is only ever to the address that passed that check.
+
+Product data-API answers carry `Server-Timing: queue;dur, total;dur` (the wait
+for a bulkhead slot and the whole time on the instance). Durations only.
+
+`GET /org/me` has always validated the caller's original proof inside its
+transaction. It now also returns what it validated, as an `assurance` object
+with the fields of `POST /org/assurance/validate` plus `org_id` and `team_id`,
+when the credential carried a proof and the person holds a role on the domain
+(the same role requirement as the validate route). A product that needs both
+answers for one person and one team can ask once instead of twice. No check is
+removed: an absent object means "ask the validate route", never "no proof
+needed".

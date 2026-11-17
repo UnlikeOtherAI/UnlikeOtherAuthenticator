@@ -14,7 +14,8 @@ import { normalizeDomain } from '../utils/domain.js';
 import { AppError } from '../utils/errors.js';
 import { findJwkByKid, importClientJwkKey, type PublicRsaJwks } from './client-jwk.service.js';
 import type { ClientConfig } from './config.service.js';
-import { fetchPartnerJwks, PartnerJwksUnavailableError } from './jwks-fetch.service.js';
+import { PartnerJwksUnavailableError } from './jwks-fetch.service.js';
+import { UnknownPartnerKeyError, verifyWithPartnerJwks } from './partner-jwks-cache.service.js';
 import {
   signConfidentialAccessToken,
   type ConfidentialAccessTokenClaims,
@@ -127,21 +128,26 @@ export async function verifyConfidentialSubjectToken(
     }
 
     const jwksUrl = getConfigJwksUrl(params.configJwt, sourceDomain);
-    const jwks = await (deps.fetchJwks ?? fetchPartnerJwks)(jwksUrl, {
-      expectedHost: sourceDomain,
-    });
-    const jwk = findJwkByKid(jwks, header.kid);
-    if (!jwk || (jwk.alg && jwk.alg !== 'RS256') || (jwk.use && jwk.use !== 'sig')) {
-      throw invalidSubjectToken();
-    }
-
-    const publicKey = await importClientJwkKey(jwk);
-    const { payload } = await jwtVerify(params.subjectToken, publicKey, {
-      algorithms: ['RS256'],
-      issuer: sourceDomain,
-      audience: params.audience,
-      clockTolerance: CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS,
-    });
+    const kid = header.kid;
+    const verifySignature = async (jwks: PublicRsaJwks) => {
+      const jwk = findJwkByKid(jwks, kid);
+      if (!jwk) throw new UnknownPartnerKeyError();
+      if ((jwk.alg && jwk.alg !== 'RS256') || (jwk.use && jwk.use !== 'sig')) {
+        throw invalidSubjectToken();
+      }
+      return jwtVerify(params.subjectToken, await importClientJwkKey(jwk), {
+        algorithms: ['RS256'],
+        issuer: sourceDomain,
+        audience: params.audience,
+        clockTolerance: CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS,
+      });
+    };
+    const keyOptions = { expectedHost: sourceDomain };
+    // An injected reader is the caller's own transport and is asked every time. The
+    // default keeps the product's public keys for a minute (partner-jwks-cache.service.ts).
+    const { payload } = deps.fetchJwks
+      ? await verifySignature(await deps.fetchJwks(jwksUrl, keyOptions))
+      : await verifyWithPartnerJwks(jwksUrl, keyOptions, verifySignature);
     const assertion = SubjectAssertionSchema.parse(payload);
     const now = deps.now?.() ?? Math.floor(Date.now() / 1000);
 
