@@ -6,7 +6,7 @@ import { requireDomainHashAuthForDomainQuery } from '../../middleware/domain-has
 import { resolveOrgUserClaims } from '../../middleware/org-role-guard.js';
 import { createManagementContinuation } from '../../services/org-sso-management.service.js';
 import { enterpriseReadiness } from '../../services/org-sso-policy.service.js';
-import { resolveOriginalAssurance } from '../../services/confidential-assurance-validation.service.js';
+import { assuranceValidationAnswer, resolveOriginalAssurance } from '../../services/confidential-assurance-validation.service.js';
 import { AppError } from '../../utils/errors.js';
 
 export function registerOrgEnterpriseRoutes(app: FastifyInstance): void {
@@ -49,13 +49,6 @@ export function registerOrgEnterpriseRoutes(app: FastifyInstance): void {
     const body = z.object({ assurance_ref: z.string().min(32).max(256), org_id: z.string().min(1).optional(),
       team_id: z.string().min(1).optional() }).strict().refine(value => !value.team_id || Boolean(value.org_id)).parse(request.body);
     const proof = await resolveOriginalAssurance(request, body);
-    return reply.header('Cache-Control', 'no-store').send({ ok: true, active: true,
-      assurance_id: proof.id, method: proof.method, expires_at: proof.expiresAt.toISOString(),
-      client_domain: proof.clientDomain,
-      recheck_by: new Date(Math.min(Date.now() + 1800000, proof.expiresAt.getTime())).toISOString(),
-      policy_generation: proof.policyGeneration,
-      connection_generation: proof.connectionGeneration, connection_revision: proof.connectionRevision,
-      authenticated_at: proof.authenticatedAt?.toISOString() ?? null, observed_at: proof.observedAt.toISOString(),
-      ...(proof.connectionId ? { connection_id: proof.connectionId } : {}) });
+    return reply.header('Cache-Control', 'no-store').send({ ok: true, ...assuranceValidationAnswer(proof) });
   });
 }

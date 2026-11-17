@@ -19,6 +19,7 @@ import { resolveProductTeamPolicy } from '../../services/product-team-policy.ser
 import { AppError } from '../../utils/errors.js';
 import { configVerifier } from '../../middleware/config-verifier.js';
 import { memberAvatarImageUrl } from '../../services/organisation.service.base.js';
+import { assuranceValidationAnswer } from '../../services/confidential-assurance-validation.service.js';
 import { validateSessionAssurance } from '../../services/session-assurance.service.js';
 import { assertTenantEffectAuthority } from '../../services/tenant-effect-authority.service.js';
 import { assertVerifiedDomainMatchesQuery, normalizeDomain } from './domain-context.js';
@@ -62,18 +63,25 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
       // and the caller's own invitations. Pin authority and every read on ONE admin connection:
       // an app transaction holding the shared epoch while requesting a second pool can cycle
       // with admin writers waiting for that epoch. See row-level-security.md §10.15.
-      const { org, self, systemAdmin } = await runWithRequestAdminTransaction(request, async (prisma) => {
+      const { org, self, systemAdmin, assurance } = await runWithRequestAdminTransaction(request, async (prisma) => {
+        let proof: Awaited<ReturnType<typeof validateSessionAssurance>> | undefined;
         if (getEnv().DATABASE_URL) {
           const context = request.tenantContext;
           if (!context) throw new Error('Organisation authority read requires tenantContext');
           await assertTenantEffectAuthority(request, context, prisma, prisma, { userEpochLock: 'shared' });
           // A proof checked before acquiring this connection may have been revoked while queued.
-          if (claims.assuranceId) await validateSessionAssurance({
+          if (claims.assuranceId) proof = await validateSessionAssurance({
             id: claims.assuranceId, userId: claims.userId, credentialEpoch: claims.tokenVersion,
             clientDomain: normalizedDomain, orgId: claims.active?.orgId ?? claims.org?.org_id,
             teamId: claims.active?.teamId,
           }, prisma);
         }
+        // The proof this read just validated, in the words `POST /org/assurance/validate` uses,
+        // so a product that needs both answers asks once. That route also requires the person's
+        // role on this domain; without one the block is left out and the product asks there.
+        const assurance = proof && await prisma.domainRole.findUnique({
+          where: { domain_userId: { domain: normalizedDomain, userId: claims.userId } }, select: { role: true },
+        }) ? { ...assuranceValidationAnswer(proof), org_id: proof.orgId, team_id: proof.teamId } : undefined;
         const systemAdmin = Boolean(getEnv().DATABASE_URL) && await isPlatformSuperuser({
           userId: claims.userId,
           prisma,
@@ -127,9 +135,9 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
           select: { id: true, name: true, email: true, lifecycleStatus: true } });
         if (self.lifecycleStatus !== 'ACTIVE') throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
         return { org: context ? { ...context, team_directory: teamDirectory, pending_invites: pendingInvites } : null,
-          self, systemAdmin };
+          self, systemAdmin, assurance };
       });
-      const response: { ok: true; system_admin: boolean; org?: typeof org; self_identity: {
+      const response: { ok: true; system_admin: boolean; org?: typeof org; assurance?: typeof assurance; self_identity: {
         subject: string; display_name: string | null; email: string | null; avatar_image_url: string;
       } } = {
         ok: true,
@@ -138,6 +146,7 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
           avatar_image_url: memberAvatarImageUrl(normalizedDomain, self.id) },
       };
       if (org) response.org = org;
+      if (assurance) response.assurance = assurance;
 
       reply.header('Cache-Control', 'private, no-store').status(200).send(response);
     },

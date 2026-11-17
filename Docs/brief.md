@@ -3641,3 +3641,12 @@ connection is only ever to the address that passed that check.
 
 Product data-API answers carry `Server-Timing: queue;dur, total;dur` (the wait
 for a bulkhead slot and the whole time on the instance). Durations only.
+
+`GET /org/me` has always validated the caller's original proof inside its
+transaction. It now also returns what it validated, as an `assurance` object
+with the fields of `POST /org/assurance/validate` plus `org_id` and `team_id`,
+when the credential carried a proof and the person holds a role on the domain
+(the same role requirement as the validate route). A product that needs both
+answers for one person and one team can ask once instead of twice. No check is
+removed: an absent object means "ask the validate route", never "no proof
+needed".
