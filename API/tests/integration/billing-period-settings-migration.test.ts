@@ -54,7 +54,7 @@ describe.skipIf(!process.env.DATABASE_URL)('billing period settings migration', 
           LOOP EXECUTE format('ALTER FUNCTION %s OWNER TO uoa_admin',item.signature); END LOOP;
         END $$`);
       // Two organisations from before the change: one still inside its trial, one whose trial ended early.
-      const ids = { running: randomUUID(), ended: randomUUID() };
+      const ids = { running: randomUUID(), ended: randomUUID(), expired: randomUUID() };
       for (const [label, id] of Object.entries(ids)) {
         const user = randomUUID();
         await admin.query(`INSERT INTO users(id,email,user_key) VALUES($1,$2,$3)`,
@@ -66,6 +66,8 @@ describe.skipIf(!process.env.DATABASE_URL)('billing period settings migration', 
       const fortnight = new Date(started.getTime() + 2 * WEEK);
       await admin.query(`INSERT INTO billing_nessie_seat_transitions(org_id,starts_at,ends_at,cohort_user_ids,ended_at)
         VALUES($1,$3,$4,'{}',NULL),($2,$3,$4,'{}',$5)`, [ids.running, ids.ended, started, fortnight, new Date()]);
+      await admin.query(`INSERT INTO billing_nessie_seat_transitions(org_id,starts_at,ends_at,cohort_user_ids,ended_at)
+        VALUES($1,$2,$3,'{}',$3)`, [ids.expired, new Date(started.getTime() - 2 * WEEK), started]);
       await cp(join(prismaRoot, 'migrations', migration), join(migrations, migration), { recursive: true });
       const roleUrl = new URL(ownerUrl);
       roleUrl.username = name; roleUrl.password = 'isolated-migration-test';
@@ -86,6 +88,20 @@ describe.skipIf(!process.env.DATABASE_URL)('billing period settings migration', 
         AND proname IN ('billing_period_setting','billing_nessie_start_transition')`, [`"${name}"`])).rows;
       expect(configured).toHaveLength(2);
       for (const row of configured) expect(row.proconfig.join(' ')).toContain(`search_path=pg_catalog, ${name}, pg_temp`);
+
+      // Apply the invitation fix to the same historical rows with the deployment role.
+      const repair = '20261117224500_preserve_invited_organisation_trial';
+      for (const item of (await readdir(join(prismaRoot, 'migrations'))).filter(n => n > migration && n <= repair)) {
+        await cp(join(prismaRoot, 'migrations', item), join(migrations, item), { recursive: true });
+      }
+      const snapshot = async () => (await admin.query(`SELECT org_id,starts_at,ends_at,cohort_user_ids,ended_at
+        FROM billing_nessie_seat_transitions ORDER BY org_id`)).rows;
+      const beforeRepair = await snapshot();
+      expect(await deploy(roleUrl.toString())).toBe(0);
+      expect(await snapshot()).toEqual(beforeRepair.map(row =>
+        row.org_id === ids.ended ? { ...row, ended_at: null } : row));
+      await expect(admin.query(`UPDATE billing_nessie_seat_transitions SET ends_at=ends_at+interval '1 day' WHERE org_id=$1`,
+        [ids.ended])).rejects.toThrow('cannot restart');
     } finally {
       await admin.query(`RESET search_path; DROP SCHEMA IF EXISTS "${name}" CASCADE; DROP ROLE IF EXISTS "${name}"`);
       await admin.end();
