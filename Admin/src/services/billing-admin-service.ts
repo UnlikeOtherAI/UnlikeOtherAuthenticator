@@ -1,7 +1,6 @@
 import {
   BillingAppKeySchema,
   CreatedBillingAdjustmentSchema,
-  BillingAssignmentSchema,
   BillingServicesSchema,
   BillingServiceSchema,
   BillingTariffSchema,
@@ -132,15 +131,13 @@ export const billingAdminService = {
   },
 
   async saveAssignment(serviceId: string, input: BillingAssignmentFormValues) {
-    return BillingAssignmentSchema.parse(
-      await api.put<unknown>(
-        `/internal/admin/billing/services/${encodeURIComponent(serviceId)}/assignments`,
-        {
-          tariff_id: input.tariffId,
-          organisation_id: input.organisationId,
-          team_id: input.teamId || null,
-        },
-      ),
+    await api.put<unknown>(
+      `/internal/admin/billing/services/${encodeURIComponent(serviceId)}/assignments`,
+      {
+        tariff_id: input.tariffId,
+        organisation_id: input.organisationId,
+        team_id: input.teamId || null,
+      },
     );
   },
 

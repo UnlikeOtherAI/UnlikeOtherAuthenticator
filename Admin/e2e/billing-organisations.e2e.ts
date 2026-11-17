@@ -93,10 +93,11 @@ test('operator moves a team, retries a refused change and removes a team tariff'
   await expect(page.getByRole('row').filter({ hasText: 'QA' })).toContainText(/Starts 1 \w+ \d{4}/);
   await expect(page.getByRole('row').filter({ hasText: 'Backend' })).toContainText('3.99');
   await noHorizontalOverflow(page);
-  await capture(page, info.project.name, 'organisation', page.getByRole('table'));
+  const tariffTable = page.getByRole('table').filter({ has: frontend });
+  await capture(page, info.project.name, 'organisation', tariffTable);
 
   // Save and Cancel appear in a column that already has their width.
-  const actionsWidth = async () => (await page.getByRole('columnheader').last().boundingBox())?.width;
+  const actionsWidth = async () => (await tariffTable.getByRole('columnheader').last().boundingBox())?.width;
   const before = await actionsWidth();
   expect(before).toBeGreaterThanOrEqual(192);
   await frontend.selectOption({ label: 'Standard' });

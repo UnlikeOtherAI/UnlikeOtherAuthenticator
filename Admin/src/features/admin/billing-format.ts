@@ -98,7 +98,7 @@ export function billingRefusal(error: unknown): string {
     if (!error.code) return `The change was refused (HTTP ${error.status}).`;
     return refusals[error.code] ?? `The change was refused (${error.code}).`;
   }
-  return error instanceof Error ? error.message : 'The change could not be saved.';
+  return 'We could not confirm the change. Refresh to check whether it was saved.';
 }
 
 type SummaryTerms = Pick<BillingTariff,
