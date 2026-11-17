@@ -235,6 +235,48 @@ use the organisation overview; never invent an org total from old team DTOs.
 Pinned old schemas remain unchanged. Member Ask is a direct nonfinancial POST,
 and frozen action context or absence is never upgraded by a read/refetch.
 
+### Platform credit grants (17 November 2026)
+
+A platform superuser can add prepaid credits to an organisation's wallet without
+a payment: Admin Billing → Organisations → selected organisation → Prepaid
+credits → Grant credits, also on the organisation's own Billing tab. The panel
+shows the wallet in the organisation's current mode (balance, held for work in
+progress, spendable now) and the latest 50 grants with who, when, how much and
+why. The API is `GET/POST /internal/admin/billing/organisations/:orgId/credit-grants`
+(`billing-credit-admin-grant.service.ts`).
+
+A grant is whole credits (1 to 10,000,000; 1,000 credits = US$1), a reason of
+12–500 characters and a 64-hex idempotency key the browser keeps across
+retries. The POST needs a session issued in the last five minutes, like the
+paid-usage write-off. One serializable transaction rechecks the operator's live
+superuser role and token version, rechecks the organisation's mode, locks the
+wallet and writes:
+
+- one `billing_credit_admin_adjustments` row (actor, email, admin domain,
+  signed amount, reason, key), the immutable superuser evidence the ledger has
+  required for `ADJUSTMENT` entries since the funding foundation;
+- one `ADJUSTMENT` CREDIT entry with no product, app key or attributed user,
+  `source_type = 'credit_admin_adjustment'` and the adjustment as its source;
+- one `admin_audit_log` row, `billing.credits_granted`.
+
+No migration was needed. The existing triggers already check this pair: the
+adjustment must name a current `SUPERUSER` of the trusted admin domain (set for
+the transaction as `app.admin_auth_domain`), the entry must match it exactly,
+the balance moves under the account lock, and the lot trigger opens a USD lot
+with `paid_amount_minor = 0`. Usage then draws that lot oldest-first like any
+other, so reservation, settlement and the funded prepaid offset read the grant
+as ordinary spendable credit. Nothing creates a checkout, payment, invoice or
+Stripe object; refunds and disputes reverse only `TOP_UP` and
+`AUTOMATIC_TOP_UP` entries with Stripe evidence, so a grant can never be
+refunded to a card. Customers see it in their credit history as "Credits
+granted by UnlikeOtherAI … This was not a purchase", in every customer locale.
+
+A replay with the same key and terms returns the original grant (HTTP 200);
+the same key with other terms is refused with `409
+BILLING_CREDIT_GRANT_KEY_CONFLICT`. Granting only adds credits; there is no
+removal or claw-back here. A remaining balance is a `funded_balance` blocker for
+changing the organisation's billing mode.
+
 New manual invoice calculations require the contract's captured account before
 reading metering. Funding evidence selects settlements and separately paid
 add-ons from that exact account, which identifies both provider account and

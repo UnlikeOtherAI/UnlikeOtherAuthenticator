@@ -25,6 +25,20 @@ usage against credit budgets. PREPAID wallet debits only the collectible part.
 Unknown actual cost, missing historical rating or a changed selected receipt
 remain held for further evidence; no operator can turn unknown into zero.
 
+### Platform credit grants
+
+Platform superusers can give an organisation prepaid credits without a payment
+in Admin Billing → Organisations → selected organisation → Prepaid credits, or
+\`GET/POST /internal/admin/billing/organisations/:orgId/credit-grants\`. A
+freshly issued (at most five minutes old), live-epoch superuser token POSTs
+whole \`credits\`, a written \`reason\` and a stable 64-hex
+\`idempotency_key\`. UOA writes one immutable admin adjustment and one
+\`ADJUSTMENT\` credit entry to the organisation wallet in its current billing
+mode, with an audit row, in one transaction. The credits are spendable at once
+for prepaid reservation and settlement. Customers see the entry as credits
+granted by UnlikeOtherAI, never as a purchase; no invoice, payment record or
+Stripe object exists, and refunds or disputes cannot reach it.
+
 Platform superusers configure append-only prepaid legal invoice tax policy at
 \`GET/POST /internal/admin/billing/credit-invoice-tax-policies\`. A policy binds
 one Stripe account, active legal issuer, issuer jurisdiction, inclusive tax

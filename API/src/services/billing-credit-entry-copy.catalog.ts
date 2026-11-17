@@ -1,4 +1,4 @@
-import { BillingCreditEntryKind } from '@prisma/client';
+import { BillingCreditEntryDirection, BillingCreditEntryKind } from '@prisma/client';
 
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingLocaleText, formatBillingCopy } from './billing-copy-locale.js';
@@ -10,8 +10,9 @@ export type BillingCreditEntryCopy = Readonly<{
 
 export type BillingCreditEntryCopyKey = keyof typeof BillingCreditEntryKind;
 
+/** `ADJUSTMENT_GRANT` is a superuser ADJUSTMENT that added credits: a platform grant, never a purchase. */
 type EntryCopyCatalog = Readonly<Record<Exclude<BillingCreditEntryKind,
-  'PREPAID_USAGE' | 'SMS_PREPAID_USAGE' | 'VOICE_PREPAID_USAGE'>, BillingCreditEntryCopy>>;
+  'PREPAID_USAGE' | 'SMS_PREPAID_USAGE' | 'VOICE_PREPAID_USAGE'> | 'ADJUSTMENT_GRANT', BillingCreditEntryCopy>>;
 
 export const BILLING_CREDIT_ENTRY_COPY = {
   cs: {
@@ -25,6 +26,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     REFUND_REVERSAL: { label: 'Obnovené kredity', detail: 'Vrácení platby se neprovedlo. {credits} se vrátilo do týmového zůstatku.' },
     DISPUTE_REVERSAL: { label: 'Obnovení kreditů po sporu služby {product}', detail: 'Ověřené obnovení platby ve sporu vrátilo {credits} do sdíleného týmového zůstatku.' },
     ADJUSTMENT: { label: 'Úprava kreditů na účtu', detail: 'Podpora upravila sdílený týmový zůstatek o {credits}.' },
+    ADJUSTMENT_GRANT: { label: 'Kredity přidělené UnlikeOtherAI', detail: 'UnlikeOtherAI zdarma přidalo {credits} do sdíleného zůstatku. Nejde o nákup a nebyla přijata žádná platba.' },
   },
   'en-US': {
     BROWSER_PREPAID_USAGE: { label: "{product} cloud browser time", detail: "{minutes} billed minutes used {credits}. Provider rate plus 10%." },
@@ -37,6 +39,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     REFUND_REVERSAL: { label: '{product} refund reversal', detail: 'A failed or canceled refund restored {credits} to the shared team balance.' },
     DISPUTE_REVERSAL: { label: '{product} dispute reinstatement', detail: 'Verified reinstated dispute funds restored {credits} to the shared team balance.' },
     ADJUSTMENT: { label: 'Account credit adjustment', detail: 'Support adjusted the shared team balance by {credits}.' },
+    ADJUSTMENT_GRANT: { label: 'Credits granted by UnlikeOtherAI', detail: 'UnlikeOtherAI added {credits} to the shared balance at no charge. This was not a purchase and no payment was taken.' },
   },
   'en-GB': {
     BROWSER_PREPAID_USAGE: { label: "{product} cloud browser time", detail: "{minutes} billed minutes used {credits}. Provider rate plus 10%." },
@@ -49,6 +52,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     REFUND_REVERSAL: { label: '{product} refund reversal', detail: 'A failed or cancelled refund restored {credits} to the shared team balance.' },
     DISPUTE_REVERSAL: { label: '{product} dispute reinstatement', detail: 'Verified reinstated dispute funds restored {credits} to the shared team balance.' },
     ADJUSTMENT: { label: 'Account credit adjustment', detail: 'Support adjusted the shared team balance by {credits}.' },
+    ADJUSTMENT_GRANT: { label: 'Credits granted by UnlikeOtherAI', detail: 'UnlikeOtherAI added {credits} to the shared balance at no charge. This was not a purchase and no payment was taken.' },
   },
   de: {
     BROWSER_PREPAID_USAGE: { label: "Cloud-Browserzeit von {product}", detail: "{minutes} abgerechnete Minuten haben {credits} verbraucht. Anbieterpreis zuzüglich 10 %." },
@@ -61,6 +65,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     REFUND_REVERSAL: { label: 'Rücknahme einer Rückerstattung für {product}', detail: 'Eine fehlgeschlagene oder stornierte Rückerstattung hat {credits} dem gemeinsamen Teamguthaben wieder gutgeschrieben.' },
     DISPUTE_REVERSAL: { label: 'Wiederherstellung nach Zahlungsstreitfall für {product}', detail: 'Bestätigte wiederhergestellte Streitfallbeträge haben {credits} dem gemeinsamen Teamguthaben wieder gutgeschrieben.' },
     ADJUSTMENT: { label: 'Guthabenkorrektur', detail: 'Der Support hat das gemeinsame Teamguthaben um {credits} angepasst.' },
+    ADJUSTMENT_GRANT: { label: 'Von UnlikeOtherAI gewährte Credits', detail: 'UnlikeOtherAI hat {credits} kostenlos zum gemeinsamen Guthaben hinzugefügt. Dies war kein Kauf, es wurde keine Zahlung eingezogen.' },
   },
   es: {
     BROWSER_PREPAID_USAGE: { label: "Tiempo del navegador en la nube de {product}", detail: "{minutes} minutos facturados consumieron {credits}. Tarifa del proveedor más un 10 %." },
@@ -73,6 +78,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     REFUND_REVERSAL: { label: 'Reversión del reembolso de {product}', detail: 'Un reembolso fallido o cancelado devolvió {credits} al saldo compartido del equipo.' },
     DISPUTE_REVERSAL: { label: 'Restitución tras disputa de {product}', detail: 'La restitución verificada de fondos de una disputa devolvió {credits} al saldo compartido del equipo.' },
     ADJUSTMENT: { label: 'Ajuste de créditos de la cuenta', detail: 'El equipo de soporte ajustó el saldo compartido en {credits}.' },
+    ADJUSTMENT_GRANT: { label: 'Créditos concedidos por UnlikeOtherAI', detail: 'UnlikeOtherAI añadió {credits} al saldo compartido sin coste. No fue una compra y no se cobró ningún pago.' },
   },
   fr: {
     BROWSER_PREPAID_USAGE: { label: "Temps de navigateur cloud {product}", detail: "{minutes} minutes facturées ont utilisé {credits}. Tarif du fournisseur majoré de 10 %." },
@@ -85,6 +91,7 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     REFUND_REVERSAL: { label: 'Annulation du remboursement de {product}', detail: 'Un remboursement échoué ou annulé a rétabli {credits} dans le solde partagé de l’équipe.' },
     DISPUTE_REVERSAL: { label: 'Rétablissement après litige pour {product}', detail: 'Le rétablissement vérifié des fonds contestés a rendu {credits} au solde partagé de l’équipe.' },
     ADJUSTMENT: { label: 'Ajustement des crédits du compte', detail: 'L’assistance a ajusté le solde partagé de {credits}.' },
+    ADJUSTMENT_GRANT: { label: 'Crédits offerts par UnlikeOtherAI', detail: 'UnlikeOtherAI a ajouté {credits} au solde partagé gratuitement. Il ne s’agit pas d’un achat et aucun paiement n’a été prélevé.' },
   },
   it: {
     BROWSER_PREPAID_USAGE: { label: "Tempo del browser cloud di {product}", detail: "{minutes} minuti fatturati hanno consumato {credits}. Tariffa del fornitore più il 10%." },
@@ -97,14 +104,18 @@ export const BILLING_CREDIT_ENTRY_COPY = {
     REFUND_REVERSAL: { label: 'Storno del rimborso di {product}', detail: 'Un rimborso non riuscito o annullato ha ripristinato {credits} nel saldo condiviso del team.' },
     DISPUTE_REVERSAL: { label: 'Ripristino dopo contestazione di {product}', detail: 'Il ripristino verificato dei fondi contestati ha restituito {credits} al saldo condiviso del team.' },
     ADJUSTMENT: { label: 'Rettifica dei crediti del conto', detail: 'L’assistenza ha rettificato il saldo condiviso di {credits}.' },
+    ADJUSTMENT_GRANT: { label: 'Crediti concessi da UnlikeOtherAI', detail: 'UnlikeOtherAI ha aggiunto {credits} al saldo condiviso senza costi. Non si tratta di un acquisto e non è stato addebitato alcun pagamento.' },
   },
 } satisfies Record<BillingCustomerLocale, EntryCopyCatalog>;
 
 export function billingCreditEntryCopy(
   kind: BillingCreditEntryKind,
   locale?: BillingCustomerLocale,
+  direction?: BillingCreditEntryDirection,
 ): BillingCreditEntryCopy {
   return billingLocaleText(BILLING_CREDIT_ENTRY_COPY, locale)[
+    kind === BillingCreditEntryKind.ADJUSTMENT && direction === BillingCreditEntryDirection.CREDIT
+      ? 'ADJUSTMENT_GRANT' :
     kind === BillingCreditEntryKind.PREPAID_USAGE || kind === BillingCreditEntryKind.SMS_PREPAID_USAGE || kind === BillingCreditEntryKind.VOICE_PREPAID_USAGE
       ? BillingCreditEntryKind.USAGE_SETTLEMENT : kind
   ];
@@ -114,8 +125,9 @@ export function formatBillingCreditEntryCopy(
   kind: BillingCreditEntryKind,
   locale: BillingCustomerLocale | undefined,
   values: { product: string; credits: string; minutes?: string },
+  direction?: BillingCreditEntryDirection,
 ): BillingCreditEntryCopy {
-  const copy = billingCreditEntryCopy(kind, locale);
+  const copy = billingCreditEntryCopy(kind, locale, direction);
   return {
     label: formatBillingCopy(copy.label, { ...values, minutes: values.minutes ?? '—' }),
     detail: formatBillingCopy(copy.detail, { ...values, minutes: values.minutes ?? '—' }),

@@ -685,6 +685,8 @@ slice.
 | `POST /internal/admin/billing/services/:serviceId/app-keys`                    | Mint a product-bound key and bind its actor verification key                                                             |
 | `DELETE /internal/admin/billing/services/:serviceId/app-keys/:keyId`           | Revoke a product credential                                                                                              |
 | `POST /internal/admin/billing/stripe/usage-exports`                            | Fetch/replay one immutable Ledger subscription-month snapshot and idempotently export its customer-money delta to Stripe |
+| `GET /internal/admin/billing/organisations/:orgId/credit-grants`              | Read the organisation wallet in its current mode and the latest platform credit grants |
+| `POST /internal/admin/billing/organisations/:orgId/credit-grants`             | Grant whole prepaid credits without a payment (fresh session, reason, idempotency key); see [platform credit grants](../Billing/organisation-billing.md#platform-credit-grants-17-november-2026) |
 
 Every mutation writes the existing global admin audit log. Tariff and credential
 tables are denied to the tenant runtime database role and accessed only through
@@ -1360,7 +1362,9 @@ top-up, set/update/recover auto-top-up, or alter consent; the database requires
 an active organisation and exact-team billing manager for every
 customer-initiated funding or consent mutation. Automatic attempts, Stripe
 refunds/disputes, usage settlements, and superuser adjustments use their own
-immutable system/admin proof instead of customer manager authority.
+immutable system/admin proof instead of customer manager authority. Superuser
+credit grants are written from Admin Billing → Organisations; see
+[platform credit grants](../Billing/organisation-billing.md#platform-credit-grants-17-november-2026).
 Failed or canceled refunds and reinstated disputes create explicit reversal
 credit entries. Those entries restore only the principal that remains removed
 after all refund and dispute evidence for the original payment is reconciled,

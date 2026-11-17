@@ -1,6 +1,7 @@
 import { createLifecycleFixtures } from './lifecycle-fixtures';
 import { createBillingFixtures } from './billing-fixtures';
 import { createBillingServiceFixtures } from './billing-service-fixtures';
+import { createCreditGrantFixtures } from './billing-credit-grant-fixtures';
 import type { Page } from '@playwright/test';
 import { mockAdminData } from '../src/features/admin/__mocks__/mock-data';
 import type { NativeApp } from '../src/schemas/native-app';
@@ -116,6 +117,8 @@ export async function installFixtures(page: Page) {
   const native = structuredClone(nativeApp);
   const unexpected: string[] = [];
   const errors: string[] = [];
+  const creditGrants = createCreditGrantFixtures(
+    (orgId) => data.organisations.find((item) => item.id === orgId)?.name);
   let nativeFailures = 0;
   let nativeWrites = 0;
   page.on('pageerror', (error) => errors.push(error.message));
@@ -132,6 +135,8 @@ export async function installFixtures(page: Page) {
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path.startsWith('/lifecycle/')) return lifecycle.handle(route, path);
+    const grantResponse = creditGrants.handle(req.method(), path, req.method() === 'POST' ? req.postDataJSON() : null);
+    if (grantResponse) return json(grantResponse.body, grantResponse.status);
     if (req.method() !== 'GET') {
       const tariffWrite = products.handleTariffWrite(req.method(), path);
       if (tariffWrite) return json(tariffWrite.body, tariffWrite.status);
@@ -360,6 +365,7 @@ export async function installFixtures(page: Page) {
     taxPolicies,
     memberships,
     tariffWrites: products.tariffWrites,
+    creditGrants,
     failNextNativeSave: () => {
       nativeFailures = 1;
     },
