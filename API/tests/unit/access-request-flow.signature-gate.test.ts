@@ -8,6 +8,11 @@ const assertEmailDomainAllowedForLoginMock = vi.fn();
 const assertNotBannedAtLoginMock = vi.fn();
 const handlePostAuthenticationAccessRequestMock = vi.fn();
 const finalizeConfigAuthorizationWithSignaturesMock = vi.fn();
+const resolveTeamByIdMock = vi.fn();
+
+vi.mock('../../src/services/team-hostname.service.js', () => ({
+  resolveTeamById: (...args: unknown[]) => resolveTeamByIdMock(...args),
+}));
 
 vi.mock('../../src/services/login-domain-policy.service.js', () => ({
   assertEmailDomainAllowedForLogin: (...args: unknown[]) =>
@@ -39,6 +44,69 @@ describe('shared post-authentication signature gate', () => {
     assertNotBannedAtLoginMock.mockReset().mockResolvedValue(undefined);
     handlePostAuthenticationAccessRequestMock.mockReset();
     finalizeConfigAuthorizationWithSignaturesMock.mockReset();
+    resolveTeamByIdMock.mockReset();
+  });
+
+  it('binds a team sign-in to the team address when the config declares a template', async () => {
+    const prisma = legacyCredentialStores() as unknown as PrismaClient;
+    resolveTeamByIdMock.mockResolvedValue({
+      teamId: 'team-1',
+      teamSlug: 'design',
+      orgId: 'org-1',
+      orgSlug: 'acme',
+    });
+    finalizeConfigAuthorizationWithSignaturesMock.mockResolvedValue({
+      status: 'granted',
+      code: 'code-1',
+      redirectTo: 'https://acme.client.example.com/design/login?code=code-1',
+    });
+    const { finalizeAuthenticatedUser } =
+      await import('../../src/services/access-request-flow.service.js');
+    const input = {
+      userId: 'user-1',
+      credentialEpoch: 0,
+      config: {
+        ...config,
+        login_flow: {
+          team_redirect: {
+            redirect_url: 'https://client.example.com/oauth/callback',
+            template: 'https://{org}.client.example.com/{team}/login',
+          },
+        },
+      } as ClientConfig,
+      configUrl: 'https://client.example.com/auth-config',
+      redirectUrl: 'https://client.example.com/oauth/callback',
+      rememberMe: false,
+      requestAccess: false,
+      authMethod: 'google',
+      twoFaCompleted: false,
+      codeChallenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      codeChallengeMethod: 'S256' as const,
+      orgId: 'org-1',
+      teamId: 'team-1',
+    };
+
+    await finalizeAuthenticatedUser(input, { authenticationEpochLocked: true, prisma });
+
+    expect(resolveTeamByIdMock).toHaveBeenCalledWith(
+      { domain: 'client.example.com', teamId: 'team-1' },
+      { prisma },
+    );
+    expect(finalizeConfigAuthorizationWithSignaturesMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ redirectUrl: 'https://acme.client.example.com/design/login' }),
+      expect.anything(),
+    );
+
+    // A machine approval finishes on UOA's own pages, never at a team address.
+    await finalizeAuthenticatedUser(
+      { ...input, machineIntentId: 'machine-1' },
+      { authenticationEpochLocked: true, prisma },
+    );
+    expect(resolveTeamByIdMock).toHaveBeenCalledTimes(1);
+    expect(finalizeConfigAuthorizationWithSignaturesMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ redirectUrl: 'https://client.example.com/oauth/callback' }),
+      expect.anything(),
+    );
   });
 
   it('forwards the exact authenticated flow state and returns the signing continuation', async () => {

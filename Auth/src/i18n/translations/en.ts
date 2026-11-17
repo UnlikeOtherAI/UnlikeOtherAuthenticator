@@ -24,7 +24,7 @@ export const en = {
   'auth.accessStatus.team': "Team",
   'auth.accessStatus.parent': "Organisation access",
   'auth.login.title': 'Sign in',
-  'auth.renewal.open': 'Expired account? Request access',
+  'auth.renewal.expired': 'This account has expired.',
   'auth.renewal.title': 'Request renewed access',
   'auth.renewal.description': 'Verify your account email, then ask an administrator to set a new access date.',
   'auth.renewal.codeSent': 'Check your email for a verification code. If two-factor authentication is enabled, enter that code too.',

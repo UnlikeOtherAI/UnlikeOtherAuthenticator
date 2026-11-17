@@ -383,4 +383,16 @@ describe('organisation management destination', () => {
     expect(html).toContain('Use another account');
     expect(html).not.toContain('>Other<');
   });
+  it('keeps sign-in settings out of an ordinary team choice', () => {
+    const html = renderChooser({teams: [
+      {teamId: 't1',orgId: 'o1',name: 'Design',role: 'owner',orgName: 'Acme',can_manage_sso: true},
+      {teamId: 't2',orgId: 'o2',name: 'Research',role: 'owner',orgName: 'Globex',can_manage_sso: true},
+    ],pending_invites: [],can_create_org: false,
+      manageable_orgs: [{orgId: 'o1',orgName: 'Acme'},{orgId: 'o2',orgName: 'Globex'}]});
+    expect(html).toContain('Design');
+    expect(html).toContain('Research');
+    expect(html).not.toContain('sign-in settings');
+    expect(html).not.toContain('single sign-on');
+    expect(html).not.toContain('Continue');
+  });
 });

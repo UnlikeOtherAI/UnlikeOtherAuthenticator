@@ -59,6 +59,60 @@ describe('validateConfigFields', () => {
     expect(cfg.login_flow).toEqual({ email_code_enabled: true, team_selection: 'auto' });
   });
 
+  it('accepts a team redirect template under a registered redirect URL', () => {
+    const cfg = validateConfigFields({
+      ...basePayload(),
+      redirect_urls: [
+        'https://client.example.com/login',
+        'https://client.example.com/login?arrive=team',
+      ],
+      login_flow: {
+        team_selection: 'auto',
+        team_redirect: {
+          redirect_url: 'https://client.example.com/login?arrive=team',
+          template: 'https://{org}.client.example.com/{team}/login',
+        },
+      },
+    });
+
+    expect(cfg.login_flow.team_redirect).toEqual({
+      redirect_url: 'https://client.example.com/login?arrive=team',
+      template: 'https://{org}.client.example.com/{team}/login',
+    });
+  });
+
+  it('rejects a team redirect template outside the registered redirect URLs', () => {
+    const withTeamRedirect = (team_redirect: Record<string, unknown>) => () =>
+      validateConfigFields({
+        ...basePayload(),
+        redirect_urls: ['https://client.example.com/login'],
+        login_flow: { team_selection: 'auto', team_redirect },
+      });
+
+    // The URL it upgrades is not registered.
+    expect(
+      withTeamRedirect({
+        redirect_url: 'https://client.example.com/other',
+        template: 'https://{org}.client.example.com/{team}/login',
+      }),
+    ).toThrow();
+    // The template leaves the registered host.
+    expect(
+      withTeamRedirect({
+        redirect_url: 'https://client.example.com/login',
+        template: 'https://{org}.attacker.example/{team}/login',
+      }),
+    ).toThrow();
+    // Unknown members are refused rather than ignored.
+    expect(
+      withTeamRedirect({
+        redirect_url: 'https://client.example.com/login',
+        template: 'https://{org}.client.example.com/{team}/login',
+        fallback: 'https://attacker.example/',
+      }),
+    ).toThrow();
+  });
+
   it('parses optional fields when provided', () => {
     const cfg = validateConfigFields({
       ...basePayload(),

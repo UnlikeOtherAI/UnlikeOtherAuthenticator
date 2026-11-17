@@ -23,11 +23,16 @@ export function manageableOrganisations(choices: SessionChoices) {
   return [...organisations].map(([orgId, orgName]) => ({ orgId, orgName }));
 }
 
+/**
+ * The owner sign-in a product opens for one organisation's single sign-on settings
+ * (`management_org_id`). It is never part of an ordinary team choice: somebody
+ * signing in to work is not asked about sign-in settings.
+ */
 export function OrganisationManagementChoices(props: {
   choices: SessionChoices;
   loginToken: string;
   query: AuthFlowQuery;
-  targetOrgId?: string;
+  targetOrgId: string;
   onOutcome: (outcome: TeamResponseOutcome) => void;
 }): React.JSX.Element | null {
   const t = useAccessTranslation();
@@ -36,8 +41,7 @@ export function OrganisationManagementChoices(props: {
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   const organisations = manageableOrganisations(props.choices)
-    .filter(org => !props.targetOrgId || org.orgId === props.targetOrgId);
-  if (!props.targetOrgId && organisations.length === 0) return null;
+    .filter(org => org.orgId === props.targetOrgId);
 
   const useAnotherAccount = () => {
     popup.setSessionChoices(null);
@@ -68,11 +72,11 @@ export function OrganisationManagementChoices(props: {
   };
   return <section className="flex flex-col gap-3">
     <h1 className="text-lg font-semibold">
-      {t(props.targetOrgId ? 'managementTitle' : 'managementSection')}
+      {t('managementTitle')}
     </h1>
-    {props.targetOrgId ? <p className="text-sm text-[var(--uoa-color-muted)]">
+    <p className="text-sm text-[var(--uoa-color-muted)]">
       {t(organisations.length ? 'managementHint' : 'managementUnavailable')}
-    </p> : null}
+    </p>
     {organisations.map(org => <div key={org.orgId} className="flex flex-col gap-2">
       <p className="font-medium">{clientDomain ? t('destination', {org: org.orgName,domain: clientDomain}) : org.orgName}</p>
       <Button disabled={pending} onClick={() => void start(org.orgId)}>
@@ -82,8 +86,8 @@ export function OrganisationManagementChoices(props: {
     {failed ? <p role="alert" className="text-sm text-[var(--uoa-color-danger)]">
       {t('managementFailed')}
     </p> : null}
-    {props.targetOrgId ? <Button variant="secondary" disabled={pending} onClick={useAnotherAccount}>
+    <Button variant="secondary" disabled={pending} onClick={useAnotherAccount}>
       {t('managementOther')}
-    </Button> : null}
+    </Button>
   </section>;
 }

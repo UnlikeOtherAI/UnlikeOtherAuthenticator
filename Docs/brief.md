@@ -1531,6 +1531,37 @@ its slug alone; changing the address is a separate, deliberate write. Before
 this, renaming an organisation re-derived its slug, so correcting a typo in a
 company name silently relocated that tenant's hostname.
 
+#### Team Redirect Template Clarification (2026-11)
+
+An addition to section 6.6, not a change to it. `redirect_urls` is still matched
+byte-for-byte, and a sign-in still names one of its entries. A product whose
+teams live at their own addresses could not list those addresses, because they
+are made at runtime from labels UOA owns, so it received every code on one
+shared page and then moved the browser to the team's address with a second
+handoff of its own.
+
+The signed config may now declare `login_flow.team_redirect`:
+`{ redirect_url, template }`. `redirect_url` is one of `redirect_urls`.
+`template` is an `https` URL with `{org}` as the whole left-most host label,
+directly under the `redirect_url` host, and optionally `{team}` as one whole
+path segment. A sign-in that asks for exactly that `redirect_url` and finishes
+inside a team receives its authorization code at the template filled with the
+team's organisation and team slug. The code is bound to the filled address, and
+the token exchange presents it. A sign-in with no team, or whose organisation
+label is ambiguous for the product, receives the registered `redirect_url`
+unchanged.
+
+The template can only name a direct subdomain of a host the product already
+registered, the labels come from UOA's rows and never from the request, and an
+invalid template rejects the config. It grants no membership or access.
+
+The ordinary team chooser no longer lists organisation sign-in settings. A
+product opens those for one organisation with `management_org_id`.
+
+The hosted sign-in page no longer offers "Expired account? Request access" to
+everybody. The renewal screen opens only after a correct password on an expired
+account (`ACCOUNT_EXPIRED`).
+
 ---
 
 ### 24.5 Team Semantics

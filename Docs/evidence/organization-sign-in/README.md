@@ -2,6 +2,8 @@
 
 The signed `login_flow.organization_id` narrows hosted sign-in to one organization. The chooser owns team selection, invitations, team creation and organization sign-in settings; Nessie supplies the stable organization ID from its public tenant resolver.
 
+Since 2026-11 the ordinary chooser no longer lists organization sign-in settings. A product opens them for one organization with `management_org_id`.
+
 ## Verification
 
 - Windows Maxis: 50 focused API assertions across configuration, chooser, login-session binding, selection and creation routes. API and Auth type checks and scoped ESLint pass.

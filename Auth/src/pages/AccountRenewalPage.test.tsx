@@ -32,6 +32,7 @@ it('verifies the mailbox and 2FA before sending the renewal request', async () =
   mocks.post.mockResolvedValueOnce({ ok: true, data: { challengeId: 'challenge-1' } })
     .mockResolvedValueOnce({ ok: true, data: { ok: true } });
   await act(async () => root.render(<AccountRenewalPage />));
+  expect(host.querySelector('[role="status"]')?.textContent).toBe('auth.renewal.expired');
   await submit();
   expect(host.textContent).toContain('auth.renewal.codeSent');
   await fill(0, '123456'); await fill(1, '654321'); await submit();

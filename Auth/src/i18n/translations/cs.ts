@@ -26,7 +26,7 @@ export const cs = {
   'auth.accessStatus.team': "Tým",
   'auth.accessStatus.parent': "Přístup k organizaci",
   'auth.login.title': 'Přihlášení',
-  'auth.renewal.open': 'Platnost účtu skončila? Požádat o přístup',
+  'auth.renewal.expired': 'Platnost tohoto účtu skončila.',
   'auth.renewal.title': 'Požádat o obnovení přístupu',
   'auth.renewal.description': 'Ověřte e-mail účtu a požádejte správce o nastavení nového data platnosti.',
   'auth.renewal.codeSent': 'V e-mailu najdete ověřovací kód. Pokud máte zapnuté dvoufázové ověření, zadejte i tento kód.',

@@ -20,7 +20,7 @@ export function LoginPage(): React.JSX.Element {
   const { classNames } = useTheme();
   const { t } = useTranslation();
   const accessT = useAccessTranslation();
-  const { config, notice, managementOrgId, enterpriseLinkIntent, machineRequestId, machineManagement, setView } = usePopup();
+  const { config, notice, managementOrgId, enterpriseLinkIntent, machineRequestId, machineManagement } = usePopup();
   const machineT = useMachineTranslation();
   const accessStatusEnabled = useAccessStatusEnabled();
   const showEmailPassword = isEmailPasswordEnabled(config);
@@ -52,8 +52,6 @@ export function LoginPage(): React.JSX.Element {
       {managementOrgId ? <div className="mt-4"><Button variant="secondary" onClick={()=>setPersonalFactor(true)}>
         {enterpriseT('factor')}</Button></div> : null}
       {accessStatusEnabled ? <AccessStatusForm /> : null}
-      {!managementOrgId ? <button type="button" className="mt-5 text-sm underline text-[var(--uoa-color-primary)]"
-        onClick={() => setView('account-renewal')}>{t('auth.renewal.open')}</button> : null}
     </div>
   );
 }

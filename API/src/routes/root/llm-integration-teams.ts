@@ -1,5 +1,6 @@
 // Sections 4.7a and 4.7b of the /llm guide: team join policies, the invitation
-// lifecycle, the sidebar team stack, the "Invited" tab and team icons.
+// lifecycle, the sidebar team stack, the "Invited" tab and team icons, and the
+// team redirect template (4.7c).
 export const llmTeamsInvitationsMarkdown = `### 4.7a Team join policies + member-initiated invites (Phase 4)
 
 Every \`Team\` has a \`joinPolicy\`: \`INVITE_ONLY\` (default) | \`APPROVED_DOMAIN\` | \`REQUEST_TO_JOIN\` | \`OPEN_TO_ORG\` | \`HIDDEN\`. The policy **gates** the existing join mechanisms rather than replacing them:
@@ -166,4 +167,35 @@ Same body/response shape for \`PUT /org/organisations/:orgId\`. Rules, identical
   \`400\` UOA uses everywhere else (no "must be https" specificity leaked back).
 - Owner/admin only — the same authorization the \`PUT\` already enforced.
 - \`iconUrl\` is echoed on every team/org read and write, the team chooser's \`teams[]\`, \`/org/me\`'s
-  \`team_directory[]\`, and \`firstLogin.memberships.teams[]\` — one column, one field name, everywhere.`;
+  \`team_directory[]\`, and \`firstLogin.memberships.teams[]\` — one column, one field name, everywhere.
+
+### 4.7c Team redirect template
+
+A product whose teams have their own addresses can receive a sign-in's code at the team's
+address instead of one shared callback page. Declare it in the signed config:
+
+\`\`\`jsonc
+"redirect_urls": ["https://product.example/login", "https://product.example/login?arrive=team"],
+"login_flow": {
+  "team_selection": "auto",
+  "team_redirect": {
+    "redirect_url": "https://product.example/login?arrive=team",
+    "template": "https://{org}.product.example/{team}/login"
+  }
+}
+\`\`\`
+
+- \`redirect_url\` must be one of \`redirect_urls\`. Send it, exactly, as the \`redirect_url\` of
+  \`GET /auth\` to ask for team delivery. Every other registered URL behaves as before, so older
+  clients and native deep links are unaffected.
+- \`template\` is an \`https\` URL. \`{org}\` is required and is the whole left-most host label,
+  directly under the \`redirect_url\` host. \`{team}\` is optional and is one whole path segment. No
+  query, fragment, credentials, upper-case host or default port. Anything else rejects the config.
+- When the sign-in finishes inside a team, UOA fills the template with that organisation's and
+  team's slugs and redirects there with \`code\` and \`state\`. The code is bound to that filled
+  address: send it as \`redirect_url\` to \`POST /auth/token\`. Read it from the page the code
+  arrived on (origin plus path), never from the request.
+- When there is no team, or the organisation label is ambiguous for the product, the code is
+  delivered to \`redirect_url\` itself and is exchanged with it, as today. Handle both.
+- The template grants nothing. Membership and product eligibility are decided before the code is
+  issued, exactly as for any other sign-in.`;

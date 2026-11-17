@@ -15,6 +15,7 @@ import {
   finalizeConfigAuthorizationWithSignatures,
   type SignatureContinuationDeps,
 } from './signature-continuation.service.js';
+import { resolveTeamRedirectUrl } from './team-redirect.service.js';
 
 type FinalizeDeps = {
   authenticationEpochLocked?: boolean;
@@ -181,12 +182,27 @@ export async function finalizeAuthenticatedUser(
         }
       : undefined;
 
+  // A team with an address of its own receives its code there. Everything
+  // above stays bound to the redirect URL the sign-in asked for; the code and
+  // any signature continuation are bound to the address they are delivered to.
+  const redirectUrl = params.machineIntentId
+    ? params.redirectUrl
+    : await resolveTeamRedirectUrl(
+        {
+          config: params.config,
+          redirectUrl: params.redirectUrl,
+          orgId: params.orgId,
+          teamId: params.teamId,
+        },
+        { prisma: deps.teamPrisma ?? deps.prisma ?? getAdminPrisma() },
+      );
+
   const gate = await finalizeConfigAuthorizationWithSignatures(
     {
       userId: params.userId,
       domain: params.config.domain,
       configUrl: params.configUrl,
-      redirectUrl: params.redirectUrl,
+      redirectUrl,
       state: params.state,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,

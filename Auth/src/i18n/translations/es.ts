@@ -26,7 +26,7 @@ export const es = {
   'auth.accessStatus.team': "Equipo",
   'auth.accessStatus.parent': "Acceso de la organización",
   'auth.login.title': 'Iniciar sesión',
-  'auth.renewal.open': '¿Cuenta caducada? Solicitar acceso',
+  'auth.renewal.expired': 'Esta cuenta ha caducado.',
   'auth.renewal.title': 'Solicitar la renovación del acceso',
   'auth.renewal.description': 'Verifica el correo de tu cuenta y pide a un administrador que fije una nueva fecha.',
   'auth.renewal.codeSent': 'Consulta tu correo para obtener un código de verificación. Si tienes activada la autenticación en dos pasos, introduce también ese código.',
