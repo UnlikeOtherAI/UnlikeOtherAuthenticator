@@ -3634,6 +3634,10 @@ decision:
   `INTEGRATION_JWKS_UNAVAILABLE` exactly as before. No negative result is kept.
 
 Config JWTs are unchanged: fetched and verified on every request (22.2, 22.4).
+Between those fetches UOA may reuse an idle connection to the product's config
+host (`CONFIG_FETCH_KEEP_ALIVE_SECONDS`, default 30; `0` disables it). The
+destination is still resolved and vetted before every request, and a kept
+connection is only ever to the address that passed that check.
 
 Product data-API answers carry `Server-Timing: queue;dur, total;dur` (the wait
 for a bulkhead slot and the whole time on the instance). Durations only.

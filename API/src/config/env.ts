@@ -133,6 +133,9 @@ const EnvSchema = z
     // How long a product's public signing keys (its JWKS) are kept between subject assertions
     // (services/partner-jwks-cache.service.ts). 0 fetches them for every assertion.
     PARTNER_JWKS_CACHE_SECONDS: z.coerce.number().int().min(0).max(600).default(60),
+    // How long an idle connection to a product's config URL is kept for the next config fetch
+    // (services/config-fetch.service.ts). 0 opens a new connection for every fetch.
+    CONFIG_FETCH_KEEP_ALIVE_SECONDS: z.coerce.number().int().min(0).max(120).default(30),
     // Brief 8 / Phase 10: AI translation service credentials (optional; the UI falls back to English if disabled).
     AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),
     OPENAI_API_KEY: z.string().min(1).optional(),

@@ -204,10 +204,15 @@ export async function resolvePublicDestinations(url: URL): Promise<PublicDestina
   return addresses;
 }
 
-export function createPinnedAgent(url: URL, destination: PublicDestination): Agent {
+export function createPinnedAgent(
+  url: URL,
+  destination: PublicDestination,
+  options: { keepAliveTimeoutMs?: number } = {},
+): Agent {
   const servername = isIP(stripIpv6Brackets(url.hostname)) ? undefined : url.hostname;
 
   return new Agent({
+    ...(options.keepAliveTimeoutMs ? { keepAliveTimeout: options.keepAliveTimeoutMs } : {}),
     connect: {
       ...(servername ? { servername } : {}),
       lookup: (_hostname, options, callback) => {
@@ -222,6 +227,59 @@ export function createPinnedAgent(url: URL, destination: PublicDestination): Age
       },
     },
   });
+}
+
+const MAX_KEPT_AGENTS = 32;
+const keptAgents = new Map<string, Agent>();
+
+function keptAgentKey(url: URL, destination: PublicDestination): string {
+  return `${url.hostname}\n${destination.family}\n${destination.address}`;
+}
+
+/**
+ * A pinned agent that outlives one request, so repeated requests to one host at one vetted
+ * address reuse its connection instead of paying TCP and TLS setup every time.
+ *
+ * Keyed by hostname and address: the caller still resolves and vets the destination before
+ * every request, and a host that resolves elsewhere gets a different agent, so a kept agent can
+ * only ever dial the address that passed the guard for its key. Callers must release every
+ * response body and must NOT close what this returns; {@link dropKeptPinnedAgent} discards one
+ * whose connection failed.
+ */
+export function keptPinnedAgent(
+  url: URL,
+  destination: PublicDestination,
+  keepAliveTimeoutMs: number,
+): Agent {
+  const key = keptAgentKey(url, destination);
+  const existing = keptAgents.get(key);
+  if (existing) {
+    // Refresh recency so the eviction below drops genuinely cold entries.
+    keptAgents.delete(key);
+    keptAgents.set(key, existing);
+    return existing;
+  }
+
+  const agent = createPinnedAgent(url, destination, { keepAliveTimeoutMs });
+  keptAgents.set(key, agent);
+  if (keptAgents.size > MAX_KEPT_AGENTS) {
+    const oldest = keptAgents.keys().next();
+    if (!oldest.done) {
+      const evicted = keptAgents.get(oldest.value);
+      keptAgents.delete(oldest.value);
+      if (evicted) void closeSsrfAgent(evicted);
+    }
+  }
+  return agent;
+}
+
+/** Forget the kept agent for this host and address and tear its sockets down. */
+export async function dropKeptPinnedAgent(url: URL, destination: PublicDestination): Promise<void> {
+  const key = keptAgentKey(url, destination);
+  const agent = keptAgents.get(key);
+  if (!agent) return;
+  keptAgents.delete(key);
+  await closeSsrfAgent(agent, 0);
 }
 
 /**
