@@ -271,9 +271,6 @@ export function TeamChooserPage(): React.JSX.Element {
         />
       ) : null}
 
-      <OrganisationManagementChoices choices={teamChoices} loginToken={loginToken}
-        query={query} onOutcome={handleOutcome} />
-
       {isCreateDialogOpen ? (
         <CreateTeamDialog
           loginToken={loginToken}

@@ -6,6 +6,11 @@ import { useTheme } from '../hooks/use-theme.js';
 import { useTranslation } from '../i18n/use-translation.js';
 import { postJson } from '../utils/api.js';
 
+/**
+ * Shown only once UOA has seen proof of an expired account (a correct password
+ * on one, `ACCOUNT_EXPIRED`). The sign-in screen offers no way here: somebody
+ * whose account is fine is never asked about expiry.
+ */
 export function AccountRenewalPage(): React.JSX.Element {
   const { configUrl, clientId, redirectUrl, pendingEmail, setView } = usePopup();
   const { classNames } = useTheme();
@@ -35,6 +40,9 @@ export function AccountRenewalPage(): React.JSX.Element {
   }
 
   return <div className="flex flex-col gap-4">
+    <p role="status" className="rounded-[var(--uoa-radius-input)] border border-[var(--uoa-color-danger)] px-3 py-2 text-sm font-medium text-[var(--uoa-color-danger)]">
+      {t('auth.renewal.expired')}
+    </p>
     <h1 className={`text-balance ${classNames.title}`}>{t('auth.renewal.title')}</h1>
     <p className="text-sm text-[var(--uoa-color-muted)]">{t('auth.renewal.description')}</p>
     {sent ? <p role="status" className="text-sm">{t('auth.renewal.sent')}</p> :

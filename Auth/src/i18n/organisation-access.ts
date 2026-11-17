@@ -4,7 +4,6 @@ export const accessEn = {
   managementUnavailable: "This account cannot manage the requested organisation. Sign in with its UnlikeOtherAI owner account.",
   managementOther: "Use another account",
   managementContinue: "Continue",
-  managementSection: "Organisation sign-in settings",
   managementFailed: "Unable to continue. Try again, or use another account.",
 
   reissueDns: 'Get a new DNS record',
@@ -71,7 +70,6 @@ export const accessCs: Record<AccessKey, string> = {
   managementUnavailable: "Tento účet nemůže spravovat požadovanou organizaci. Přihlaste se jejím účtem vlastníka UnlikeOtherAI.",
   managementOther: "Použít jiný účet",
   managementContinue: "Pokračovat",
-  managementSection: "Přihlašování do organizace",
   managementFailed: "Nelze pokračovat. Zkuste to znovu nebo použijte jiný účet.",
 
   reissueDns: 'Získat nový DNS záznam',
@@ -137,7 +135,6 @@ export const accessEs: Record<AccessKey, string> = {
   managementUnavailable: "Esta cuenta no puede gestionar la organización solicitada. Inicia sesión con su cuenta de propietario de UnlikeOtherAI.",
   managementOther: "Usar otra cuenta",
   managementContinue: "Continuar",
-  managementSection: "Inicio de sesión de la organización",
   managementFailed: "No se puede continuar. Inténtalo de nuevo o usa otra cuenta.",
 
   reissueDns: 'Obtener un nuevo registro DNS',

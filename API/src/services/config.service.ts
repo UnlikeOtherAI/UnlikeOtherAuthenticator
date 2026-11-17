@@ -7,6 +7,7 @@ import { tryParseHttpUrl, tryParseRedirectUrl } from '../utils/http-url.js';
 import { getAppLogger } from '../utils/app-logger.js';
 import { OrgFeaturesSchema } from './config-org-features.schema.js';
 import { clientService, clientServiceContainsUrl } from '../utils/client-service.js';
+import { teamRedirectTemplateProblem } from '../utils/team-redirect-template.js';
 
 const CONFIG_JWT_ALLOWED_ALGS = ['RS256'] as const;
 const CONFIG_JWKS_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -222,6 +223,17 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
       invitation_return_target: z.boolean().optional(),
       // Optional exact organisation for this interactive sign-in, carried in the signed config.
       organization_id: z.string().regex(/^[A-Za-z0-9_-]{1,256}$/).optional(),
+      // Deliver a team-scoped authorization code to the team's own address
+      // (utils/team-redirect-template.ts). `redirect_url` is one of
+      // `redirect_urls`; a sign-in that asks for it and finishes inside a team
+      // is sent to `template` filled with that team's labels instead.
+      team_redirect: z
+        .object({
+          redirect_url: z.string().trim().min(1).max(2048),
+          template: z.string().trim().min(1).max(2048),
+        })
+        .strict()
+        .optional(),
     })
     .optional()
     .default({ email_code_enabled: false, team_selection: 'off' }),
@@ -278,6 +290,23 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
         code: z.ZodIssueCode.custom,
         message: 'ui_theme.logo.url must use the same origin as config.domain',
         path: ['ui_theme', 'logo', 'url'],
+      });
+    }
+  }
+
+  const teamRedirect = config.login_flow.team_redirect;
+  if (teamRedirect) {
+    const problem = config.redirect_urls.includes(teamRedirect.redirect_url)
+      ? teamRedirectTemplateProblem({
+          template: teamRedirect.template,
+          redirectUrl: teamRedirect.redirect_url,
+        })
+      : 'redirect_url must be one of redirect_urls';
+    if (problem) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `login_flow.team_redirect: ${problem}`,
+        path: ['login_flow', 'team_redirect'],
       });
     }
   }
