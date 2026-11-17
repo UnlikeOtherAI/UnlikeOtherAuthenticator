@@ -48,6 +48,10 @@ concurrency cap so sign-in always keeps database connections. An excess request 
 (FIFO), then answers **\`503\`** with **\`Retry-After: 1\`** and code **\`PRODUCT_API_BUSY\`**. The
 request had no effect: retry after the delay with backoff (you already treat 5xx as temporary).
 
+Every answer from these APIs carries \`Server-Timing: queue;dur=<ms>, total;dur=<ms>\`: how long
+the request waited for its slot, and how long the instance spent on it in all. A long \`queue\`
+means the instance was busy with other calls (often your own), not that this call was slow.
+
 Never fan out one UOA call per end-user request. Resolve \`/org/me\` and settings once per
 session, cache them for the session, and refresh on your own schedule — a burst of ~100
 \`/org/me\` calls in one second is exactly what this limit exists to absorb. Sign-in

@@ -139,6 +139,29 @@ describe('product API bulkhead (Fastify)', () => {
     expect((await app.inject({ method: 'GET', url: '/org/fast' })).statusCode).toBe(200);
   });
 
+  it('tells the caller how long its request waited for a slot, and nothing on unlimited paths', async () => {
+    const built = await buildApp({ maxConcurrency: 1, maxQueue: 1, queueWaitMs: 5000 });
+    app = built.app;
+    const span = (header: unknown, name: string): number =>
+      Number(new RegExp(`${name};dur=([0-9.]+)`).exec(String(header))?.[1]);
+
+    const holding = app.inject({ method: 'GET', url: '/org/slow' });
+    await until(() => built.gates.length === 1);
+    const queued = app.inject({ method: 'GET', url: '/org/fast' });
+    await until(() => built.bulkhead.stats().queued === 1);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    built.gates[0].open();
+
+    const immediate = (await holding).headers['server-timing'];
+    const waited = (await queued).headers['server-timing'];
+    expect(span(immediate, 'queue')).toBeLessThan(20);
+    expect(span(waited, 'queue')).toBeGreaterThanOrEqual(30);
+    expect(span(waited, 'total')).toBeGreaterThanOrEqual(span(waited, 'queue'));
+
+    const unlimited = await app.inject({ method: 'GET', url: '/auth/ping' });
+    expect(unlimited.headers['server-timing']).toBeUndefined();
+  });
+
   it('refuses a queued request once the wait budget is spent', async () => {
     const built = await buildApp({ maxConcurrency: 1, maxQueue: 4, queueWaitMs: 30 });
     app = built.app;

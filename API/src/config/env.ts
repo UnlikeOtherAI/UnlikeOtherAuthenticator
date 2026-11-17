@@ -130,6 +130,9 @@ const EnvSchema = z
     // 20-40 requests a second, so ~32 is what a 3 s budget can realistically clear; queueing
     // more only delays the same 503 and pins memory during a flood.
     PRODUCT_API_MAX_QUEUE: z.coerce.number().int().min(0).max(10_000).default(32),
+    // How long a product's public signing keys (its JWKS) are kept between subject assertions
+    // (services/partner-jwks-cache.service.ts). 0 fetches them for every assertion.
+    PARTNER_JWKS_CACHE_SECONDS: z.coerce.number().int().min(0).max(600).default(60),
     // Brief 8 / Phase 10: AI translation service credentials (optional; the UI falls back to English if disabled).
     AI_TRANSLATION_PROVIDER: z.enum(['disabled', 'openai']).default('disabled'),
     OPENAI_API_KEY: z.string().min(1).optional(),
