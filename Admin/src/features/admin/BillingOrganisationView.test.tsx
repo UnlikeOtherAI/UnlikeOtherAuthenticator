@@ -18,6 +18,7 @@ vi.mock('./billing-admin-queries', () => ({
   useRemoveBillingAssignmentMutation: () => ({ mutateAsync: mutations.remove }),
 }));
 vi.mock('./OrganisationBillingModePanel', () => ({ OrganisationBillingModePanel: () => null }));
+vi.mock('./OrganisationCreditGrantsPanel', () => ({ OrganisationCreditGrantsPanel: () => null }));
 
 function tariff(id: string, name: string, extra: Partial<BillingTariff> = {}): BillingTariff {
   return {

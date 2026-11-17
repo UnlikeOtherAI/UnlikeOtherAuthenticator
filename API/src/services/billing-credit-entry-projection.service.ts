@@ -43,7 +43,7 @@ function commonEntry(
         .format(Math.max(entry.browserReservation.policy.minimumSeconds,
           Math.ceil(Number(entry.browserReservation.actualDurationMilliseconds) / (entry.browserReservation.policy.roundingSeconds * 1000))
             * entry.browserReservation.policy.roundingSeconds) / 60) } : {}),
-    }),
+    }, entry.direction),
     credits: { ...amount, display: billingLocalizedCreditDisplay(amount.credits, locale) },
     credit_balance_after: {
       ...billingCreditAmount(entry.balanceAfterMicrocredits, locale),

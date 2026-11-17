@@ -18,6 +18,7 @@ import {
 } from './billing-organisation-tariffs';
 import { BillingOrganisationTariffRow } from './BillingOrganisationTariffRow';
 import { OrganisationBillingModePanel } from './OrganisationBillingModePanel';
+import { OrganisationCreditGrantsPanel } from './OrganisationCreditGrantsPanel';
 import { useDirectoryNavigation } from './useDirectoryNavigation';
 
 type OrganisationLike = { id: string; name: string; slug: string };
@@ -77,6 +78,7 @@ export function BillingOrganisationView({
           <p className="px-5 py-8 text-sm text-gray-400">No products yet.</p>
         )}
       </Card>
+      <OrganisationCreditGrantsPanel key={`credits-${organisation.id}`} organisationId={organisation.id} />
       <OrganisationBillingModePanel key={organisation.id} organisationId={organisation.id} />
     </div>
   );

@@ -36,6 +36,23 @@ export const billingFinancialEvidenceEndpoints=(adminAuth:string):EndpointSchema
       409: 'Conflicting receipt, replay key or financial state' },
   },
   {
+    method: 'GET', path: '/internal/admin/billing/organisations/:orgId/credit-grants',
+    description: 'Read the organisation wallet in its current billing mode (confirmed, reserved and spendable credits) and the latest 50 platform credit grants. Reading creates no wallet.',
+    auth: adminAuth,
+    response: { 200: '{ organisation, mode, credit_account_id|null, balance{confirmed,reserved,spendable}, limits, grants[{id,credit_entry_id,amount,reason,granted_by,granted_at,mode}], has_more }',
+      404: 'Organisation not active' },
+  },
+  {
+    method: 'POST', path: '/internal/admin/billing/organisations/:orgId/credit-grants',
+    description: 'A recently authenticated platform superuser grants whole prepaid credits to the organisation wallet in its current mode: one immutable admin adjustment, one ADJUSTMENT credit entry and one audit row in a single transaction. No payment, invoice or Stripe object is created and the grant cannot be refunded to a card.',
+    auth: `${adminAuth}; access token iat within five minutes, live user epoch and role rechecked under row locks`,
+    body: { credits: 'whole credits, 1 to 10,000,000 (1 credit = US$0.001)',
+      reason: 'operator explanation, 12–500 characters',
+      idempotency_key: 'lowercase 64-hex key stable across retries' },
+    response: { 201: '{ grant, replayed: false, balance_after }', 200: 'Same key and terms replayed: { grant, replayed: true, balance_after }',
+      409: 'Key reused with other terms (BILLING_CREDIT_GRANT_KEY_CONFLICT) or organisation mode changed' },
+  },
+  {
     method: 'GET', path: '/schemas/billing-customer-invoices-v1.json', auth: 'public',
     description: 'Strict customer-safe actual-charge invoice list, detail and download schema.',
     response: { 200: 'BillingCustomerInvoicesV1 Draft 2020-12 JSON Schema' },

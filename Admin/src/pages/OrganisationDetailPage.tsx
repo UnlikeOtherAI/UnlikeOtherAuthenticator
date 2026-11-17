@@ -1,5 +1,6 @@
 import { EntityLifecyclePanel } from '../features/admin/EntityLifecyclePanel';
 import { OrganisationBillingModePanel } from '../features/admin/OrganisationBillingModePanel';
+import { OrganisationCreditGrantsPanel } from '../features/admin/OrganisationCreditGrantsPanel';
 import { billingOrganisationModeCopy } from '../features/admin/billing-organisation-mode-copy';
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import type { ReactNode } from 'react';
@@ -74,7 +75,7 @@ export function OrganisationDetailPage() {
         <MetricCard label="Teams" value={String(org.teams.length)} />
       </div>
       <SegmentedTabs<OrgTab> value={tab} onChange={setTab} options={[{ label: 'Members', value: 'members' }, { label: 'Teams', value: 'teams' }, { label: 'Invitations', value: 'invitations' }, { label: 'Access', value: 'access' },{label:modeCopy.tab,value:'billing'}]} />
-      {tab==='billing'?<OrganisationBillingModePanel key={org.id} organisationId={org.id}/>:null}
+      {tab==='billing'?<div className="space-y-4"><OrganisationCreditGrantsPanel key={`credits-${org.id}`} organisationId={org.id}/><OrganisationBillingModePanel key={org.id} organisationId={org.id}/></div>:null}
       {tab === 'access' ? <div className="mb-5"><EntityLifecyclePanel scope="ORGANISATION" id={org.id} /></div> : null}
       {tab === 'access' ? <>
       <div className="mb-5">
