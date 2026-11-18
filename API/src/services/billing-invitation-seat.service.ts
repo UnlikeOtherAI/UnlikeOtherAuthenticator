@@ -13,22 +13,31 @@ export async function invitationFundingRequest(prisma: PrismaClient, inviteId: s
     orgId: true, teamId: true, billingSeatRequired: true, billingSeatSourceInviteId: true,
   } });
   if (!invitation) throw new AppError('NOT_FOUND', 404);
-  return { ...invitation, inviteId: invitation.billingSeatSourceInviteId ?? inviteId };
+  // The current replacement can be live while its original seat owner is revoked as REPLACED.
+  // Read payment for the delivery invitation; keep the original id for any collection work.
+  const funded = invitation.billingSeatRequired && await isInvitationFunded(prisma, inviteId);
+  return { ...invitation, funded, inviteId: invitation.billingSeatSourceInviteId ?? inviteId };
 }
 
 export async function collectInvitationPayment(invitation: Awaited<ReturnType<typeof invitationFundingRequest>>, deps?: {
   admin?: PrismaClient; collect?: typeof runAnniversarySeatCycle; cardOnFile?: typeof assertNessieCardOnFile;
 }): Promise<void> {
-  if (!invitation.billingSeatRequired) return;
+  if (!invitation.billingSeatRequired || invitation.funded) return;
   const admin = deps?.admin ?? getAdminPrisma();
   await (deps?.cardOnFile ?? assertNessieCardOnFile)({ product: 'nessie',
     organisationId: invitation.orgId, teamId: invitation.teamId }, admin);
   await (deps?.collect ?? runAnniversarySeatCycle)({ prisma: admin, inviteId: invitation.inviteId });
 }
 
-/** Recheck inside the token transaction. A UI notice or pending collection never grants a capability. */
-export async function requireFundedInvitation(prisma: PrismaClient, inviteId: string): Promise<void> {
+async function isInvitationFunded(prisma: PrismaClient, inviteId: string): Promise<boolean> {
   const [row] = await prisma.$queryRaw<Array<{ ready: boolean }>>`
     SELECT billing_invitation_seat_ready(${inviteId}) AS ready`;
-  if (row?.ready !== true) throw new AppError('FORBIDDEN', 402, 'BILLING_SEAT_PAYMENT_REQUIRED');
+  return row?.ready === true;
+}
+
+/** Recheck inside the token transaction. A prior funding read never grants delivery. */
+export async function requireFundedInvitation(prisma: PrismaClient, inviteId: string): Promise<void> {
+  if (!await isInvitationFunded(prisma, inviteId)) {
+    throw new AppError('FORBIDDEN', 402, 'BILLING_SEAT_PAYMENT_REQUIRED');
+  }
 }
