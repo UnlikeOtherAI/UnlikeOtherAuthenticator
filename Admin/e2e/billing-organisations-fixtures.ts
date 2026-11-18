@@ -102,7 +102,10 @@ export async function installOrganisationBillingFixtures(page: Page) {
       const team = directoryTeam ? { id: directoryTeam.id, name: directoryTeam.name } : null;
       const saved = assign(target, assigned, organisation, team, nextMonth());
       saved.updated_at = new Date().toISOString();
-      return json(route, saved);
+      return json(route, {
+        id: saved.id, service_id: target.id, tariff_id: assigned.id, organisation_id: organisation.id,
+        team_id: team?.id ?? null, scope: saved.scope, tariff: assigned, effective_from_month: saved.effective_from_month,
+      });
     }
     if (request.method() === 'DELETE' && match[2]) {
       writes.push({ method: 'DELETE', path, body: null });

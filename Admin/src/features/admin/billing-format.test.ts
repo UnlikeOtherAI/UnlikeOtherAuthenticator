@@ -101,6 +101,11 @@ describe('billingTariffLabel', () => {
 });
 
 describe('billingRefusal', () => {
+  it('gives a recovery step when the save response cannot be read', () => {
+    expect(billingRefusal(new SyntaxError('Unexpected token in JSON')))
+      .toBe('We could not confirm the change. Refresh to check whether it was saved.');
+  });
+
   it('says why a tariff change was refused, in plain words', () => {
     const refused = (code?: string) => billingRefusal(new ApiRequestError(409, code));
     expect(refused('BILLING_TARIFF_RETIRED')).toBe('This tariff is retired. Pick another one.');
