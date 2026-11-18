@@ -1,3 +1,4 @@
+import { collectInvitationPayment, invitationFundingRequest } from '../../src/services/billing-invitation-seat.service.js';
 import { readNessieSeatAccess } from '../../src/services/billing-nessie-seat-access.service.js';
 import { recordSeatRenewalFailure } from '../../src/services/billing-seat-renewal.service.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -144,6 +145,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     const resent = await invite();
     expect(resent.billingSeatSourceInviteId).toBe(invitation.id);
     expect(await ready(resent.id)).toBe(true);
+    const funding = await invitationFundingRequest(p, resent.id);
+    expect(funding).toMatchObject({ inviteId: invitation.id, funded: true });
+    const cardOnFile = vi.fn().mockRejectedValue(new Error('NESSIE_BILLING_SETUP_REQUIRED'));
+    const collect = vi.fn();
+    await collectInvitationPayment(funding, { admin: p, cardOnFile, collect });
+    expect(cardOnFile).not.toHaveBeenCalled();
+    expect(collect).not.toHaveBeenCalled();
     await accept(resent.id, member.id);
     expect(await p.billingAutomaticSeatChange.count()).toBe(1);
     expect((await context())?.teams).toContain(team.id);

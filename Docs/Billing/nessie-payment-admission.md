@@ -73,7 +73,12 @@ from it. Trials that had already ended were not reopened.
 
 Invitation creation commits the held intent before provider IO. Payment failure
 retains it. Resends and cross-team invitations reuse the original funded seat
-within its scope. A fresh tenant transaction rechecks authority and the database
+within its scope. Before checking a saved card or attempting collection, delivery
+reads the existing payment predicate for the current invitation, following its
+original seat. An already funded seat needs no new payment method or charge.
+This also covers a seat bought through Stripe Link, which is not a card-type
+payment method. Unfunded invitations retain the existing collection requirements.
+A fresh tenant transaction rechecks authority and the database
 payment predicate before minting the token. The user retries delivery after
 payment; a payment webhook never sends invitation email by itself. Acceptance
 uses the funded seat. Removal, expiry and cancellation retain their financial
