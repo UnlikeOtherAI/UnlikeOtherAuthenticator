@@ -84,6 +84,14 @@ payment; a payment webhook never sends invitation email by itself. Acceptance
 uses the funded seat. Removal, expiry and cancellation retain their financial
 history and queue agreed quantity reductions without automatic refunds.
 
+An invitation created before a seat-free agreement took effect retains its
+original billing flag as historical evidence. Delivery reads the current scoped
+tariff too: once an explicit free or token-only agreement has no seat charge,
+the old invitation needs neither a saved card nor seat collection. Future-dated
+agreements do not waive today's requirement, and revoked, expired, declined or
+unapproved invitations remain invalid. The migration changes the shared
+readiness predicate; it does not rewrite invitations or payment records.
+
 Collected invoice periods bind the exact subscription, account, currency and
 line. Provider status alone, an unpaid minimum-charge carry, an open Checkout or
 a redirect cannot grant access. Cash adjustments for refunds and disputes affect
