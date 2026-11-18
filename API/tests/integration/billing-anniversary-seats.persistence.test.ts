@@ -49,7 +49,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     const ready = async (id: string) => (await p.$queryRaw<Array<{ ready: boolean }>>`
       SELECT billing_invitation_seat_ready(${id}) AS ready`)[0]?.ready;
     expect(await ready(held.id)).toBe(false);
-    expect((await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: org.id } })).endedAt).not.toBeNull();
+    expect((await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: org.id } })).endedAt).toBeNull();
     await p.teamInvite.update({ where: { id: held.id }, data: { revokedAt: new Date(), revokedReason: 'REVOKED' } });
     await expect(orgMember(member.id)).rejects.toThrow('complete the seat payment');
     const billingScopeEpoch = await createTestSandboxOrganisationPolicy(p, org.id);
@@ -225,7 +225,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     expect(await p.billingNessieSeatTransition.findUnique({ where: { orgId: cohortOrg.id } })).toEqual(cohort);
     const extra = await p.teamInvite.create({ data: { orgId: cohortOrg.id, teamId: cohortTeam.id,
       email: 'cohort-addition@example.test', lastSentAt: now } });
-    expect((await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: cohortOrg.id } })).endedAt).not.toBeNull();
+    await p.teamInvite.update({ where: { id: extra.id }, data: { lastSentAt: new Date() } });
+    expect(await p.billingNessieSeatTransition.findUniqueOrThrow({ where: { orgId: cohortOrg.id } })).toEqual(cohort);
+    const cohortAccess = (userId: string, at: Date) => p.$transaction(tx => readNessieSeatAccess(tx, {
+      serviceId: service.id, organisationId: cohortOrg.id, teamId: cohortTeam.id, userId,
+    }, at, 'projection'));
+    expect(await cohortAccess(member.id, now)).toMatchObject({ allowed: true, deadline: cohort.endsAt.toISOString() });
+    expect((await cohortAccess('outside-cohort', now)).allowed).toBe(false);
+    expect((await cohortAccess(member.id, cohort.endsAt)).allowed).toBe(false);
     expect(await ready(extra.id)).toBe(false);
     const cohortEpoch = await createTestSandboxOrganisationPolicy(p, cohortOrg.id);
     const cohortCustomer = await p.billingStripeCustomer.create({ data: { accountId: acct.id, orgId: cohortOrg.id,

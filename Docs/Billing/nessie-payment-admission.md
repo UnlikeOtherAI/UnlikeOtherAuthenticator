@@ -42,8 +42,9 @@ New and pre-cutover default-plan organisations enter the regular paid plan.
 Explicit agreements retain their terms. The free trial freezes the original
 member cohort and deadline: a new organisation's creator, or the people already
 in an organisation that moves to the paid plan. It never includes consumables,
-resets on login or grants new members an allowance. Adding a person ends it and
-requires collection for all existing seats and the invitation before delivery.
+resets on login or grants new members an allowance. Requesting or resending an invitation leaves the original members' access in place
+until their scheduled deadline. Delivering the invitation still requires collection
+for all existing seats and the new seat.
 
 ### Time periods are operator settings
 
