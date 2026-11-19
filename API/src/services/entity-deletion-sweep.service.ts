@@ -69,6 +69,7 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   const protectedRows = await retainedEvidence(tx, 'USER', userId);
   await tx.user.update({ where: { id: userId }, data: {
     lifecycleStatus: 'DELETED', lifecycleChangedAt: new Date(), email: null, userKey: null, name: null,
+    accountDeletionRequestedAt: null,
     passwordHash: null, twoFaEnabled: false, twoFaSecret: null, twoFaLastAcceptedCounter: null,
     avatarUrl: null, deeptestNessieInferenceAllowed: false,
     tokenVersion: { increment: 1 }, lifecycleReason: null, lifecycleInternalNote: null,

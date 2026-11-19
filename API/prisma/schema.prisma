@@ -117,6 +117,7 @@ enum VerificationTokenType {
   LOGIN_CODE
   ACTION_VERIFICATION
   LIFECYCLE_STATUS
+  ACCOUNT_DELETION
 }
 
 enum ClientDomainIntegrationStatus {
@@ -470,6 +471,7 @@ model User {
   tokenVersion                         Int                                       @default(0) @map("token_version")
   accountExpiresAt                     DateTime?                                 @map("account_expires_at")
   accountRenewalRequest                 AccountRenewalRequest?
+  accountDeletionRequestedAt           DateTime?                                 @map("account_deletion_requested_at")
   deeptestNessieInferenceAllowed        Boolean                                   @default(false) @map("deeptest_nessie_inference_allowed")
   createdAt                            DateTime                                  @default(now()) @map("created_at")
   billingStripeCheckouts               BillingStripeCheckoutSession[]

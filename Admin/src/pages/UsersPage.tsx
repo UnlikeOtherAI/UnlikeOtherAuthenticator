@@ -17,12 +17,13 @@ import { useDomainsQuery, useUsersQuery } from '../features/admin/admin-queries'
 import { UserAvatar } from '../features/admin/UserAvatar';
 
 export function UsersPage() {
-  const { data: users = [], isLoading, isError, refetch } = useUsersQuery();
   const { data: domains = [] } = useDomainsQuery();
   const { recordState, openRecord } = useDirectoryNavigation('/users');
   const [searchQuery, setSearchQuery] = useDirectoryParam('q');
   const [selectedDomain, setSelectedDomain] = useDirectoryParam('domain', 'all');
   const [selectedStatus, setSelectedStatus] = useDirectoryParam('status', 'all');
+  const deletionRequested = selectedStatus === 'deletion-requested';
+  const { data: users = [], isLoading, isError, refetch } = useUsersQuery(deletionRequested);
   const domainOptions = useMemo(() => domains.map((domain) => ({ label: domain.name, meta: domain.label, value: domain.name })), [domains]);
   const filteredUsers = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -30,16 +31,16 @@ export function UsersPage() {
     return users.filter((user) => {
       const matchesSearch = !normalizedQuery || [user.name ?? '', user.email].some((value) => (value ?? '').toLowerCase().includes(normalizedQuery));
       const matchesDomain = selectedDomain === 'all' || user.domains.includes(selectedDomain);
-      const matchesStatus = selectedStatus === 'all' || user.status === selectedStatus;
+      const matchesStatus = deletionRequested || selectedStatus === 'all' || user.status === selectedStatus;
       return matchesSearch && matchesDomain && matchesStatus;
     });
-  }, [searchQuery, selectedDomain, selectedStatus, users]);
+  }, [deletionRequested, searchQuery, selectedDomain, selectedStatus, users]);
   const { pageItems, pagination } = usePagination(filteredUsers);
   const [creatingUser, setCreatingUser] = useState(false);
 
   return (
     <>
-      <PageHeader title="Users" description="Search the latest 100 users." actions={<Button icon="plus" variant="primary" onClick={() => setCreatingUser(true)}>New user</Button>} />
+      <PageHeader title="Users" description={deletionRequested ? 'Review account deletion requests, oldest first.' : 'Search the latest 100 users.'} actions={<Button icon="plus" variant="primary" onClick={() => setCreatingUser(true)}>New user</Button>} />
       <Card>
         <div className="flex flex-wrap items-end gap-3 border-b border-gray-100 px-4 py-3">
           <label className="block w-64 max-w-full">
@@ -51,6 +52,7 @@ export function UsersPage() {
             <span className="mb-1.5 block text-sm font-medium text-gray-700">Status</span>
             <SelectField className="h-9 w-full" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)}>
               <option value="all">All statuses</option>
+              <option value="deletion-requested">Deletion requested</option>
               <option value="active">Active</option>
               <option value="expired">Expired</option>
               <option value="banned">Banned</option>
@@ -93,7 +95,9 @@ export function UsersPage() {
                   <Td><MethodBadge method={user.method} /></Td>
                   <Td><Badge variant={user.twofa ? 'green' : 'slate'}>{user.twofa ? '2FA enabled' : '2FA not enrolled'}</Badge></Td>
                   <Td className="text-xs text-gray-400">{user.lastLogin === 'Never' ? 'Not in recent activity' : user.lastLogin}</Td>
-                  <Td><StatusBadge status={user.status} /></Td>
+                  <Td><StatusBadge status={user.status} />
+                    {user.accountDeletionRequestedAt && <span className="ml-2"><Badge variant="amber">Deletion requested</Badge></span>}
+                  </Td>
                 </tr>
               ))}
             {pageItems.length === 0 ? <tr><Td colSpan={6}>No users match these filters.</Td></tr> : null}

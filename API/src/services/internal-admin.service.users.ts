@@ -51,11 +51,15 @@ export async function getAdminLogs(limit = 100, userId?: string) {
   }));
 }
 
-export async function getAdminUsers(limit?: number) {
+export async function getAdminUsers(limit?: number, deletionRequested = false) {
   if (!isDatabaseEnabled()) return [];
 
   const prisma = getAdminPrisma();
-  const users = await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: listLimit(limit) });
+  const users = await prisma.user.findMany({
+    where: deletionRequested ? { accountDeletionRequestedAt: { not: null } } : undefined,
+    orderBy: deletionRequested ? [{ accountDeletionRequestedAt: 'asc' }, { id: 'asc' }] : { createdAt: 'desc' },
+    take: listLimit(limit),
+  });
   const userIds = users.map((user) => user.id);
   const [roles, logs, uploadedAvatars] = await Promise.all([
     prisma.domainRole.findMany({ where: { userId: { in: userIds } }, select: { userId: true, domain: true } }),
@@ -97,6 +101,7 @@ export async function getAdminUsers(limit?: number) {
       lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
       status: user.lifecycleStatus === 'ACTIVE' && !isActiveUser(user) ? 'expired' : user.lifecycleStatus.toLowerCase(),
       accountExpiresAt: user.accountExpiresAt?.toISOString() ?? null,
+      accountDeletionRequestedAt: user.accountDeletionRequestedAt?.toISOString() ?? null,
       method: method(latestLog?.authMethod),
       created: displayDate(user.createdAt),
     };
@@ -132,6 +137,7 @@ export async function getAdminUser(userId: string) {
     lastLogin: latestLog ? displayTimestamp(latestLog.createdAt) : 'Never',
     status: user.lifecycleStatus === 'ACTIVE' && !isActiveUser(user) ? 'expired' : user.lifecycleStatus.toLowerCase(),
     accountExpiresAt: user.accountExpiresAt?.toISOString() ?? null,
+    accountDeletionRequestedAt: user.accountDeletionRequestedAt?.toISOString() ?? null,
     accountRenewalRequest: renewal ? { id: renewal.id, status: renewal.status.toLowerCase(),
       requestedAt: renewal.requestedAt.toISOString(), reviewedAt: renewal.reviewedAt?.toISOString() ?? null,
       approvedUntil: renewal.approvedUntil?.toISOString() ?? null } : null,

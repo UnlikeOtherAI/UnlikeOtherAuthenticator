@@ -3,6 +3,9 @@ import type { EndpointSchema } from './schema.js';
 const accessStatusNotes = 'Optional diagnostics: AUTH_ACCESS_STATUS_ENABLED=true on the auth server is required. False/unset returns404 before config/client/mail/proof work, including outstanding proof redemption.';
 
 export const lifecycleEndpoints: EndpointSchema[] = [
+  { method: 'GET', path: '/auth/delete-account', description: 'Open the first-party global account-deletion request form', response: { 200: 'HTML; no-store' } },
+  { method: 'POST', path: '/auth/delete-account/start', description: 'Send a neutral mailbox code and bind the ten-minute challenge to the current browser', auth: 'same-origin browser; rate limited', body: { email: 'account email' }, response: { challengeId: 'opaque UUID; HttpOnly SameSite=Strict cookie set' } },
+  { method: 'POST', path: '/auth/delete-account/confirm', description: 'Verify and record a global account-deletion request for operator review', auth: 'same browser cookie, one-use mailbox code, enrolled TOTP and current credential epoch', body: { challengeId: 'UUID', code: 'six digits', twoFactorCode: 'six digits if enrolled' }, response: { submitted: 'true; no session issued' }, notes: 'A duplicate verified request preserves the existing queue time. Only the normal platform-admin deletion workflow can start erasure.' },
   { method: 'POST', path: '/org/organisations/:orgId/teams/:teamId/archive',
     auth: 'registered domain bearer, verified config, fresh exact-team human assertion and live org teams.manage capability',
     query: { domain: 'registered product domain', config_url: 'signed product config URL' },

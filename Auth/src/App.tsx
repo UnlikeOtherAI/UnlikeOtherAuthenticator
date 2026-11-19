@@ -1,3 +1,4 @@
+import { AccountDeletionPage } from './pages/AccountDeletionPage.js';
 import { MachinesPage } from './pages/MachinesPage.js';
 import { PopupContainer } from './components/layout/PopupContainer.js';
 import { I18nProvider } from './i18n/I18nProvider.js';
@@ -20,11 +21,15 @@ export function App(props?: {
     serverAccessStatusEnabled: props?.accessStatusEnabled,
   });
 
+  const pathname = props?.pathname ?? (typeof window !== 'undefined' ? window.location.pathname : '');
+
   return (
     <AccessStatusContext.Provider value={bootstrap.accessStatusEnabled}>
       <ThemeProvider config={bootstrap.config} configUrl={bootstrap.configUrl}>
         <I18nProvider config={bootstrap.config} configUrl={bootstrap.configUrl}>
-          {(props?.pathname ?? (typeof window !== 'undefined' ? window.location.pathname : '')) === '/auth/machines' ? <MachinesPage /> : (props?.pathname ?? (typeof window !== 'undefined' ? window.location.pathname : '')) === '/auth/organisation-recovery' ? <OrganisationRecoveryPage /> : (props?.pathname ?? (typeof window !== 'undefined' ? window.location.pathname : '')) === '/auth/organisation-access' ? <OrganisationAccessPage /> : <PopupContainer
+          {pathname === '/auth/delete-account' ? <AccountDeletionPage /> : pathname === '/auth/machines' ? <MachinesPage />
+            : pathname === '/auth/organisation-recovery' ? <OrganisationRecoveryPage />
+            : pathname === '/auth/organisation-access' ? <OrganisationAccessPage /> : <PopupContainer
             configUrl={bootstrap.configUrl}
             config={bootstrap.config}
             initialSearch={props?.initialSearch}

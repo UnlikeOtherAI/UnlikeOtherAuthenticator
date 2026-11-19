@@ -116,8 +116,9 @@ export function useDeleteTeamAvatarMutation(teamId: string) {
   });
 }
 
-export function useUsersQuery() {
-  return useQuery({ queryKey: ['admin', 'users'], queryFn: adminService.getUsers });
+export function useUsersQuery(deletionRequested = false) {
+  return useQuery({ queryKey: deletionRequested ? ['admin', 'users', 'deletion-requested'] : ['admin', 'users'],
+    queryFn: () => adminService.getUsers(deletionRequested) });
 }
 
 export function useCreateUserMutation() {

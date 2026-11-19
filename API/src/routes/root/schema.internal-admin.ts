@@ -391,11 +391,11 @@ export const internalAdminEndpoints: EndpointSchema[] = [
   {
     method: 'GET',
     path: '/internal/admin/users',
-    description: 'List users with domains and latest login metadata',
+    description: 'List users with domains and latest login metadata, or list verified account deletion requests oldest first',
     auth: adminAuth,
-    query: listLimit,
+    query: { ...listLimit, deletionRequested: 'optional true to list only users with pending deletion requests' },
     response: {
-      200: 'Admin user summary array — each entry carries avatarSource and avatarImageUrl',
+      200: 'Admin user summary array with avatarSource, avatarImageUrl and accountDeletionRequestedAt',
       '401/403': authFailures,
     },
     notes: IDENTITY_AVATAR_URL_NOTE,
