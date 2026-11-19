@@ -278,6 +278,14 @@ describe.skipIf(!hasDatabase)('user-facing /org team CRUD and membership', () =>
     expect(resendInvite.statusCode).toBe(200);
     expect((resendInvite.json() as TeamInviteRecord).id).not.toBe(pendingList.data[0].id);
 
+    const retryResend = await app.inject({
+      method: 'POST',
+      url: `/org/organisations/${org.id}/teams/${createdTeamIds[0]}/invitations/${pendingList.data[0].id}/resend?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,
+      headers: { authorization: `Bearer ${domainHash}` },
+    });
+    expect(retryResend.statusCode).toBe(200);
+    expect(retryResend.json().id).toBe(resendInvite.json().id);
+
     const addTeamMember = await app.inject({
       method: 'POST',
       url: `/org/organisations/${org.id}/teams/${createdTeamIds[0]}/members?domain=${encodeURIComponent(domain)}&config_url=${encodeURIComponent(orgConfigUrl)}`,

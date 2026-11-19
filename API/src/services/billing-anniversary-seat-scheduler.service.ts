@@ -40,7 +40,8 @@ export async function runAnniversarySeatCycle(deps?: {
         ORDER BY c.next_attempt_at,c.id LIMIT 1 FOR UPDATE OF c SKIP LOCKED
       ) UPDATE billing_automatic_seat_changes c SET
         first_attempt_at=COALESCE(c.first_attempt_at,${now}),next_attempt_at=${new Date(now.getTime() + 300_000)}
-        FROM candidate WHERE candidate.id=c.id RETURNING c.id`;
+        FROM candidate WHERE candidate.id=c.id
+          AND set_config('uoa.invite_restore_aware','yes',true)='yes' RETURNING c.id`;
     if (!claim) break;
     const row = await prisma.billingAutomaticSeatChange.findUniqueOrThrow({ where: { id: claim.id },
       include: { seatSubscription: { include: { stripeSubscription: { include: { customer: true } } } } } });

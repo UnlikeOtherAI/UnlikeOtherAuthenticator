@@ -94,3 +94,17 @@ it.each(['past_due', 'unpaid', 'canceled', 'incomplete', 'incomplete_expired', '
     expect(provider.subscriptions.update).not.toHaveBeenCalled();
   },
 );
+
+it('restores an expired invitation quantity within the paid period without a second invoice', async () => {
+  const change = { ...pendingChange(), reuseInvoice: 'in_original', reusePeriodEnd: new Date(1796169600000) };
+  const provider = pendingProvider();
+  expect(await collectAnniversarySeat(change, provider as never, change.firstAttemptAt))
+    .toEqual({ status: 'complete', invoice: 'in_original' });
+  expect(provider.subscriptions.update.mock.calls[0][1].proration_behavior).toBe('none');
+  expect(provider.invoices.retrieve).not.toHaveBeenCalled();
+  const later = pendingProvider();
+  change.reusePeriodEnd = new Date(1796169599000);
+  expect(await collectAnniversarySeat(change, later as never, change.firstAttemptAt))
+    .toMatchObject({ reason: 'PRORATION_PERIOD_MISMATCH' });
+  expect(later.subscriptions.update).not.toHaveBeenCalled();
+});

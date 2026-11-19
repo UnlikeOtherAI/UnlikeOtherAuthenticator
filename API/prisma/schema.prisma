@@ -1728,6 +1728,9 @@ model TeamMember {
 }
 
 model TeamInvite {
+  resendOfId String? @unique(map: "team_invites_resend_of_key") @map("resend_of_id")
+  resendOf TeamInvite? @relation("InvitationResend", fields: [resendOfId], references: [id], onDelete: Restrict)
+  resentAs TeamInvite? @relation("InvitationResend")
   billingSeatRequired Boolean @default(false) @map("billing_seat_required")
   billingSeatSourceInviteId String? @map("billing_seat_source_invite_id")
   billingSeatSubscriptionId String? @map("billing_seat_subscription_id")
@@ -2928,6 +2931,8 @@ model BillingSeatMembershipInterval {
 }
 
 model BillingAutomaticSeatChange {
+  reuseInvoice String? @map("reuse_invoice")
+  reusePeriodEnd DateTime? @map("reuse_period_end") @db.Timestamptz(6)
   inviteId String? @map("invite_id")
   invitation TeamInvite? @relation(fields: [inviteId], references: [id], onDelete: Restrict)
   cancelledWithoutCharge Boolean @default(false) @map("cancelled_without_charge")

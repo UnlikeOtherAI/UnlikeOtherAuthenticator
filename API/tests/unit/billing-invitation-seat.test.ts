@@ -9,6 +9,7 @@ function fixture({ funded = false, required = true, root = null as string | null
     teamInvite: { findUnique: vi.fn().mockResolvedValue({
       orgId: 'org', teamId: 'team', billingSeatRequired: required, billingSeatSourceInviteId: root,
     }) },
+    billingAutomaticSeatChange: { findFirst: vi.fn().mockResolvedValue(null), findUnique: vi.fn().mockResolvedValue(null) },
     $queryRaw: query,
   };
   const cardOnFile = vi.fn().mockResolvedValue(undefined);
@@ -41,6 +42,14 @@ describe('invitation payment collection admission', () => {
     expect(f.cardOnFile).toHaveBeenLastCalledWith({
       product: 'nessie', organisationId: 'org', teamId: 'team',
     }, f.prisma);
+  });
+
+  it('drives queued subscription collection even when checkout used Link', async () => {
+    const f = fixture();
+    f.prisma.billingAutomaticSeatChange.findFirst.mockResolvedValue({ id: 1n });
+    await collectInvitationPayment(await f.read(), f.deps);
+    expect(f.collect).toHaveBeenCalledOnce();
+    expect(f.cardOnFile).not.toHaveBeenCalled();
   });
 
   it('does not treat a missing payment verdict as paid', async () => {

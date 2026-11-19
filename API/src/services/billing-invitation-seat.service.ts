@@ -24,9 +24,24 @@ export async function collectInvitationPayment(invitation: Awaited<ReturnType<ty
 }): Promise<void> {
   if (!invitation.billingSeatRequired || invitation.funded) return;
   const admin = deps?.admin ?? getAdminPrisma();
-  await (deps?.cardOnFile ?? assertNessieCardOnFile)({ product: 'nessie',
+  // A seat change already queued against a paid subscription uses its own collection
+  // authority, including Stripe Link. Both the request and scheduler drive that same operation.
+  const queued = await admin.billingAutomaticSeatChange.findFirst({ where: {
+    inviteId: invitation.inviteId, delta: 1, cancelledWithoutCharge: false,
+  }, select: { id: true } });
+  if (!queued) await (deps?.cardOnFile ?? assertNessieCardOnFile)({ product: 'nessie',
     organisationId: invitation.orgId, teamId: invitation.teamId }, admin);
   await (deps?.collect ?? runAnniversarySeatCycle)({ prisma: admin, inviteId: invitation.inviteId });
+  if (!queued) return;
+  // A scheduler may already own the provider request. Give it a bounded window
+  // to commit payment so this request can send the link after the final tenant check.
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const change = await admin.billingAutomaticSeatChange.findUnique({ where: { id: queued.id },
+      select: { completedAt: true, failureCode: true, firstAttemptAt: true } });
+    if (!change?.firstAttemptAt || change.completedAt || change.failureCode) break;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
 }
 
 async function isInvitationFunded(prisma: PrismaClient, inviteId: string): Promise<boolean> {

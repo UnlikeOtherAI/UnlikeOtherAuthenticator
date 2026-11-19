@@ -1,3 +1,7 @@
+import { resendTeamInvite } from '../../src/services/team-invite.service.resend.js';
+import type { InvitePrisma } from '../../src/services/team-invite.service.base.js';
+import type { ClientConfig } from '../../src/services/config.service.js';
+import { testUiTheme, TEST_SHARED_SECRET } from '../helpers/test-config.js';
 import { collectInvitationPayment, invitationFundingRequest } from '../../src/services/billing-invitation-seat.service.js';
 import { readNessieSeatAccess } from '../../src/services/billing-nessie-seat-access.service.js';
 import { recordSeatRenewalFailure } from '../../src/services/billing-seat-renewal.service.js';
@@ -213,6 +217,43 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
     expect(await ready(cancelled.id)).toBe(false);
     await cycle();
     expect(item.quantity).toBe(4);
+
+    // Expiring the link releases the renewal quantity. Resending to its recipient
+    // restores that same quantity without billing the paid interval again.
+    const expiredEmail = 'expired-seat@example.test';
+    const original = await p.teamInvite.create({ data: { orgId: org.id, teamId: team.id,
+      email: expiredEmail, lastSentAt: new Date() } });
+    await cycle();
+    const invoiceCount = invoices.size;
+    await p.teamInvite.update({ where: { id: original.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    await cycle();
+    expect((await p.teamInvite.findUniqueOrThrow({ where: { id: original.id } })).billingSeatEndedAt).not.toBeNull();
+    const mail = vi.fn().mockResolvedValue(undefined);
+    let deliver!: (client: InvitePrisma) => Promise<void>;
+    const resendOriginal = () => p.$transaction(tx => resendTeamInvite({
+      orgId: org.id, teamId: team.id, inviteId: original.id, domain: org.domain, configUrl: 'https://seat.example/config',
+      config: { domain: org.domain, user_scope: 'global', ui_theme: testUiTheme() } as ClientConfig,
+    }, { prisma: tx as InvitePrisma, env: { DATABASE_URL: db.databaseUrl, PUBLIC_BASE_URL: 'https://auth.example' } as never,
+      sharedSecret: TEST_SHARED_SECRET, sendTeamInviteEmail: mail, inviterPrisma: tx,
+      afterCommit: (_id, send) => { deliver = send; } }));
+    const finishDelivery = () => p.$transaction(tx => deliver(tx as InvitePrisma));
+    const restored = await resendOriginal();
+    await expect(finishDelivery()).rejects.toThrow('BILLING_SEAT_PAYMENT_REQUIRED');
+    const restoration = await p.billingAutomaticSeatChange.findFirstOrThrow({ where: { inviteId: restored.id } });
+    expect(restoration.reuseInvoice).toBeTruthy();
+    expect(await ready(restored.id)).toBe(false);
+    expect(await p.billingAutomaticSeatChange.updateMany({ where: { id: restoration.id },
+      data: { firstAttemptAt: now } })).toEqual({ count: 0 });
+    await cycle();
+    expect(await ready(restored.id)).toBe(true);
+    expect((await resendOriginal()).id).toBe(restored.id);
+    await finishDelivery();
+    expect((await resendOriginal()).id).toBe(restored.id);
+    await finishDelivery();
+    expect(mail).toHaveBeenCalledTimes(1);
+    expect(await p.verificationToken.count({ where: { teamInviteId: restored.id } })).toBe(1);
+    expect(invoices.size).toBe(invoiceCount);
+    expect(update.mock.calls.at(-1)?.[1].proration_behavior).toBe('none');
 
     // A free-to-paid transition charges the frozen existing cohort plus the new invitation.
     const cohortOrg = await p.organisation.create({ data: { name: 'Existing cohort', slug: 'existing-cohort',

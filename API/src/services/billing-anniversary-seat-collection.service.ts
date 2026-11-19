@@ -8,6 +8,8 @@ type Provider = StripeInvoiceCashClient & Pick<Stripe, 'subscriptions' | 'events
 export type SeatPayment = {
   id: bigint;
   delta: number;
+  reuseInvoice?: string | null;
+  reusePeriodEnd?: Date | null;
   fromQuantity: number;
   toQuantity: number;
   effectiveAt: Date;
@@ -89,6 +91,10 @@ export async function collectAnniversarySeat(change: SeatPayment, stripe: Provid
       const applied = event.data.object as Stripe.Subscription;
       if (event.request?.idempotency_key !== key || applied.id !== subscription.id) continue;
       if (change.delta < 0) return { status: 'complete', invoice: null };
+      if (change.reuseInvoice) {
+        if (boundItem(applied, change)?.quantity !== change.toQuantity || applied.pending_update) continue;
+        return { status: 'complete', invoice: change.reuseInvoice ?? null };
+      }
       const invoice = stripeExternalId(applied.latest_invoice);
       if (invoice) return paidInvoice(await stripe.invoices.retrieve(invoice), change, subscription, stripe);
     }
@@ -105,17 +111,20 @@ export async function collectAnniversarySeat(change: SeatPayment, stripe: Provid
   if (change.delta > 0 && now.getTime() - change.firstAttemptAt.getTime() >= 23 * 3600_000) {
     return { status: 'hold', reason: 'PAYMENT_RECONCILIATION_REQUIRED' };
   }
+  if (change.reuseInvoice && item.current_period_end !== (change.reusePeriodEnd?.getTime() ?? 0) / 1000) {
+    return { status: 'hold', reason: 'PRORATION_PERIOD_MISMATCH' };
+  }
   const updated = await stripe.subscriptions.update(subscription.id, {
     items: [{ id: item.id, quantity: change.toQuantity }],
-    ...(change.delta > 0
+    ...(change.delta > 0 && !change.reuseInvoice
       ? { proration_behavior: 'always_invoice', payment_behavior: 'pending_if_incomplete', proration_date: at }
       : { proration_behavior: 'none' }),
     expand: ['latest_invoice'],
   }, { idempotencyKey: key });
   const next = boundItem(updated, change);
   if (!next) return { status: 'hold', reason: 'SUBSCRIPTION_BINDING' };
-  if (change.delta < 0) return next.quantity === change.toQuantity && !updated.pending_update
-    ? { status: 'complete', invoice: null } : { status: 'hold', reason: 'QUANTITY_MISMATCH' };
+  if (change.delta < 0 || change.reuseInvoice) return next.quantity === change.toQuantity && !updated.pending_update
+    ? { status: 'complete', invoice: change.reuseInvoice ?? null } : { status: 'hold', reason: 'QUANTITY_MISMATCH' };
   if (!updated.latest_invoice || typeof updated.latest_invoice === 'string') {
     return { status: 'hold', reason: 'INVOICE_BINDING' };
   }

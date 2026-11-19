@@ -77,12 +77,18 @@ within its scope. Before checking a saved card or attempting collection, deliver
 reads the existing payment predicate for the current invitation, following its
 original seat. An already funded seat needs no new payment method or charge.
 This also covers a seat bought through Stripe Link, which is not a card-type
-payment method. Unfunded invitations retain the existing collection requirements.
+payment method. An invitation with a seat change already queued uses the subscription's payment
+method, including Link. The request and scheduler claim the same operation.
+Opening the same resend again can finish the immediate replacement and does not
+issue a second link if its successful send was already recorded.
 A fresh tenant transaction rechecks authority and the database
 payment predicate before minting the token. The user retries delivery after
 payment; a payment webhook never sends invitation email by itself. Acceptance
 uses the funded seat. Removal, expiry and cancellation retain their financial
-history and queue agreed quantity reductions without automatic refunds.
+history and queue agreed quantity reductions without automatic refunds. An expired
+invitation reduces the renewal quantity. Resending to the same recipient on the
+same subscription during the period already paid for restores the quantity
+without another prorated invoice. The emailed link still expires after 24 hours.
 
 An invitation created before a seat-free agreement took effect retains its
 original billing flag as historical evidence. Delivery reads the current scoped
