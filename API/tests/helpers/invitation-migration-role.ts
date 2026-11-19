@@ -58,6 +58,8 @@ export async function migrationRoleFixture() {
         LOOP EXECUTE format('ALTER SEQUENCE %I OWNER TO uoa_admin',item.relname); END LOOP;
         FOR item IN SELECT oid::regprocedure AS signature FROM pg_proc WHERE pronamespace='"${name}"'::regnamespace
         LOOP EXECUTE format('ALTER FUNCTION %s OWNER TO uoa_admin',item.signature); END LOOP;
+        FOR item IN SELECT typname FROM pg_type WHERE typnamespace='"${name}"'::regnamespace AND typtype='e'
+        LOOP EXECUTE format('ALTER TYPE %I OWNER TO uoa_admin',item.typname); END LOOP;
       END $$;
       REVOKE ALL ON billing_automatic_seat_changes FROM uoa_admin;
       GRANT SELECT,INSERT,UPDATE ON billing_automatic_seat_changes TO uoa_admin`);
@@ -75,8 +77,8 @@ export async function migrationRoleFixture() {
         });
         child.once('error', reject); child.once('close', accept);
       }),
-      copyRemaining: async () => {
-        for (const migration of names.filter(n => n >= permissionMigration)) await copyMigration(migration);
+      copyRemaining: async (before?: string) => {
+        for (const migration of names.filter(n => n >= permissionMigration && (!before || n < before))) await copyMigration(migration);
       },
       cleanup: async () => {
         await client.end();

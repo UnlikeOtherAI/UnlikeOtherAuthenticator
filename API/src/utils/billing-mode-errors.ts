@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { AppError } from './errors.js';
 
 const refusals = new Set(['BILLING_CONTEXT_REQUIRED', 'BILLING_CONTEXT_STALE',
-  'BILLING_TEAM_MODE_CHANGED', 'BILLING_TEAM_MODE_BLOCKED', 'BILLING_HISTORICAL_WORK_PENDING',
+  'BILLING_REGION_IMMUTABLE', 'STRIPE_TARIFF_PINNED', 'BILLING_TEAM_MODE_CHANGED', 'BILLING_TEAM_MODE_BLOCKED', 'BILLING_HISTORICAL_WORK_PENDING',
   'BILLING_ORGANISATION_MODES_MIXED']);
 
 /** Surface only named capture-guard refusals, never SQL or Prisma diagnostics. */

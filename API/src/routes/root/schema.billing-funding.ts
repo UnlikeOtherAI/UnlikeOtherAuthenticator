@@ -303,10 +303,10 @@ export const billingFundingEndpoints: EndpointSchema[] = [
     response: {
       200: '{ region, currency, suggested_region, suggested_currency, suggested_from? (region protocol 1.1.0), can_set }',
       '401/403': 'Invalid lifecycle credential, actor, membership, or BILLING_ORG_MANAGER_REQUIRED',
-      409: 'BILLING_REGION_IMMUTABLE: a different region was already chosen',
+      409: 'BILLING_REGION_IMMUTABLE for an existing different region, STRIPE_TARIFF_PINNED for a conflicting Nessie checkout in progress',
     },
     notes:
-      'Set once, never changed; the database refuses updates. Repeating the same region is a no-op. AI usage stays USD for every region. Until chosen, SMS quotes, number purchases and SMS top-ups answer 409 BILLING_REGION_REQUIRED.',
+      'The first live Nessie organisation seat payment sets an empty region from the paid currency. Repeating the same region is a no-op. AI usage stays USD for every region. Until chosen, SMS quotes, number purchases and SMS top-ups answer 409 BILLING_REGION_REQUIRED.',
   },
   {
     method: 'POST',
