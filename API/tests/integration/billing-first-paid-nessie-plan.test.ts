@@ -50,7 +50,7 @@ describe.skipIf(!process.env.DATABASE_URL)('first paid Nessie plan', () => {
     await db.$transaction(tx => appendTariffTermEvent(tx, { serviceId: service.id, source: 'SERVICE_DEFAULT',
       scopeKey: service.id, effectiveFromMonth: month, tariffId: usd.id, reason: 'initial-default' }));
 
-    const owner = await db.user.create({ data: { email: 'owner@example.test', userKey: 'plan-owner' } });
+    const owner = await db.user.create({ data: { email: 'owner@example.test', userKey: 'plan-owner' }, select: { id: true } });
     const account = await db.billingStripeAccount.create({ data: { stripeAccountId: 'acct_PlanLock', livemode: true } });
     const catalog = await db.billingStripeCatalog.create({ data: { accountId: account.id, serviceId: service.id, currency: 'USD',
       meterEventName: 'plan_usage', stripeProductId: 'prod_seat', stripeMeterId: 'mtr_seat', stripeUsagePriceId: 'price_usage' } });

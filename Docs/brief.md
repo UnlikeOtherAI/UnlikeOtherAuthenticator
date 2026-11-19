@@ -3135,6 +3135,12 @@ Implementation plan: additive migration and central denial/issuance guards; admi
 
 Connected products must deploy adapters that pull assigned jobs and acknowledge the exact revision only after committed cleanup. This repository cannot silently deploy those adapters. Unknown registration/inventory or missing acknowledgement is a visible completion blocker. Native logical domains are direct identity use, not imaginary product backends. Offline JWT validators require online lifecycle checks or bounded expiry; local revocation alone cannot rewrite an already delivered JWT. Mailbox proof (plus enrolled TOTP) can read access reasons without granting a session or exposing pre-authentication reasons.
 
+### Verified self-service account deletion requests
+
+Global UnlikeOtherAI accounts can initiate deletion at the first-party `/auth/delete-account` page, including from Kelpie’s account menu and privacy policy. Confirm a browser-bound, expiring mailbox code and the enrolled authenticator when present. Use the current account credential epoch, isolate the code from all other authentication flows, and issue no session. A verified request records one pending timestamp on the account. Repeating it preserves the original queue time.
+
+Platform superusers receive requests in Admin → Users → Deletion requested, oldest first. Process requests through the existing USER deletion preview, dependency checks and erasure job. User confirmation authorises the request. It does not make a team or organisation a deletion target. Review any ownership or billing prerequisites and communicate completion or required follow-up to the verified account email through the established privacy process.
+
 ## Admin Add User to Team (2026-10-03)
 
 The existing user-detail dialog adds an existing UOA user by stable subject to the

@@ -330,7 +330,8 @@ export const adminService = {
     api.post<{ ok: true; userId: string; orgId: string; teamId: string; teamRole: 'member' | 'admin' }>(
       `/internal/admin/users/${encodeURIComponent(userId)}/teams`, body,
     ),
-  getUsers: () => api.get<UserSummary[]>('/internal/admin/users'),
+  getUsers: (deletionRequested = false) => api.get<UserSummary[]>(
+    deletionRequested ? '/internal/admin/users?deletionRequested=true' : '/internal/admin/users'),
   createUser: (input: { email: string; password: string; name?: string; accountExpiresAt?: string | null }) =>
     api.post<UserSummary>('/internal/admin/users', input),
   setUserExpiry: (userId: string, accountExpiresAt: string | null) =>

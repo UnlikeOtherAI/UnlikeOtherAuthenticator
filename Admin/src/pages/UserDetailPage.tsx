@@ -83,6 +83,10 @@ export function UserDetailPage() {
         }
         onBack={goBack}
       />
+      {user.accountDeletionRequestedAt && <Card className="mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
+        <p>Account deletion requested on {new Date(user.accountDeletionRequestedAt).toLocaleDateString()}.</p>
+        {tab !== 'security' && <Button onClick={() => setTab('security')}>Review deletion</Button>}
+      </Card>}
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Services" value={String(user.domains.length)} />
         <Metric label="Organisations" value={String(organisations.filter((org) => org.members.some((member) => member.id === user.id)).length)} />

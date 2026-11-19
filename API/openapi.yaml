@@ -9558,6 +9558,89 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /auth/delete-account:
+    get:
+      tags: [Auth]
+      summary: Open the first-party global account-deletion form
+      operationId: accountDeletionForm
+      responses:
+        '200':
+          description: Account deletion request form.
+          content:
+            text/html:
+              schema:
+                type: string
+  /auth/delete-account/start:
+    post:
+      tags: [Auth]
+      summary: Start a browser-bound mailbox challenge for account deletion
+      operationId: startAccountDeletion
+      description: The response does not disclose whether a matching global account exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 320
+      responses:
+        '200':
+          description: Opaque challenge ID. A private, same-origin browser cookie is also set.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challengeId]
+                properties:
+                  challengeId:
+                    type: string
+                    format: uuid
+        '429':
+          description: Request rate limit exceeded.
+  /auth/delete-account/confirm:
+    post:
+      tags: [Auth]
+      summary: Confirm a deletion request using a mailbox code and any enrolled authenticator
+      operationId: confirmAccountDeletion
+      description: Requires the browser cookie issued by start. A successful request is queued for administrative review.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challengeId, code]
+              properties:
+                challengeId:
+                  type: string
+                  format: uuid
+                code:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+                twoFactorCode:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+      responses:
+        '200':
+          description: Confirmed request saved. No session is issued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [submitted]
+                properties:
+                  submitted:
+                    type: boolean
+                    enum: [true]
+        '401':
+          description: The browser proof, mailbox code or required authenticator code could not be verified.
   /internal/admin/users:
     post:
       tags: [Internal Admin]
@@ -9604,9 +9687,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     get:
       tags: [Internal Admin]
-      summary: List all users (admin view)
+      summary: List users or verified account-deletion requests
       operationId: adminListUsers
       description: |
+        Users with a verified deletion request carry accountDeletionRequestedAt.
         Each entry carries `avatarSource` and `avatarImageUrl`
         (`<PUBLIC_BASE_URL>/internal/admin/users/{userId}/avatar`), fetchable with the same
         admin bearer — see Docs/Auth/avatars.md §9.
@@ -9614,6 +9698,12 @@ paths:
         - adminBearer: []
       parameters:
         - $ref: '#/components/parameters/limitQuery'
+        - name: deletionRequested
+          in: query
+          schema:
+            type: string
+            enum: ['true']
+          description: Return users with pending account deletion requests, oldest first.
       responses:
         '200':
           description: User list.

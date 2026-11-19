@@ -29,6 +29,7 @@ const TeamParamsSchema = z.object({
 const UserParamsSchema = z.object({ userId: z.string().trim().min(1) });
 const DomainParamsSchema = z.object({ domain: z.string().trim().min(3).transform(normalizeDomain) });
 const LimitQuerySchema = z.object({ limit: z.coerce.number().int().positive().optional() }).strict();
+const UsersQuerySchema = LimitQuerySchema.extend({ deletionRequested: z.literal('true').optional() });
 const LogsQuerySchema = LimitQuerySchema.extend({ userId: z.string().trim().min(1).optional() });
 const SearchQuerySchema = z.object({ q: z.string().trim().default('') }).strict();
 
@@ -98,8 +99,8 @@ export function registerInternalAdminReadRoutes(app: FastifyInstance): void {
     return getAdminTeams(limit);
   });
   app.get('/internal/admin/users', adminRoute(arraySchema), async (request) => {
-    const { limit } = LimitQuerySchema.parse(request.query);
-    return getAdminUsers(limit);
+    const { limit, deletionRequested } = UsersQuerySchema.parse(request.query);
+    return getAdminUsers(limit, deletionRequested === 'true');
   });
   app.get('/internal/admin/settings', adminRoute(settingsSchema), async () => getAdminSettings());
 

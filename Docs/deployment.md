@@ -279,6 +279,12 @@ Deploy the forward lifecycle migration before the API/Admin release. No producti
 
 Deletion jobs use a two-minute renewable executor lease and commit at most20 local cleanup stages per retry. READY means additional stages remain; repeat the authenticated retry endpoint until COMPLETE or a visible blocker. Each audit stage processes at most100 matching operational records and atomically saves its cursor. A restarted executor waits for an outstanding lease to expire, then resumes committed progress. Products return optional bounded retained-evidence summaries (label/count/reason, no unrelated PII); absent summaries are explicitly unavailable. Billing access inventory derives the exact registered HTTPS host from the actual app key actor issuer, including revoked access history; a product label is not an authority. Never-recorded product use cannot be inferred from UOA: operators must reconcile missing registrations/history before declaring an estate-wide purge. Deployment of adapters and their cleanup policies remains external to this repository.
 
+## Self-service account deletion requests
+
+Apply `20261119210000_self_service_account_deletion` with the UOA Auth, API and Admin build. The public `/auth/delete-account` form requires the existing transactional email configuration and serves from the canonical auth origin. Verify same-browser confirmation and the Admin Users **Deletion requested** filter using an isolated account. A request alone leaves the account’s lifecycle unchanged.
+
+Privacy operators review this queue oldest first and use the normal USER deletion preview and job. Complete connected-product cleanup and resolve any ownership or billing prerequisites through that workflow. Share progress or required follow-up with the user through the verified email address before it is erased.
+
 ## UOA access-status diagnostics
 
 The UOA auth service's `AUTH_ACCESS_STATUS_ENABLED` environment setting defaults
