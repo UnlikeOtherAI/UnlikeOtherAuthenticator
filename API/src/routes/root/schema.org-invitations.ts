@@ -105,7 +105,7 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
     method: 'POST',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/resend',
     description:
-      'Resend a pending team invitation email; refreshes both the invite and emailed token to a complete 24-hour window. Only an actionable invitation with settled approval can be resent: accepted, declined, revoked, approval-denied, and still-awaiting-approval invitations all answer the generic 400, so a resend can neither resurrect a revoked invitation nor mail an unapproved one',
+      'Resend a pending team invitation email; refreshes both the invite and emailed token to a complete 24-hour window. Retrying a replaced id resumes its live immediate resend and returns its existing delivery if already sent. Only an actionable invitation with settled approval can be resent: accepted, declined, revoked, approval-denied, and still-awaiting-approval invitations all answer the generic 400, so a resend can neither resurrect a revoked invitation nor mail an unapproved one',
     auth: 'domain hash bearer token plus optional access token or subject assertion; user callers need current members.manage in this exact team; absent credentials require backend_org_management and origin-domain isolation',
   },
   {

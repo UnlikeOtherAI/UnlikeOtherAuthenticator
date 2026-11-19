@@ -1,6 +1,7 @@
 import type { ClientConfig } from './config.service.js';
 
 import { getPrisma } from '../db/prisma.js';
+import { requireFundedInvitation } from './billing-invitation-seat.service.js';
 import { AppError } from '../utils/errors.js';
 import { assertDatabaseEnabled } from './organisation.service.base.js';
 import { buildUserIdentity } from './user-scope.service.js';
@@ -54,7 +55,11 @@ export async function resendTeamInvite(
     teamId: params.teamId,
   });
 
-  const invite = await prisma.teamInvite.findFirst({
+  // The route holds this lock through prepare/commit. Two requests from the same
+  // open dialog must see the same immediate successor.
+  if (deps?.afterCommit) await prisma.$queryRaw`SELECT id FROM team_invites
+    WHERE id=${params.inviteId} AND org_id=${org.id} AND team_id=${team.id} FOR UPDATE`;
+  const original = await prisma.teamInvite.findFirst({
     where: {
       id: params.inviteId,
       orgId: org.id,
@@ -62,9 +67,15 @@ export async function resendTeamInvite(
     },
     select: TEAM_INVITE_SELECT,
   });
-  if (!invite) {
+  if (!original) {
     throw new AppError('NOT_FOUND', 404);
   }
+  const successor = original.revokedReason === 'REPLACED' && original.revokedAt
+    ? await prisma.teamInvite.findFirst({ where: { resendOfId: original.id, orgId: org.id,
+      teamId: team.id, email: original.email, ...ACTIONABLE_TEAM_INVITE_WHERE,
+      expiresAt: { gt: now } }, select: TEAM_INVITE_SELECT })
+    : null;
+  const invite = successor ?? original;
   // Shared policy: an accepted, declined, revoked or DENIED invite cannot be resent, and neither
   // can one still awaiting approval (nothing has been approved to mail yet). Resending used to
   // check only `acceptedAt`, so it could resurrect an invite an admin had just revoked, or mail an
@@ -88,40 +99,53 @@ export async function resendTeamInvite(
     throw new AppError('BAD_REQUEST', 409, 'EMAIL_ALREADY_REGISTERED');
   }
 
-  // Frees the actionable slot before the replacement row is created, so the new invite cannot
-  // collide with `team_invites_one_actionable_per_team_email`.
-  await prisma.teamInvite.updateMany({
-    where: {
-      ...ACTIONABLE_TEAM_INVITE_WHERE,
-      teamId: team.id,
-      email: invite.email,
-    },
-    data: {
-      revokedAt: now,
-      revokedReason: 'REPLACED',
-    },
-  });
+  const replace = async () => {
+    // Frees the actionable slot before the replacement row is created, so the new invite cannot
+    // collide with `team_invites_one_actionable_per_team_email`.
+    const revoked = await prisma.teamInvite.updateMany({
+      where: {
+        ...ACTIONABLE_TEAM_INVITE_WHERE,
+        id: invite.id,
+      },
+      data: {
+        revokedAt: now,
+        revokedReason: 'REPLACED',
+      },
+    });
 
-  const resentInvite = await prisma.teamInvite.create({
-    data: {
-      orgId: invite.orgId,
-      teamId: invite.teamId,
-      email: invite.email,
-      inviteName: invite.inviteName,
-      teamRole,
-      redirectUrl: invite.redirectUrl,
-      invitedByUserId: invite.invitedByUserId,
-      invitedByName: invite.invitedByName,
-      invitedByEmail: invite.invitedByEmail,
-      lastSentAt: now,
-      // Resending replaces the prior invite with a fresh 24-hour capability, regardless of the
-      // prior invite's remaining window.
-      expiresAt: computeInviteExpiresAt(now),
-    },
-    select: TEAM_INVITE_SELECT,
-  });
+    if (revoked.count !== 1) throw new AppError('BAD_REQUEST', 409);
+    return prisma.teamInvite.create({
+      data: {
+        resendOfId: invite.id,
+        orgId: invite.orgId,
+        teamId: invite.teamId,
+        email: invite.email,
+        inviteName: invite.inviteName,
+        teamRole,
+        redirectUrl: invite.redirectUrl,
+        invitedByUserId: invite.invitedByUserId,
+        invitedByName: invite.invitedByName,
+        invitedByEmail: invite.invitedByEmail,
+        lastSentAt: now,
+        // Resending replaces the prior invite with a fresh 24-hour capability, regardless of the
+        // prior invite's remaining window.
+        expiresAt: computeInviteExpiresAt(now),
+      },
+      select: TEAM_INVITE_SELECT,
+    });
+  };
+  const resentInvite = successor ?? await replace();
 
   const deliver = async (prisma: InvitePrisma) => {
+    if (deps?.afterCommit) {
+      await prisma.$queryRaw`SELECT id FROM team_invites WHERE id=${resentInvite.id} FOR UPDATE`;
+      // A concurrent retry can arrive after the first mail transaction commits.
+      if (await prisma.verificationToken.findFirst({ where: { teamInviteId: resentInvite.id,
+        usedAt: null, expiresAt: { gt: new Date() } }, select: { id: true } })) {
+        await requireFundedInvitation(prisma, resentInvite.id);
+        return;
+      }
+    }
     const token = await issueInviteToken({
       prisma,
       inviteId: resentInvite.id,
@@ -131,7 +155,7 @@ export async function resendTeamInvite(
       domain: identity.domain,
       config: params.config,
       configUrl: params.configUrl,
-      now,
+      now: resentInvite.lastSentAt,
       sharedSecret: deps?.sharedSecret,
       generateEmailTokenFn: deps?.generateEmailToken,
       hashEmailTokenFn: deps?.hashEmailToken ?? hashEmailToken,
