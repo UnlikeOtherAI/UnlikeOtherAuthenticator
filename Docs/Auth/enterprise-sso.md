@@ -604,6 +604,24 @@ holder is rebound, no original deadline is extended, and the exact-scope ancesto
 rules remain unchanged. Legacy proof-free families retain the existing switch
 contract below the minimum floor.
 
+The separate team-session grant (`urn:unlikeotherai:params:oauth:grant-type:team-session`)
+reaches the same end state without the browser when the original sign-in already
+satisfies the target. It validates the presented proof and judges the exact target
+against the original sign-in that proof came from: ACTIVE organisation and team
+membership, product scope policy, the target's 2FA policy and its organisation
+sign-in policy. An independent original may be carried to any of the person's
+teams; an SSO original only inside the organisation that owns its connection; a
+recovery or debug proof never. It then creates a separate exact-target family whose
+proof is derived from that original (`derived_from_id`): same method, evidence,
+observation and absolute deadline, never later, and at least five minutes left.
+The presented family, its proof and every holder of them are not touched, so the
+product can keep and return to it. Validation walks every derived proof to its
+original on each use, and the original is validated in its own organisation and
+team, so revoking or expiring the original, ending its family, or losing that
+membership ends every session derived from it. Anything the original cannot satisfy
+returns `403 INTERACTION_REQUIRED` and the product starts target-bound interactive
+authorization exactly as above.
+
 
 ### One-off login code response
 

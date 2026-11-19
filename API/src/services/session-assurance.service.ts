@@ -96,7 +96,11 @@ async function validateSessionAssuranceInside(
         identity.connectionId !== connection.id || identity.userId !== row.userId) reject();
       await assertEnterpriseProvisioningActive(connection.id, identity.id, row.userId, db);
     }
-    if (!row.parentId) break;
+    if (!row.parentId) {
+      // A team-session proof is only as good as the original sign-in it came from, on every use.
+      if (row.derivedFromId) await assertDerivedOrigin(row.derivedFromId, leaf, db, now);
+      break;
+    }
     row = await db.sessionAssurance.findUnique({ where: { id: row.parentId } });
     if (!row) reject();
   }
@@ -105,6 +109,58 @@ async function validateSessionAssuranceInside(
   if (binding.requirement === 'global_account_control' && leaf.method !== 'independent') reject();
   if (binding.requirement === 'sso_recovery' && leaf.method !== 'recovery') reject();
   return leaf;
+}
+
+/**
+ * The original of a team-session proof: one level, never itself derived or a child, carrying the
+ * same evidence and a deadline no earlier than the derived proof's. It is then validated in its
+ * own organisation and team, so its revocation, expiry, family end or membership loss ends every
+ * session derived from it.
+ */
+async function assertDerivedOrigin(originId: string, leaf: SessionAssurance, db: AssuranceDb, now: Date): Promise<void> {
+  const origin = await db.sessionAssurance.findUnique({ where: { id: originId } });
+  if (!origin || origin.derivedFromId || origin.parentId || origin.userId !== leaf.userId ||
+    origin.clientDomain !== leaf.clientDomain || origin.credentialEpoch !== leaf.credentialEpoch ||
+    origin.method !== leaf.method || origin.expiresAt < leaf.expiresAt ||
+    origin.connectionId !== leaf.connectionId || origin.externalIdentityId !== leaf.externalIdentityId ||
+    origin.authenticatedAt?.getTime() !== leaf.authenticatedAt?.getTime() ||
+    origin.observedAt.getTime() !== leaf.observedAt.getTime() || origin.mfaSource !== leaf.mfaSource ||
+    origin.acr !== leaf.acr || JSON.stringify(origin.amr) !== JSON.stringify(leaf.amr)) reject();
+  await validateSessionAssuranceInside({ id: origin.id, userId: origin.userId, clientDomain: origin.clientDomain,
+    credentialEpoch: origin.credentialEpoch, orgId: origin.orgId, teamId: origin.teamId }, db, now);
+}
+
+/** Whether the team-session grant may derive a proof for this target from this original. */
+export const derivesTeamSessionProof = (origin: SessionAssurance, targetOrgId: string): boolean =>
+  !origin.parentId && !origin.derivedFromId
+  // An independent sign-in (password, email code, social) is the person's own; an enterprise
+  // connection is trusted only inside the organisation that owns it; recovery never travels.
+  && (origin.method === 'independent' || (origin.method === 'sso' && origin.orgId === targetOrgId));
+
+/**
+ * The team-session grant's exact-target proof: the original sign-in's evidence for another team of
+ * the same person, bound to its own new family, never with a later deadline than the original.
+ */
+export async function issueDerivedSessionAssurance(
+  origin: SessionAssurance,
+  target: { orgId: string; teamId: string; familyId: string; expiresAt: Date; policyGeneration: number },
+  db: AssuranceDb,
+): Promise<{ assurance: SessionAssurance; reference: string }> {
+  if (!derivesTeamSessionProof(origin, target.orgId) || target.expiresAt > origin.expiresAt) reject();
+  const reference = randomBytes(32).toString('base64url');
+  const assurance = await db.sessionAssurance.create({ data: {
+    referenceHash: hashAssuranceReference(reference), derivedFromId: origin.id,
+    userId: origin.userId, credentialEpoch: origin.credentialEpoch, clientDomain: origin.clientDomain,
+    orgId: target.orgId, teamId: target.teamId, familyId: target.familyId, method: origin.method,
+    connectionId: origin.connectionId, connectionRevision: origin.connectionRevision,
+    connectionGeneration: origin.connectionGeneration, externalIdentityId: origin.externalIdentityId,
+    observedAt: origin.observedAt, authenticatedAt: origin.authenticatedAt, mfaSource: origin.mfaSource,
+    amr: origin.amr, acr: origin.acr, policyGeneration: target.policyGeneration, expiresAt: target.expiresAt,
+  } });
+  await validateSessionAssuranceInside({ id: assurance.id, userId: assurance.userId,
+    clientDomain: assurance.clientDomain, credentialEpoch: assurance.credentialEpoch,
+    orgId: assurance.orgId, teamId: assurance.teamId }, db, new Date());
+  return { assurance, reference };
 }
 
 /** Called only after final proof, under the same transaction that created the source family. */

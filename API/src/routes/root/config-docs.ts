@@ -278,6 +278,30 @@ export const accessTokenDocumentation = {
     'The /auth/token response envelope is snake_case (access_token, refresh_token, expires_in, refresh_token_expires_in, token_type). The key firstLogin is camelCase; memberships.orgs[].orgId, memberships.teams[].teamId, memberships.teams[].orgId, and pending_invites[].inviteId/orgId/teamId/teamName are camelCase. pending_invites and capabilities.can_* remain snake_case.',
 };
 
+export const teamSessionDocumentation = {
+  endpoint: 'POST /auth/token?config_url=<verified config URL>',
+  description:
+    'Backend-only: issue a separate session for another team of the same person from the proof-bearing sign-in the product already holds, with no browser round trip. The presented family is validated and left untouched (no rotation, no rebinding), so the product can keep and return to it.',
+  request: {
+    grant_type: 'urn:unlikeotherai:params:oauth:grant-type:team-session',
+    refresh_token: 'opaque current refresh token of a live proof-bearing family',
+    organization_id: 'exact target organisation id',
+    team_id: 'exact target team id within organization_id (not the source team)',
+  },
+  assurance:
+    'UOA validates the source proof, then judges the exact target against the ORIGINAL sign-in that proof came from: ACTIVE organisation and team membership, server-owned product scope policy, target 2FA policy and the target organisation sign-in policy. An independent sign-in may be carried to any of the person’s teams; an enterprise SSO sign-in only inside its own organisation; recovery never. The new family carries a proof derived from that original with the same method, evidence and absolute deadline (never later). Validation walks every derived proof to its original on each use, so revoking, expiring or ending the original ends every derived session.',
+  response:
+    'The normal token-pair envelope scoped exactly to organization_id/team_id, with the new family’s backend-only assurance_ref and assurance_expires_at. refresh_token_expires_in never exceeds the original sign-in’s remaining lifetime.',
+  errors: {
+    INTERACTION_REQUIRED:
+      '403. The original sign-in cannot open this team (another organisation’s required SSO, stronger 2FA, recovery or debug proof, a proof-free legacy family, or under five minutes left). Start target-bound interactive authorization.',
+    TEAM_NOT_AVAILABLE: '403. The person has no active membership or product access in the exact target.',
+    INVALID_REFRESH_TOKEN:
+      '401 after client authentication. The source is no longer a live sign-in (expired, revoked, rotated or its proof ended). Sign in again.',
+    INVALID_TOKEN_REQUEST: '400. The target is the source family’s own team.',
+  },
+};
+
 export const teamSwitchDocumentation = {
   endpoint: 'POST /auth/token?config_url=<verified config URL>',
   description:
