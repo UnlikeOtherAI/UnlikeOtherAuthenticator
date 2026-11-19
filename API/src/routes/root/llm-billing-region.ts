@@ -2,7 +2,9 @@ export const llmBillingRegionMarkdown = `
 ## Organisation billing region
 Every organisation has one billing region, UK, US or EUROPE, which sets the
 currency of everything SMS (GBP, USD or EUR). It is chosen once by an
-organisation owner or admin and never changes. POST /billing/v1/organisation-billing
+organisation owner or admin. If the first live Nessie seat payment arrives
+before that choice, its currency sets the region. A conflicting selection during
+checkout returns 409 STRIPE_TARIFF_PINNED. Once set, the region is locked. POST /billing/v1/organisation-billing
 returns billing_region: {region, currency} (both null until chosen),
 {suggested_region, suggested_currency} to prefill the choice (from the
 organisation's invoice billing country: GB → UK, the EU, EEA and CH → EUROPE,

@@ -8,11 +8,12 @@ const regular = { id: 'regular', mode: 'STANDARD', collectionMode: 'STRIPE', cur
   anniversarySeats: true, usageCurrency: 'USD', usagePaymentMode: 'PREPAID', monthlyChargeBasis: 'PER_SEAT', monthlyAmountMinor: 399n };
 function fixture(source = 'SERVICE_DEFAULT', current: object | null = regular, currency: string | null = null) {
   const reader = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     billingService: { findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }) },
     billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
     billingTariffTermEvent: { findFirst: vi.fn().mockImplementation(async ({ where }) =>
       where.source === source ? { tariffId: 'old', tariff: { ...historical, serviceId: 'svc' }, assignmentId: null } : null) },
-    billingTariff: { findFirst: vi.fn().mockResolvedValue(current) },
+    billingTariff: { findUniqueOrThrow: vi.fn(), findFirst: vi.fn().mockResolvedValue(current) },
     billingOrganisationRegion: { findUnique: vi.fn().mockResolvedValue(currency ? { currency } : null) },
   };
   return reader;
@@ -34,6 +35,15 @@ describe('prospective Nessie purchase terms', () => {
     await expect(resolveCurrentBillingTariff(fixture('SERVICE_DEFAULT', current) as never, scope, 'nessie'))
       .rejects.toThrow('NESSIE_PREPAID_SETUP_REQUIRED');
   });
+  it('keeps the first paid version when the region or public catalogue changes', async () => {
+    const reader = fixture('SERVICE_DEFAULT', null, 'EUR');
+    reader.$queryRaw.mockResolvedValue([{ tariff_id: 'paid-usd' }]);
+    reader.billingTariff.findUniqueOrThrow.mockResolvedValue({ ...regular, id: 'paid-usd' });
+    expect((await resolveCurrentBillingTariff(reader as never, scope, 'nessie')).tariff.id).toBe('paid-usd');
+    expect(reader.billingOrganisationRegion.findUnique).not.toHaveBeenCalled();
+    expect(reader.billingTariff.findFirst).not.toHaveBeenCalled();
+  });
+
   it('selects approved regional seat terms while usage remains USD', async () => {
     const reader = fixture('SERVICE_DEFAULT', regular, 'EUR');
     reader.billingTariff.findFirst.mockResolvedValueOnce(regular).mockResolvedValueOnce({ ...regular, id: 'eur', currency: 'EUR' });

@@ -98,8 +98,8 @@ jobs:
         run: pnpm --filter @uoa/api exec vitest run --exclude 'tests/integration/**'
 
       # Recovery deliberately acquires Prisma's database-wide migration lock.
-      - name: Verify invitation migration recovery with production role privileges
-        run: pnpm --filter @uoa/api exec vitest run tests/integration/invitation-migration-recovery.test.ts --maxWorkers=1
+      - name: Verify billing upgrades with production role privileges
+        run: pnpm --filter @uoa/api exec vitest run tests/integration/invitation-migration-recovery.test.ts tests/integration/billing-first-paid-nessie-plan.test.ts --maxWorkers=1
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
@@ -131,7 +131,7 @@ jobs:
           BILLING_FUNDING_DATABASE_TESTS: 'true'
 
       - name: Run remaining API integration tests (Postgres)
-        run: pnpm --filter @uoa/api exec vitest run tests/integration --exclude 'tests/integration/org-me-pool-contention.test.ts' --exclude 'tests/integration/machine-*.test.ts' --exclude 'tests/integration/invitation-migration-recovery.test.ts'
+        run: pnpm --filter @uoa/api exec vitest run tests/integration --exclude 'tests/integration/org-me-pool-contention.test.ts' --exclude 'tests/integration/machine-*.test.ts' --exclude 'tests/integration/invitation-migration-recovery.test.ts' --exclude 'tests/integration/billing-first-paid-nessie-plan.test.ts'
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
           BILLING_FUNDING_DATABASE_TESTS: 'true'
