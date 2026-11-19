@@ -106,6 +106,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie anniversary seat payments', (
         total: 299, amount_due: 299, amount_paid: 299, amount_remaining: 0, ending_balance: 0 },
     } as never));
     expect((await p.billingStripeSubscription.findFirstOrThrow()).initialSeatInvoiceId).not.toBeNull();
+    expect(await p.billingOrganisationRegion.findUnique({ where: { orgId: org.id } })).toBeNull();
+    expect(await p.$queryRaw`SELECT * FROM billing_first_paid_nessie_plan(${org.id})`).toEqual([]);
     // Collection is queued when the first receipt arrives, even if the invitation arrived before its webhook.
     expect(await p.billingAutomaticSeatChange.count()).toBe(1);
     await expect(orgMember(member.id)).rejects.toThrow('complete the seat payment');

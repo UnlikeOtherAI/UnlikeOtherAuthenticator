@@ -21,7 +21,7 @@ export const organisationBillingEndpoints:EndpointSchema[]=[
     response:{sections:'Independent accrued_bill, credits, funding, subscription, history and optional attention. Confirmed has data; pending_reconciliation/unavailable has code/message and no data. Only confirmed attention [] clears the exact organisation/mode/epoch/revision.'},
     notes:'Selected team admits the actor, never filters money. Funding can confirm saved consent/disable with empty unavailable offers/options during provider or FX failure; it never quotes missing rates. Preserve original displayed context or absence; missing/stale409 requires display refresh and a new click. LIVE/TEST histories remain separate.'},
   {method:'POST',path:'/billing/v1/organisation/region',auth,body:{...body,region:'optional US | UK | EUROPE: absent reads, present chooses once'},
-    description:'Nullable financial-subject organisation region read/choice; old 5.9 region schema unchanged.',response:{region:'BillingRegionViewV1; immutable audited choice'}},
+    description:'Read or choose the organisation billing region. The first live Nessie organisation seat payment sets an empty region from the paid currency.',response:{region:'BillingRegionViewV1',409:'BILLING_REGION_IMMUTABLE or STRIPE_TARIFF_PINNED'}},
   ...['/schemas/billing-organisation-v1.json','/schemas/billing-organisation-financial-v1.json',
     '/schemas/billing-organisation-v1.example.json','/schemas/billing-organisation-v1.openapi.json',
     '/schemas/billing-authority-v1.json','/schemas/billing-authority-v1.example.json',

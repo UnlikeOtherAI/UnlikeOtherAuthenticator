@@ -75,8 +75,8 @@ export async function migrationRoleFixture() {
         });
         child.once('error', reject); child.once('close', accept);
       }),
-      copyRemaining: async () => {
-        for (const migration of names.filter(n => n >= permissionMigration)) await copyMigration(migration);
+      copyRemaining: async (before?: string) => {
+        for (const migration of names.filter(n => n >= permissionMigration && (!before || n < before))) await copyMigration(migration);
       },
       cleanup: async () => {
         await client.end();

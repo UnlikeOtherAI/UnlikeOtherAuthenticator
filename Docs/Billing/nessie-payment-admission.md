@@ -161,6 +161,24 @@ cutover. Due term writes capture the roster immediately; a scheduled term also
 captures it before the first later membership mutation. Members added through
 a still-free organisation cannot become part of a paid team’s original cohort.
 A later login, team switch or repeated term does not rewrite an existing allowance.
+## First paid plan and currency
+
+The first collected live Nessie organisation seat invoice fixes the exact plan
+version and currency for that organisation. If its billing region is still
+empty, the payment sets US for USD, Europe for EUR or UK for GBP. A customer
+can choose a region before starting checkout. A conflicting choice waits until
+an outstanding checkout is resolved. Later catalogue prices apply to new buyers.
+
+Operators can schedule a different organisation or team plan through tariff
+assignment. It takes effect in the agreed month. Access still requires current
+payment or an effective agreement. An old receipt alone cannot grant paid access.
+
+On upgrade, an empty region is filled from the first paid invoice. A conflicting
+region chosen after payment is corrected only where credits, SMS, add-ons and
+invoices have no conflicting financial history. Organisations with that history
+retain their financial records and need operator reconciliation of their region.
+The repair does not collect a payment or issue a refund.
+
 ## Deployment recovery
 
 The 15 November invitation-seat deployment failed because the migration role

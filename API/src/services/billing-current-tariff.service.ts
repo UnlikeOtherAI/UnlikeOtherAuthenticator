@@ -4,13 +4,20 @@ import { AppError } from '../utils/errors.js';
 import { resolveBillingTariffForMonth } from './billing-tariff-history.service.js';
 
 type Reader = Parameters<typeof resolveBillingTariffForMonth>[0] & Pick<Prisma.TransactionClient,
-  'billingTariff' | 'billingOrganisationRegion'>;
+  'billingTariff' | 'billingOrganisationRegion' | '$queryRaw'>;
 
 /** Current purchase/admission terms only. Historical statements keep their monthly term history. */
 export async function resolveCurrentBillingTariff(reader: Reader,
   scope: Parameters<typeof resolveBillingTariffForMonth>[1], product: string) {
   const effective = await resolveBillingTariffForMonth(reader, scope);
   if (product !== 'nessie' || effective.source !== 'SERVICE_DEFAULT') return effective;
+  // Explicit, effective internal terms have already won above. Keep the exact
+  // paid catalogue version even when it is retired or the public default moves.
+  const [paid] = await reader.$queryRaw<Array<{ tariff_id: string }>>`
+    SELECT tariff_id FROM billing_first_paid_nessie_plan(${scope.organisationId})`;
+  if (paid) return { ...effective, tariff: await reader.billingTariff.findUniqueOrThrow({
+    where: { id: paid.tariff_id, serviceId: scope.serviceId },
+  }) };
   const selected = await reader.billingTariff.findFirst({
     where: { serviceId: scope.serviceId, isDefault: true },
   });
