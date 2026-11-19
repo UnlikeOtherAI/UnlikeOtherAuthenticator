@@ -8,15 +8,15 @@ export const authTokenEndpoint: EndpointSchema = {
   auth: 'config_url query param + domain hash bearer token',
   body: {
     'grant_type?':
-      '"authorization_code" (default), "refresh_token", "urn:unlikeotherai:params:oauth:grant-type:team-switch", or "urn:ietf:params:oauth:grant-type:token-exchange"',
+      '"authorization_code" (default), "refresh_token", "urn:unlikeotherai:params:oauth:grant-type:team-switch", "urn:unlikeotherai:params:oauth:grant-type:team-session", or "urn:ietf:params:oauth:grant-type:token-exchange"',
     'code?': 'authorization code (for authorization_code grant)',
     'redirect_url?': 'required for authorization_code grant; must match issued URL',
     'code_verifier?': 'required for authorization_code grant; must match the S256 challenge',
-    'refresh_token?': 'refresh token (for refresh_token and team-switch grants)',
+    'refresh_token?': 'refresh token (for refresh_token, team-switch and team-session grants)',
     'organization_id?':
-      'exact target organisation id (required for team-switch grant; must be paired with team_id)',
+      'exact target organisation id (required for team-switch and team-session grants; must be paired with team_id)',
     'team_id?':
-      'exact target team id (required for team-switch grant; must belong to organization_id)',
+      'exact target team id (required for team-switch and team-session grants; must belong to organization_id)',
     'subject_token?':
       'For a first hop: one-time RS256 JWT with exp-iat <= 60 seconds, signed by the source config JWKS. For a chained hop: UOA-issued RS256 at+jwt access token with aud exactly https://<authenticated caller config domain>, non-null org/active, and remaining lifetime.',
     'subject_token_type?':

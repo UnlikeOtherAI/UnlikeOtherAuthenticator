@@ -22,6 +22,10 @@ import {
   TEAM_SWITCH_GRANT_TYPE,
 } from '../../services/team-switch-token.service.js';
 import {
+  exchangeTeamSessionForTokens,
+  TEAM_SESSION_GRANT_TYPE,
+} from '../../services/team-session-token.service.js';
+import {
   confidentialTokenExchangeDomainRateLimiter,
   tokenExchangePreAuthRateLimiter,
 } from './rate-limit-keys.js';
@@ -54,6 +58,15 @@ const TeamSwitchGrantSchema = z
   })
   .strict();
 
+const TeamSessionGrantSchema = z
+  .object({
+    grant_type: z.literal(TEAM_SESSION_GRANT_TYPE),
+    refresh_token: z.string().min(1).max(4096),
+    organization_id: z.string().min(1).max(256),
+    team_id: z.string().min(1).max(256),
+  })
+  .strict();
+
 const ConfidentialTokenExchangeGrantSchema = z
   .object({
     grant_type: z.literal(TOKEN_EXCHANGE_GRANT_TYPE),
@@ -80,6 +93,7 @@ type TokenExchangeBody =
     }
   | { grant_type: 'refresh_token'; refresh_token: string }
   | z.infer<typeof TeamSwitchGrantSchema>
+  | z.infer<typeof TeamSessionGrantSchema>
   | z.infer<typeof ConfidentialTokenExchangeGrantSchema>;
 
 declare module 'fastify' {
@@ -102,6 +116,11 @@ function parseTokenExchangeBody(body: unknown): TokenExchangeBody {
   const teamSwitchGrant = TeamSwitchGrantSchema.safeParse(body);
   if (teamSwitchGrant.success) {
     return teamSwitchGrant.data;
+  }
+
+  const teamSessionGrant = TeamSessionGrantSchema.safeParse(body);
+  if (teamSessionGrant.success) {
+    return teamSessionGrant.data;
   }
 
   const authorizationCodeGrant = AuthorizationCodeGrantSchema.safeParse(body);
@@ -186,7 +205,26 @@ export function registerAuthTokenExchangeRoute(app: FastifyInstance): void {
       }
 
       let tokenPair;
-      if (body.grant_type === TEAM_SWITCH_GRANT_TYPE) {
+      if (body.grant_type === TEAM_SESSION_GRANT_TYPE) {
+        const clientId = requireAuthenticatedClientId(request.domainAuthClientId);
+        const authenticatedClientDomainId = requireAuthenticatedClientId(
+          request.domainAuthClientDomainId,
+        );
+        // Same exposure rule as team-switch: only after both client-auth identities exist.
+        request.authenticatedTokenGrantErrorProfile = 'team-switch';
+        tokenPair = await exchangeTeamSessionForTokens(
+          {
+            refreshToken: body.refresh_token,
+            organizationId: body.organization_id,
+            teamId: body.team_id,
+            config,
+            configUrl,
+            clientId,
+            authenticatedClientDomainId,
+          },
+          { prisma: request.adminDb, adminPrisma: request.adminDb },
+        );
+      } else if (body.grant_type === TEAM_SWITCH_GRANT_TYPE) {
         const clientId = requireAuthenticatedClientId(request.domainAuthClientId);
         const authenticatedClientDomainId = requireAuthenticatedClientId(
           request.domainAuthClientDomainId,

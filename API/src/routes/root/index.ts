@@ -14,6 +14,7 @@ import {
   configJwtDocumentation,
   configValidationEndpointDocumentation,
   configVerificationEndpointDocumentation,
+  teamSessionDocumentation,
   teamSwitchDocumentation,
 } from './config-docs.js';
 import { registerConfigValidateRoute } from './config-validate.js';
@@ -103,6 +104,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       website_service_identity: 'Separate subfolder services use config.domain=hostname/mount-path (no trailing slash). Register each complete identity independently; credentials, signing keys, roles, allowlists and organisation origin scope never inherit from its parent hostname.',
       access_token: accessTokenDocumentation,
       team_switch: teamSwitchDocumentation,
+      team_session: teamSessionDocumentation,
       confidential_token_exchange: confidentialTokenExchangeDocumentation,
       config_validation: configValidationEndpointDocumentation,
       config_verification: configVerificationEndpointDocumentation,

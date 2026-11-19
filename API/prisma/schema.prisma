@@ -5644,6 +5644,8 @@ model SessionAssurance {
   teamId String? @map("team_id")
   familyId String @map("family_id")
   parentId String? @map("parent_id")
+  /// The original sign-in proof this exact-target proof was derived from by the team-session grant.
+  derivedFromId String? @map("derived_from_id")
   connectionId String? @map("connection_id")
   connectionRevision Int? @map("connection_revision")
   connectionGeneration Int? @map("connection_generation")
@@ -5659,6 +5661,7 @@ model SessionAssurance {
   revokedAt DateTime? @map("revoked_at")
   @@index([familyId])
   @@index([clientDomain,orgId,userId])
+  @@index([derivedFromId])
   @@map("session_assurances")
 }
 
