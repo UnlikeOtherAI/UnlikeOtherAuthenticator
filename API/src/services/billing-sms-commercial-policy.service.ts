@@ -1,6 +1,7 @@
 import { AppError } from '../utils/errors.js';
 
 export interface SmsCommercialPolicy {
+  mode: 'legacy' | 'provider_markup';
   version: string;
   monthlyFeeEur: string;
   monthlyMarkupBps: number;
@@ -14,8 +15,9 @@ export function readSmsCommercialPolicy(): SmsCommercialPolicy {
   const mode = process.env.UOA_SMS_PRICING_MODE ?? 'legacy';
   if (mode === 'provider_markup') {
     const markup = process.env.UOA_SMS_PROVIDER_MARKUP_BPS;
-    if (!validMarkup(markup)) throw required();
-    return { version, monthlyFeeEur: '0', monthlyMarkupBps: Number(markup), messageMarkupBps: Number(markup) };
+    const numberMarkup = process.env.UOA_SMS_NUMBER_MARKUP_BPS ?? markup;
+    if (!validMarkup(markup) || !validMarkup(numberMarkup)) throw required();
+    return { mode, version, monthlyFeeEur: '0', monthlyMarkupBps: Number(numberMarkup), messageMarkupBps: Number(markup) };
   }
   if (mode !== 'legacy') throw required();
   const monthlyFeeEur = process.env.UOA_SMS_MONTHLY_FEE_EUR;
@@ -23,7 +25,7 @@ export function readSmsCommercialPolicy(): SmsCommercialPolicy {
   if (!monthlyFeeEur || !/^(0|[1-9]\d{0,5})(?:\.\d{1,6})?$/.test(monthlyFeeEur) || !validMarkup(markup)) {
     throw required();
   }
-  return { version, monthlyFeeEur, monthlyMarkupBps: 0, messageMarkupBps: Number(markup) };
+  return { mode, version, monthlyFeeEur, monthlyMarkupBps: 0, messageMarkupBps: Number(markup) };
 }
 
 function validMarkup(value: string | undefined): boolean {

@@ -14,9 +14,8 @@ const regions: Record<SmsMonthlyPrice['currency'], string> = { EUR: 'Europe', GB
 export function BillingSmsMonthlyPriceCard() {
   const prices = useQuery({ queryKey, queryFn: service.monthlyPrices });
   return <Card className="space-y-3 p-5"><h3 className="font-semibold text-gray-900">Monthly number prices</h3>
-    <p className="text-sm text-gray-500">Every mobile number costs its organisation&apos;s billing-region price per
-      month, the same in every country. A country whose Twilio rental reaches that price at the accepted ECB rates is
-      not offered in that currency. A change applies to new quotes only; numbers already paid for keep their price.</p>
+    <p className="text-sm text-gray-500">Provider-markup pricing uses Twilio&apos;s current mobile rental for each country
+      plus the configured number markup. The flat prices below apply in legacy mode. Numbers already paid for keep their price.</p>
     {prices.isError ? <p role="alert" className="text-sm text-red-600">Could not load the monthly prices. Reload the page to retry.</p> : null}
     {prices.data?.map((price) => <MonthlyPriceRow key={price.currency} price={price} />)}
   </Card>;

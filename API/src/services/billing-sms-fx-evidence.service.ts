@@ -115,6 +115,21 @@ export function smsCostReachesPrice(input: { costAmount: string; costCurrency: s
   return cost.numerator * price.denominator >= price.numerator * cost.denominator;
 }
 
+/** Convert the rental and apply its markup before rounding up to a checkout minor unit. */
+export function smsMonthlyPriceMinor(input: { providerAmount: string; providerCurrency: string;
+  currency: string; markupBps: number; rates: SmsFxRates }): bigint {
+  if (!Number.isSafeInteger(input.markupBps) || input.markupBps < 0 || input.markupBps > 999999) throw unavailable();
+  const cost = inEur(input.providerAmount, input.providerCurrency, input.rates);
+  const unit = inEur('1', input.currency, input.rates);
+  const numerator = cost.numerator * unit.denominator * (10_000n + BigInt(input.markupBps)) * 100n;
+  const denominator = cost.denominator * unit.numerator * 10_000n;
+  const minor = (numerator + denominator - 1n) / denominator;
+  if (minor <= 0n || minor > 99_999_999n) {
+    throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_MONTHLY_AMOUNT_UNSUPPORTED');
+  }
+  return minor;
+}
+
 /** Exact USD rational arithmetic, rounding once upwards at the specified billing quantum. */
 export function smsFinalUsdQuanta(input: {
   providerAmount: string; providerCurrency: string; usdPerEur: string;

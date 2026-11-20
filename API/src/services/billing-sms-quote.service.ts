@@ -7,7 +7,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { lockSmsSubject, verifySmsActor } from './billing-sms-authority.service.js';
-import { smsFinalUsdQuanta } from './billing-sms-fx-evidence.service.js';
+import { smsFinalUsdQuanta, smsMonthlyPriceMinor } from './billing-sms-fx-evidence.service.js';
 import type { BillingSmsProvider } from './billing-sms-provider.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { sumSmsAmounts } from './billing-sms-money.service.js';
@@ -114,21 +114,25 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
     const providerBound = policy ? sumSmsAmounts([providerAmount.toFixed(),
       policy.additionalPerSegment.toFixed(), policy.additionalPerMessage.toFixed()])
       : providerAmount;
-    // A number costs its region currency's flat monthly price in every country; messages keep
-    // provider cost plus markup. The region is chosen once before the first monthly quote.
-    const terms = monthly ? await smsMonthlyTerms(tx, { country: request.country,
-      currency: (await requireOrganisationBillingRegion(request.organisation_id, tx)).currency,
-      providerAmount: providerAmount.toFixed(), providerCurrency: price.currency,
-      rates: { usdPerEur: fx.usdPerEur.toFixed(), gbpPerEur: fx.gbpPerEur?.toFixed() ?? null } })
-      : { finalAmount: formattedQuanta(smsFinalUsdQuanta({ providerAmount: providerBound.toFixed(),
+    let terms: { finalAmount: string; finalCurrency: string; monthlyPriceId: string | null };
+    if (monthly) {
+      const { currency } = await requireOrganisationBillingRegion(request.organisation_id, tx);
+      const rental = { providerAmount: providerAmount.toFixed(), providerCurrency: price.currency, currency,
+        rates: { usdPerEur: fx.usdPerEur.toFixed(), gbpPerEur: fx.gbpPerEur?.toFixed() ?? null } };
+      terms = commercial.mode === 'provider_markup'
+        ? { finalAmount: formattedQuanta(smsMonthlyPriceMinor({ ...rental, markupBps: commercial.monthlyMarkupBps }), 2),
+          finalCurrency: currency, monthlyPriceId: null }
+        : await smsMonthlyTerms(tx, { ...rental, country: request.country });
+    } else {
+      terms = { finalAmount: formattedQuanta(smsFinalUsdQuanta({ providerAmount: providerBound.toFixed(),
         providerCurrency: price.currency, usdPerEur: fx.usdPerEur.toFixed(), ...commercial,
         direction: request.direction, quantum: PRICE_QUANTUM }), 9), finalCurrency: 'USD', monthlyPriceId: null };
+    }
     const quote = await tx.billingSmsQuote.create({ data: {
       serviceId: input.credential.service.id, appKeyId: input.credential.id, orgId: request.organisation_id,
       country: request.country, direction: request.direction, destination: request.destination,
-      // The flat price carries no fixed increment or rental markup of its own.
       commercialPolicyVersion: commercial.version, monthlyFeeEur: monthly ? '0' : commercial.monthlyFeeEur,
-      monthlyMarkupBps: monthly ? 0 : commercial.monthlyMarkupBps, messageMarkupBps: commercial.messageMarkupBps,
+      monthlyMarkupBps: commercial.monthlyMarkupBps, messageMarkupBps: commercial.messageMarkupBps,
       providerAmount, providerCurrency: price.currency, providerSource: price.source,
       providerObservedAt: price.observedAt, fxSnapshotId: fx.id,
       providerBoundAmount: providerBound, routePolicyId: policy?.id ?? null, monthlyPriceId: terms.monthlyPriceId,

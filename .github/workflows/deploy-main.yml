@@ -36,6 +36,7 @@ jobs:
       BILLING_SMS_ENABLED: ${{ vars.BILLING_SMS_ENABLED || 'false' }}
       BILLING_SMS_TWILIO_REGION: ${{ vars.BILLING_SMS_TWILIO_REGION || 'us1' }}
       UOA_SMS_PRICING_MODE: ${{ vars.UOA_SMS_PRICING_MODE || 'legacy' }}
+      UOA_SMS_NUMBER_MARKUP_BPS: ${{ vars.UOA_SMS_NUMBER_MARKUP_BPS }}
       BILLING_SMS_POLICY_AUTORENEW_ENABLED: ${{ vars.BILLING_SMS_POLICY_AUTORENEW_ENABLED || 'false' }}
       BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS: ${{ vars.BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS || '500' }}
       BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS: ${{ vars.BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS || '7' }}
@@ -157,6 +158,10 @@ jobs:
             legacy|provider_markup) ;;
             *) echo "UOA_SMS_PRICING_MODE must be legacy or provider_markup"; exit 1 ;;
           esac
+          if [[ -n "$UOA_SMS_NUMBER_MARKUP_BPS" ]] && ! [[ "$UOA_SMS_NUMBER_MARKUP_BPS" =~ ^(0|[1-9][0-9]{0,5})$ ]]; then
+            echo "UOA_SMS_NUMBER_MARKUP_BPS must be a nonnegative integer with at most six digits"
+            exit 1
+          fi
           if [[ "$BILLING_SMS_ENABLED" == "true" ]] && \
              [[ "$UOA_SMS_CONFIGURED" != "true" || "$STRIPE_BILLING_ENABLED" != "true" ]]; then
             echo "SMS enablement requires configured SMS evidence credentials/policy and enabled Stripe billing"
@@ -249,6 +254,9 @@ jobs:
           fi
           secret_vars="DATABASE_URL=uoa-auth-database-url:latest,SHARED_SECRET=uoa-auth-shared-secret:latest,GOOGLE_CLIENT_ID=uoa-auth-google-client-id:latest,GOOGLE_CLIENT_SECRET=uoa-auth-google-client-secret:latest,APPLE_CLIENT_ID=uoa-auth-apple-client-id:latest,APPLE_TEAM_ID=uoa-auth-apple-team-id:latest,APPLE_KEY_ID=uoa-auth-apple-key-id:latest,APPLE_PRIVATE_KEY=uoa-auth-apple-private-key:latest,FACEBOOK_CLIENT_ID=uoa-auth-facebook-client-id:latest,FACEBOOK_CLIENT_SECRET=uoa-auth-facebook-client-secret:latest,GITHUB_CLIENT_ID=uoa-auth-github-client-id:latest,GITHUB_CLIENT_SECRET=uoa-auth-github-client-secret:latest,LINKEDIN_CLIENT_ID=uoa-auth-linkedin-client-id:latest,LINKEDIN_CLIENT_SECRET=uoa-auth-linkedin-client-secret:latest,X_CLIENT_ID=uoa-auth-x-client-id:latest,X_CLIENT_SECRET=uoa-auth-x-client-secret:latest,SMTP_PASSWORD=uoa-auth-smtp-password:latest,ADMIN_ACCESS_TOKEN_SECRET=uoa-admin-access-token-secret:latest,ADMIN_CONFIG_JWT=uoa-admin-config-jwt:latest,CONFIG_JWKS_JSON=uoa-auth-config-jwks-json:latest,DATABASE_ADMIN_URL=uoa-auth-database-admin-url:latest,MCP_OAUTH_ACCESS_TOKEN_PRIVATE_JWK=uoa-auth-mcp-oauth-access-token-private-jwk:latest,TARIFF_SNAPSHOT_PRIVATE_JWK=uoa-auth-tariff-snapshot-private-jwk:latest,TARIFF_SNAPSHOT_PUBLIC_JWKS_JSON=uoa-auth-tariff-snapshot-public-jwks-json:latest,UOA_BILLING_ASSERTION_SIGNING_PRIVATE_JWK=uoa-auth-billing-assertion-private-jwk:latest,UOA_BILLING_ASSERTION_PUBLIC_JWKS_JSON=uoa-auth-billing-assertion-public-jwks-json:latest,LEDGER_BILLING_APP_KEY=uoa-auth-ledger-billing-app-key:latest"
           env_vars="$env_vars,BILLING_SMS_ENABLED=$BILLING_SMS_ENABLED,BILLING_SMS_TWILIO_REGION=$BILLING_SMS_TWILIO_REGION,UOA_SMS_PRICING_MODE=$UOA_SMS_PRICING_MODE"
+          if [[ -n "$UOA_SMS_NUMBER_MARKUP_BPS" ]]; then
+            env_vars="$env_vars,UOA_SMS_NUMBER_MARKUP_BPS=$UOA_SMS_NUMBER_MARKUP_BPS"
+          fi
           env_vars="$env_vars,BILLING_SMS_POLICY_AUTORENEW_ENABLED=$BILLING_SMS_POLICY_AUTORENEW_ENABLED,BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS=$BILLING_SMS_POLICY_AUTORENEW_FX_BAND_BPS,BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS=$BILLING_SMS_POLICY_AUTORENEW_LOOKAHEAD_DAYS"
           env_vars="$env_vars,BILLING_CREDIT_FX_RATE_SOURCE=$BILLING_CREDIT_FX_RATE_SOURCE"
           if [[ "$UOA_SMS_CONFIGURED" == "true" ]]; then
