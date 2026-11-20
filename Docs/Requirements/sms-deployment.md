@@ -88,7 +88,8 @@ supplies a percentage or price default:
 For example, 4,500 basis points means a 45 percent markup. Provider-markup mode
 applies the rental markup to Twilio's current mobile number price for that country.
 It converts at UOA's accepted ECB rates into the organisation's billing currency
-and rounds up once to the nearest minor unit. The separate message markup still
+and rounds up to the smallest price ending in .99. An exact .99 amount keeps its price.
+For example, 15.83 EUR becomes 15.99 EUR. The separate message markup still
 applies to the complete SMS charge in USD. Quotes
 freeze separate rental/message markup fields and the policy version. The migration
 sets existing quotes' rental markup to zero, preserving their original fixed-fee
