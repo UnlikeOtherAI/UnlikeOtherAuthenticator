@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NativeAppsPage } from './NativeAppsPage';
 import { NativeAppDetailPage } from './NativeAppDetailPage';
 
+vi.mock('../features/admin/ProductErasureSettings', () => ({ ProductErasureSettings: () => null }));
 const mocks = vi.hoisted(() => ({ save: vi.fn(), refetch: vi.fn(), failed: false }));
 const app = { id: 'native-1', identifier: 'com.example.browser', name: 'Browser', enabled: true,
   methods: ['google', 'email_password'], scopes: ['openid', 'profile'], allow_registration: true,

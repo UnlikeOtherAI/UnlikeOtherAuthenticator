@@ -1,3 +1,4 @@
+import { assertProductParticipation } from './product-participation.service.js';
 import type { MachineAuthorization, MachineEnrollment, PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { runInTransaction } from '../db/tenant-context.js';
@@ -74,6 +75,7 @@ export async function stopMachine(row: MachineEnrollment, status: string, reason
 /** This checks MACHINE authority. It never revalidates or changes a human refresh family. */
 export async function machineAdmission(row: MachineEnrollment, auth: MachineAuthorization,
   credentialExpiresAt: Date, tx: MachineDb) {
+  await assertProductParticipation(tx, row.subject, row.clientDomain);
   const now = await machineClock(tx);
   let reason: MachineReasonCode | undefined;
   let status = 'revoked';

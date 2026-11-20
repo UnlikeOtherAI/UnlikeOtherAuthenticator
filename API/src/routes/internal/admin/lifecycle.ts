@@ -1,3 +1,5 @@
+import { reviewContainer } from '../../../services/product-erasure-containers.service.js';
+import { ProductPolicyInput, saveProductErasurePolicy } from '../../../services/product-erasure-policy.service.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { getAdminPrisma } from '../../../db/prisma.js';
@@ -17,6 +19,22 @@ function actor(request: FastifyRequest) {
 }
 
 export function registerInternalAdminLifecycle(app: FastifyInstance) {
+  app.get('/internal/admin/product-erasure', options, async request => {
+    const { after } = z.object({ after: z.string().uuid().optional() }).parse(request.query);
+    const db = getAdminPrisma();
+    const rows = await db.productErasureJob.findMany({ where: { completedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 101, ...(after && { cursor: { id: after }, skip: 1 }),
+      select: { id: true, policyId: true, createdAt: true, containerJobId: true, requestedContainer: true,
+        receipts: { select: { domainId: true, acknowledgedAt: true } } } });
+    return { policies: await db.productErasurePolicy.findMany({ orderBy: { id: 'asc' } }),
+      pending: rows.slice(0, 100), next: rows.length > 100 ? rows[99].id : null };
+  });
+  app.post('/internal/admin/product-erasure/:id/container', options, request => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const { decision } = z.object({ decision: z.enum(['approve','preserve']) }).strict().parse(request.body);
+    return reviewContainer(id, decision, actor(request));
+  });
+  app.post('/internal/admin/product-erasure', options, request => saveProductErasurePolicy(ProductPolicyInput.parse(request.body), actor(request)));
   app.get('/internal/admin/lifecycle/templates', options, async () => ({ data: await getAdminPrisma().lifecycleReasonTemplate.findMany({ orderBy: [{ scope: 'asc' }, { title: 'asc' }] }) }));
   app.post('/internal/admin/lifecycle/templates', options, async request => {
     const body = z.object({ id: z.string().optional(), scope: Scope, title: z.string().trim().min(1).max(120),

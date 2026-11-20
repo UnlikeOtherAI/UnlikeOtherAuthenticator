@@ -642,6 +642,10 @@ model AuthIdentity {
 }
 
 model VerificationToken {
+  productPreviewDigest String? @map("product_preview_digest")
+  productFactorDigest String? @map("product_factor_digest")
+  productReceiptId String? @map("product_receipt_id")
+  productSelection String? @map("product_selection")
   id           String                @id @default(cuid())
   type         VerificationTokenType
   email        String
@@ -6509,4 +6513,51 @@ model BillingBrowserCancellation {
   providerHttpStatus Int? @map("provider_http_status")
   createdAt DateTime @default(now()) @map("created_at")
   @@map("billing_browser_cancellations")
+}
+
+model ProductErasurePolicy {
+  id String @id
+  name String
+  mode String
+  enabled Boolean @default(false)
+  revision Int @default(1)
+  disclosure String
+  domains String[]
+  nativeApps String[] @map("native_apps")
+  settings String[]
+  closedBootstrapDomains String[] @default([]) @map("closed_bootstrap_domains")
+  jobs ProductErasureJob[]
+  @@map("product_erasure_policies")
+}
+
+model ProductErasureJob {
+  rejoinedSubject String? @map("rejoined_subject")
+  rejoinedAt DateTime? @map("rejoined_at")
+  noticeDueAt DateTime? @default(now()) @map("notice_due_at")
+  @@index([policyId, rejoinedSubject, rejoinedAt], map: "product_erasure_generation_idx")
+  id String @id @default(uuid())
+  policyId String @map("policy_id")
+  containerJobId String? @map("container_job_id")
+  containerPreserved Boolean @default(false) @map("container_preserved")
+  requestedContainer Json? @map("requested_container")
+  subject String
+  revision Int
+  impact Json
+  createdAt DateTime @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+  policy ProductErasurePolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  receipts ProductErasureReceipt[]
+  @@unique([subject, policyId])
+  @@map("product_erasure_jobs")
+}
+
+model ProductErasureReceipt {
+  jobId String @map("job_id")
+  domainId String @map("domain_id")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  outcome String?
+  job ProductErasureJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@id([jobId, domainId])
+  @@index([domainId, acknowledgedAt])
+  @@map("product_erasure_receipts")
 }

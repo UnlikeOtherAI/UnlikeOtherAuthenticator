@@ -134,6 +134,7 @@ export async function installFixtures(page: Page) {
     const path = decodeURIComponent(url.pathname.replace('/internal/admin', ''));
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path === '/product-erasure' && req.method() === 'GET') return json({ policies: [], pending: [] });
     if (path.startsWith('/lifecycle/')) return lifecycle.handle(route, path);
     const grantResponse = creditGrants.handle(req.method(), path, req.method() === 'POST' ? req.postDataJSON() : null);
     if (grantResponse) return json(grantResponse.body, grantResponse.status);

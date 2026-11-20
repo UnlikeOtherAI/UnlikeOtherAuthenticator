@@ -1,3 +1,4 @@
+import { ProductErasureSettings } from '../features/admin/ProductErasureSettings';
 import { useDirectoryNavigation } from '../features/admin/useDirectoryNavigation';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -31,6 +32,7 @@ export function NativeAppsPage() {
         </tr>)}
       </DataTable>}
     </Card>
+    <ProductErasureSettings />
     {editing ? <NativeAppDialog app={editing === 'new' ? undefined : editing} close={() => setEditing(null)} /> : null}
   </>;
 }

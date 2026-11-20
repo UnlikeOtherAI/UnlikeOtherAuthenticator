@@ -3656,3 +3656,11 @@ when the credential carried a proof and the person holds a role on the domain
 answers for one person and one team can ask once instead of twice. No check is
 removed: an absent object means "ask the validate route", never "no proof
 needed".
+
+### Product account deletion
+
+An operator may register a logical product and its native app identifiers, backend domains and exact UOA setting keys in Admin Apps. Personal products erase the user's product data. Organisation-aware products also preserve genuinely shared company records with personal attribution removed except for disclosed protected evidence. Unmapped products cannot initiate this workflow. A product request covers only that product, independent of UOA-wide deletion and its existing queue.
+
+The hosted product form binds mailbox proof, enrolled TOTP, account epoch and confirmation to the selected product. It rechecks the policy and impact before committing. A user can separately confirm an eligible named organisation or team owned by that user when UOA can establish exclusive scope. The product form never authorises deletion of the global identity. Other memberships survive. External systems acknowledge only completed cleanup for their assigned revision. The receipt remains usable after sign-out.
+
+A multi-team participant keeps the shared directory. An outstanding invitation, a configured enterprise directory, or evidence of another product prevents automatic classification of a workspace as exclusive. Eligible named workspace requests require platform administration to confirm external dependencies before the existing entity job starts. Each backend binds its stored sessions and offline writes to the current product registration generation. A verified deliberate rejoin after erasure creates fresh access and preserves the historical receipt. Completion mail is delivered after the last required acknowledgement.

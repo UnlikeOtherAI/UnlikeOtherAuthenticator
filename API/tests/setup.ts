@@ -6,6 +6,14 @@ import { randomBytes } from 'node:crypto';
 
 import { testConfigJwks } from './helpers/test-config.js';
 
+// Route and token unit fixtures inject partial Prisma clients. They represent products
+// without erasure policies. Real Prisma clients (including transaction clients) use SQL.
+vi.mock('../src/services/product-participation.service.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../src/services/product-participation.service.js')>();
+  return { assertProductParticipation: (...args: Parameters<typeof actual.assertProductParticipation>) =>
+    !args[0].$queryRaw || vi.isMockFunction(args[0].$queryRaw) ? Promise.resolve(false) : actual.assertProductParticipation(...args) };
+});
+
 vi.mock('undici', async () => {
   const actual = await vi.importActual<typeof import('undici')>('undici');
 

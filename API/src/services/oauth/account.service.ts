@@ -43,10 +43,11 @@ export async function authorizePublicAccount(
   surface: 'public_access' | 'kelpie_connect' | 'kelpie_pair' = 'public_access',
 ): Promise<void> {
   await lockProductTeamPolicyShared(prisma);
-  if (!await getOAuthClient(account.clientId, prisma)) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
+  const client = await getOAuthClient(account.clientId, prisma);
+  if (!client) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   await lockAndAssertAuthenticationEpoch(account, { prisma });
   if (account.expiresAt <= Date.now() / 1000) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
-  await authorizeCredentialSurface(surface, { userId: account.userId, clientDomain: account.domain,
+  await authorizeCredentialSurface(surface, { userId: account.userId, clientDomain: account.domain, nativeApp: client.nativeApp?.identifier,
     credentialEpoch: account.credentialEpoch, assuranceId: account.assuranceId,
     authenticationEvidenceId: account.authenticationEvidenceId, allowConsumedEvidence: true, artifact: account.artifact }, prisma);
   const user = await prisma.user.findUnique({ where: { lifecycleStatus: 'ACTIVE', id: account.userId }, select: { twoFaEnabled: true } });

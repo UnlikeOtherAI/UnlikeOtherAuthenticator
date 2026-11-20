@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
+import { assertProductParticipation } from './product-participation.service.js';
 import { verifyBillingActor } from './billing-actor.service.js';
 import type { BillingActorEndpoint } from './billing-actor-audience.service.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
@@ -90,6 +91,10 @@ export async function confirmAuthenticatedDirectBillingServiceAccess(
   const confirmedAt = deps?.now?.() ?? new Date();
   await prisma.$transaction(
     async (tx) => {
+      const issuer = new URL(params.credential.actorIssuer);
+      if (issuer.protocol === 'https:' && issuer.pathname === '/' && !issuer.port && !issuer.search && !issuer.hash) {
+        await assertProductParticipation(tx, request.userId, issuer.hostname);
+      }
       const [service, orgMember, team] = await Promise.all([
         tx.billingService.findFirst({
           where: {
@@ -136,7 +141,9 @@ export async function confirmAuthenticatedDirectBillingServiceAccess(
         { prisma: tx, now: () => confirmedAt },
       );
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    // A concurrent product erasure reads and removes this same access record.
+    // Serializing both transactions prevents an in-flight confirmation from restoring it.
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
 }
 

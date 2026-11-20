@@ -92,7 +92,7 @@ export async function exchangeOAuthCodeForAccessToken(
   });
 
   const evidence = await authorizeCredentialSurface('public_authorization', { userId: consumed.userId,
-    clientDomain: params.domain, credentialEpoch: consumed.credentialEpoch,
+    clientDomain: params.domain, nativeApp: client.nativeApp?.identifier, credentialEpoch: consumed.credentialEpoch,
     authenticationEvidenceId: consumed.authenticationEvidenceId }, prisma);
   const refresh = isNativeRefreshClient(client) ? await issueNativeRefreshToken({ userId: consumed.userId,
     clientId: params.clientId, domain: params.domain, credentialEpoch: consumed.credentialEpoch,

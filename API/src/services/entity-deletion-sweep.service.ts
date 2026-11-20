@@ -16,6 +16,10 @@ export async function eraseOperationalIdentity(tx: PrismaClient, userId: string,
   if (await tx.organisation.count({ where: { ownerId: userId, lifecycleStatus: { not: 'DELETED' } } })) {
     throw new AppError('BAD_REQUEST', 409, 'OWNERSHIP_TRANSFER_REQUIRED');
   }
+  if (await tx.productErasureJob.count({ where: { subject: userId, completedAt: null } })) {
+    throw new AppError('BAD_REQUEST', 409, 'PRODUCT_ERASURE_PENDING');
+  }
+  await tx.productErasureJob.deleteMany({ where: { OR: [{ subject: userId }, { rejoinedSubject: userId }] } });
   const email = user.email;
   if (mode === 'RETAIN_REFERENCE') {
     const domains = new Set([

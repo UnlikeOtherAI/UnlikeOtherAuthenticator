@@ -82,7 +82,7 @@ export function registerRootRoute(app: FastifyInstance): void {
         personal_owner_membership: 'optional owner_subject in service assertion; exact-team ownerActive or owner_inactive',
         prepaid_delivery: '/apps/v1/nessie/phone-profile/call-proof/reserve', caller_id_authentication: false },
       settings_events: { path: '/oauth/me/settings/:namespace/:key/events', transport: 'WebSocket', scope: 'settings.read', protocol_version: 1, recovery: 'snapshot on reconnect; version-fenced splice or replace deltas' },
-      account_deletion: { form: '/auth/delete-account', start: '/auth/delete-account/start', confirm: '/auth/delete-account/confirm',
+      account_deletion: { product_form: '/auth/delete-account?product=<policy-id>', product_confirmation: '/auth/delete-account/submit-product', rejoin: '/auth/delete-account?product=<policy-id>&action=rejoin', participation: '/domain/product-participation', product_jobs: '/domain/product-erasure-jobs', form: '/auth/delete-account', start: '/auth/delete-account/start', confirm: '/auth/delete-account/confirm',
         authority: 'browser-bound mailbox proof and enrolled TOTP; queues a global account request for administrator review' },
       native_apps: { admin: '/admin/apps', registration: '/oauth/register', public_identifier: 'app_id', client_secret_required: false },
       enterprise_sso: { version: 1, settings: '/auth/organisation-access',

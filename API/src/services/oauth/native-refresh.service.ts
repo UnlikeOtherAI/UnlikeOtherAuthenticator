@@ -151,7 +151,7 @@ async function rotateNativeRefreshToken(
 
   const issuer = getPublicBaseUrl();
   const source = await authorizeCredentialSurface('native_refresh', { userId: rotated.userId,
-    clientDomain: config.domain, credentialEpoch, assuranceId: rotated.assuranceId ?? undefined }, tx);
+    clientDomain: config.domain, nativeApp: client.nativeApp?.identifier, credentialEpoch, assuranceId: rotated.assuranceId ?? undefined }, tx);
   const ttlSeconds = publicCredentialTtl(accessTokenExpiresInSeconds(getEnv().ACCESS_TOKEN_TTL), source?.expiresAt);
   const accessToken = await signMcpAccessToken({
     subject: rotated.userId,

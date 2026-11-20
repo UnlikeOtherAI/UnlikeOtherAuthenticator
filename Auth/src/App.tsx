@@ -1,3 +1,4 @@
+import { ProductDeletionPage } from './pages/ProductDeletionPage.js';
 import { AccountDeletionPage } from './pages/AccountDeletionPage.js';
 import { MachinesPage } from './pages/MachinesPage.js';
 import { PopupContainer } from './components/layout/PopupContainer.js';
@@ -23,11 +24,15 @@ export function App(props?: {
 
   const pathname = props?.pathname ?? (typeof window !== 'undefined' ? window.location.pathname : '');
 
+  const deletionQuery = new URLSearchParams(props?.initialSearch ?? (typeof window === 'undefined' ? '' : window.location.search));
+  const product = deletionQuery.get('product');
+
   return (
     <AccessStatusContext.Provider value={bootstrap.accessStatusEnabled}>
       <ThemeProvider config={bootstrap.config} configUrl={bootstrap.configUrl}>
         <I18nProvider config={bootstrap.config} configUrl={bootstrap.configUrl}>
-          {pathname === '/auth/delete-account' ? <AccountDeletionPage /> : pathname === '/auth/machines' ? <MachinesPage />
+          {pathname === '/auth/delete-account' ? (product !== null
+            ? <ProductDeletionPage product={product} rejoin={deletionQuery.get('action') === 'rejoin'} /> : <AccountDeletionPage />) : pathname === '/auth/machines' ? <MachinesPage />
             : pathname === '/auth/organisation-recovery' ? <OrganisationRecoveryPage />
             : pathname === '/auth/organisation-access' ? <OrganisationAccessPage /> : <PopupContainer
             configUrl={bootstrap.configUrl}
