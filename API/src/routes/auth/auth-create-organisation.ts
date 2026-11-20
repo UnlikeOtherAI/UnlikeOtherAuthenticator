@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+import { buildSessionChoices } from '../../services/session-choices.service.js';
 import { rememberCompletedSocialProvider } from '../../services/social/social-browser-preference.service.js';
 import { assertLoginOrganization } from '../../services/login-organization.service.js';
 import type { FastifyInstance } from 'fastify';
@@ -141,6 +143,14 @@ export function registerAuthCreateOrganisationRoute(app: FastifyInstance): void 
         // Serialize before the active-membership read in createOrganisation so
         // those bridges cannot create two first teams concurrently.
         await lockRequiredTeamPlacementUser(lockedSession.userId, { prisma: tx });
+        const entryInterface = config.login_flow?.team_interface;
+        if (entryInterface) {
+          const choices = await buildSessionChoices(
+            { userId: lockedSession.userId, config, authenticationEvidenceId: lockedSession.authenticationEvidenceId },
+            { prisma: tx, policyPrisma: tx, crossProductPrisma: tx },
+          );
+          if (!choices.can_create_org) rejectOrganisationCreation();
+        }
 
         // Claim before writing the new tenant. A later failure rolls the claim
         // and all team effects back, leaving a legitimate retry possible.
@@ -156,8 +166,9 @@ export function registerAuthCreateOrganisationRoute(app: FastifyInstance): void 
           {
             domain: config.domain,
             name,
-            slug,
-            defaultTeamJoinPolicy: join_policy,
+            slug: entryInterface === 'family' ? `family-${randomBytes(13).toString('hex')}` : slug,
+            defaultTeamJoinPolicy: entryInterface === 'family' ? 'INVITE_ONLY' : join_policy,
+            entryInterface,
             ownerId: lockedSession.userId,
             actorUserId: lockedSession.userId,
             config,

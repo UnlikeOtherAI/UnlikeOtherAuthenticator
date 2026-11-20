@@ -1,3 +1,4 @@
+import { assertEntryTeam } from './entry-team-interface.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv, requireEnv } from '../config/env.js';
@@ -87,7 +88,10 @@ export async function exchangeTeamSwitchForTokens(
           const source = await tx.refreshToken.findUniqueOrThrow({ where: {
             tokenHash: hashRefreshToken(params.refreshToken, sharedSecret),
           } });
-          if (!source.assuranceId) return rotationPolicy(row);
+          if (!source.assuranceId) {
+            await rotationPolicy(row);
+            return assertEntryTeam(params.config, targetTeam, tx, 'TEAM_NOT_AVAILABLE', 403);
+          }
           const user = await tx.user.findUnique({ where: { id: row.userId, lifecycleStatus: 'ACTIVE' },
             select: { tokenVersion: true } });
           if (!user) throw new AppError('UNAUTHORIZED', 401, 'INVALID_REFRESH_TOKEN');
@@ -108,6 +112,7 @@ export async function exchangeTeamSwitchForTokens(
             }
             throw error;
           }
+          await assertEntryTeam(params.config, targetTeam, tx, 'TEAM_NOT_AVAILABLE', 403);
           // The existing product recovery path starts normal target-bound authorization.
           // Refuse before any edge commits, preserving every original holder and deadline.
           throw new AppError('FORBIDDEN', 403, 'INTERACTION_REQUIRED');

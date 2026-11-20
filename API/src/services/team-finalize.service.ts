@@ -1,3 +1,4 @@
+import { assertEntryTeam } from './entry-team-interface.service.js';
 import { assertLoginOrganization } from './login-organization.service.js';
 import { recordIndependentAuthentication, requireAuthenticationEvidence, type VerifiedAuthenticationEvent } from './authentication-evidence.service.js';
 import type { PrismaClient } from '@prisma/client';
@@ -106,6 +107,8 @@ export async function finalizeWithTwoFaPolicy(
   }
   const team =
     params.orgId === undefined ? {} : { orgId: params.orgId, teamId: params.teamId as string };
+
+  await assertEntryTeam(params.config, params, deps?.teamPrisma ?? deps?.prisma ?? getAdminPrisma());
 
   // When team selection is transactional, use that transaction so a
   // freshly accepted invite's organisation policy is visible before commit.

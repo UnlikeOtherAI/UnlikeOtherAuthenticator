@@ -75,18 +75,12 @@ export function interpretTeamResponse(data: unknown): TeamResponseOutcome {
   if (!isRecord(data)) return { kind: 'error' };
 
   // Chooser payload (design §4.3): no `ok` field, but a bridge `login_token` plus the choices.
-  if (typeof data.login_token === 'string' && Array.isArray(data.teams)) {
+  const choices = toSessionChoices(data);
+  if (typeof data.login_token === 'string' && choices) {
     return {
       kind: 'chooser',
       loginToken: data.login_token,
-      choices: {
-        ...(typeof data.organization_id === 'string' ? { organization_id: data.organization_id } : {}),
-        teams: toTeamChoices(data.teams),
-        pending_invites: toInviteChoices(data.pending_invites),
-        can_create_org: Boolean(data.can_create_org),
-        creatable_orgs: toCreatableOrgs(data.creatable_orgs),
-        manageable_orgs: toCreatableOrgs(data.manageable_orgs),
-      },
+      choices,
     };
   }
 
@@ -123,6 +117,7 @@ export function toSessionChoices(data: unknown): SessionChoices | null {
   if (!isRecord(data) || !Array.isArray(data.teams)) return null;
   return {
     ...(typeof data.organization_id === 'string' ? { organization_id: data.organization_id } : {}),
+    ...(data.team_interface === 'family' || data.team_interface === 'work' ? { team_interface: data.team_interface } : {}),
     teams: toTeamChoices(data.teams),
     pending_invites: toInviteChoices(data.pending_invites),
     can_create_org: Boolean(data.can_create_org),

@@ -146,6 +146,7 @@ export const configJwtDocumentation = {
       'array of { email_domain, org_id, team_id? } — email-domain-based org/team placement',
     language: 'string — currently selected language override',
     login_flow: {
+      team_interface: 'Optional family or work for registered products with a directory team-classification endpoint. Requires auto team selection and one signed callback. Filters memberships and invitations before display, and allows creation in the Authenticator when no eligible team exists and organisation creation is enabled.',
       organization_id: 'Optional exact UOA organisation ID for this hosted sign-in; narrows choices before auto-selection and forbids completing in a different organisation.',
       email_code_enabled: 'boolean (default false)',
       invitation_return_target:

@@ -89,6 +89,7 @@ export function registerAuthCreateTeamRoute(app: FastifyInstance): void {
         QuerySchema.parse(request.query);
       const config = request.config;
       const configUrl = request.configUrl;
+      if (config?.login_flow?.team_interface) throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
       if (!config || !configUrl) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
       assertLoginOrganization(config, org_id);
 

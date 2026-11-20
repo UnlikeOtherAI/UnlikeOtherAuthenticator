@@ -114,6 +114,9 @@ export const cs = {
   'team.createOrg.submit': 'Vytvořit tým',
   'team.createOrg.cancel': 'Zrušit',
   'team.createOrg.organisationNameLabel': 'Název organizace',
+  'team.createFamily.title': 'Vytvořit rodinu',
+  'team.createFamily.name': 'Název rodiny',
+  'team.createFamily.hint': 'Zvolte název rodiny. Další členy můžete pozvat v aplikaci Nessie Family.',
   'team.createOrg.firstTeamHint':
     'Váš první tým se bude jmenovat stejně jako organizace — později jej můžete přejmenovat.',
   'team.createOrg.error.nameTaken':

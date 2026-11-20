@@ -1625,6 +1625,7 @@ model Team {
   slug                String   @db.VarChar(63)
   description         String?  @db.VarChar(500)
   isDefault           Boolean  @default(false) @map("is_default")
+  entryInterface      String?  @map("entry_interface") @db.VarChar(6)
   allowedEmailDomains String[] @default([]) @map("allowed_email_domains")
   allowedEmails       String[] @default([]) @map("allowed_emails")
   createdAt           DateTime @default(now()) @map("created_at")

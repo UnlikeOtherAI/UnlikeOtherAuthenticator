@@ -1,3 +1,4 @@
+import { assertEntryTeam } from './entry-team-interface.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { Prisma } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
@@ -69,6 +70,7 @@ export async function acceptTeamInviteWithinTransaction(params: {
   if (!invite) {
     throw new AppError('BAD_REQUEST', 400);
   }
+  await assertEntryTeam(params.config, invite, params.prisma);
   if (invite.revokedAt) {
     throw new AppError('BAD_REQUEST', 400, 'INVITE_INVALID');
   }

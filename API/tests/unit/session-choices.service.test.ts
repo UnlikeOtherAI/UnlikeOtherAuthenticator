@@ -42,6 +42,50 @@ function makeConfig(overrides?: Partial<ClientConfig>): ClientConfig {
 }
 
 describe('buildSessionChoices', () => {
+  it.each(['family', 'work'] as const)('filters %s choices and enables creation only without a matching team', async (scope) => {
+    const other = scope === 'family' ? 'work' : 'family';
+    const secret = 'dedicated-test-directory-secret-long-enough';
+    vi.stubEnv('DIRECTORY_WEBHOOK_TARGETS_JSON', JSON.stringify([{ domain: 'client.example.com',
+      url: 'https://client.example.com/api/auth/uoa/directory-webhook', secret }]));
+    const fetch = vi.fn(async (_url: unknown, request: RequestInit) => {
+      const body = JSON.parse(String(request.body)) as { teams: Array<{ orgId: string; teamId: string }> };
+      for (const team of body.teams) expect(Object.keys(team).sort()).toEqual(['orgId', 'teamId']);
+      return Response.json({ teams: body.teams.map((team) => ({ ...team,
+        interface: team.teamId.startsWith('family') ? 'family' : 'work' })) });
+    });
+    vi.stubGlobal('fetch', fetch);
+    try {
+      const teamRow = (name: string) => ({ teamId: name, teamRole: 'member',
+        team: { name, slug: name, orgId: name, iconUrl: null, updatedAt: TEAM_UPDATED_AT, org: { name } } });
+      const inviteRow = (name: string) => ({ id: name, teamId: name, orgId: name,
+        team: { name }, org: { name }, invitedByUserId: null, invitedByName: null });
+      const prisma = {
+        orgMember: { findMany: vi.fn(async () => []) },
+        user: { findUnique: vi.fn(async () => ({ email: 'jane@acme.com' })) },
+        team: { findMany: vi.fn(async () => []) },
+        teamMember: { findMany: vi.fn(async () => [teamRow(scope), teamRow(other)]) },
+        teamInvite: { findMany: vi.fn(async () => [inviteRow(scope + '-invite'), inviteRow(other + '-invite')]) },
+      };
+      const config = makeConfig({ login_flow: { team_interface: scope, email_code_enabled: true, team_selection: 'auto' },
+        org_features: { allow_user_create_org: true } });
+      const read = () => buildSessionChoices({ userId: 'user-1', config }, { policy: CLIENT_DOMAIN_TEAM_POLICY, prisma });
+      const mixed = await read();
+      expect(mixed.teams.map(({ name }) => name)).toEqual([scope]);
+      expect(mixed.pending_invites.map(({ inviteId }) => inviteId)).toEqual([scope + '-invite']);
+      expect(mixed.can_create_org).toBe(false);
+      prisma.teamMember.findMany.mockResolvedValueOnce([teamRow(other)]);
+      const empty = await read();
+      expect(empty.teams).toEqual([]);
+      expect(empty.can_create_org).toBe(true);
+      expect(shouldPresentTeamChooser(empty)).toBe(true);
+      fetch.mockResolvedValueOnce(Response.json({ teams: [] }));
+      await expect(read()).rejects.toMatchObject({ statusCode: 503, message: 'TEAM_CHOICES_UNAVAILABLE' });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('returns empty choices when the user cannot be found', async () => {
     const prisma = {
       orgMember: { findMany: vi.fn(async () => []) },
@@ -212,6 +256,8 @@ describe('buildSessionChoices', () => {
       },
       select: {
         id: true,
+        orgId: true,
+        teamId: true,
         team: { select: { name: true } },
         org: { select: { name: true } },
         invitedByName: true,

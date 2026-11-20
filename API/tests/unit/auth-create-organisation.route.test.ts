@@ -23,6 +23,7 @@ const prismaMock = vi.hoisted(() => ({
   team: { findFirst: vi.fn() },
   user: { findUnique: vi.fn() },
 }));
+const buildSessionChoicesMock = vi.hoisted(() => vi.fn());
 const consumeLoginSessionMock = vi.hoisted(() => vi.fn());
 const createOrganisationMock = vi.hoisted(() => vi.fn());
 const finalizeWithTwoFaPolicyMock = vi.hoisted(() => vi.fn());
@@ -42,6 +43,9 @@ vi.mock('../../src/middleware/config-verifier.js', () => ({
   },
 }));
 
+vi.mock('../../src/services/session-choices.service.js', () => ({
+  buildSessionChoices: (...args: unknown[]) => buildSessionChoicesMock(...args),
+}));
 vi.mock('../../src/services/login-session-use.service.js', () => ({
   consumeLoginSession: (...args: unknown[]) => consumeLoginSessionMock(...args),
 }));
@@ -151,6 +155,7 @@ describe('POST /auth/create-organisation', () => {
 
     for (const mock of [
       prismaMock.team.findFirst,
+      buildSessionChoicesMock,
       prismaMock.$queryRaw,
       prismaMock.user.findUnique,
       consumeLoginSessionMock,
@@ -229,6 +234,21 @@ describe('POST /auth/create-organisation', () => {
     expect(consumeLoginSessionMock.mock.invocationCallOrder[0]).toBeLessThan(
       createOrganisationMock.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it('creates an invitation-only family from a scoped chooser and rechecks eligibility before writes', async () => {
+    currentConfig = { ...baseConfig(), login_flow: { team_selection: 'auto', email_code_enabled: true, team_interface: 'family' } };
+    buildSessionChoicesMock.mockResolvedValueOnce({ can_create_org: true }).mockResolvedValueOnce({ can_create_org: false });
+    const create = async () => postCreateTeam({ login_token: await mintLoginToken(),
+      name: 'The Oaks', slug: 'supplied-address', join_policy: 'OPEN_TO_ORG' });
+    expect((await create()).statusCode).toBe(200);
+    expect(createOrganisationMock).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'The Oaks', slug: expect.stringMatching(/^family-[a-f0-9]{26}$/),
+      entryInterface: 'family', defaultTeamJoinPolicy: 'INVITE_ONLY',
+    }), expect.anything());
+    expect((await create()).statusCode).toBe(401);
+    expect(createOrganisationMock).toHaveBeenCalledTimes(1);
+    expect(consumeLoginSessionMock).toHaveBeenCalledTimes(1);
   });
 
   it('rejects creation when the domain has not enabled self-service teams', async () => {

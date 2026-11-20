@@ -8,6 +8,7 @@ export function tokenPairResponse(pair: IssuedTokenPair): Record<string, unknown
     refresh_token: pair.refreshToken,
     refresh_token_expires_in: pair.refreshTokenExpiresInSeconds,
     token_type: 'Bearer',
+    ...(pair.teamInterface ? { team_interface: pair.teamInterface } : {}),
     ...(pair.assuranceRef ? { assurance_ref: pair.assuranceRef,
       assurance_expires_at: pair.assuranceExpiresAt } : {}),
     ...(pair.firstLogin ? { firstLogin: pair.firstLogin } : {}),

@@ -1,3 +1,4 @@
+import { assertEntryTeam, type EntryTeamInterface } from './entry-team-interface.service.js';
 import { resolveTokenFamilyAssurance } from './token-assurance.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
@@ -102,6 +103,7 @@ export type IssuedTokenPair = {
   refreshToken: string;
   refreshTokenExpiresInSeconds: number;
   firstLogin?: FirstLoginBlock;
+  teamInterface?: EntryTeamInterface;
 };
 
 export async function issueTokenPairForUser(
@@ -184,6 +186,9 @@ export async function issueTokenPairForUser(
     throw new AppError('UNAUTHORIZED', 401, 'AUTHENTICATION_FAILED');
   }
 
+  const teamInterface = params.config.login_flow?.team_interface;
+  await assertEntryTeam(params.config, params.active ?? null, deps?.adminPrisma ?? prisma, 'INVALID_REFRESH_TOKEN');
+
   const org =
     activeOrgContext ??
     (params.config.org_features?.enabled && !assuranceId
@@ -203,6 +208,10 @@ export async function issueTokenPairForUser(
       ? { ...params.active, tenantSlug: activeOrgContext.tenant_slug }
       : null;
 
+  const scopedOrg = org && active && teamInterface
+    ? { org_id: org.org_id, tenant_slug: org.tenant_slug, org_role: org.org_role,
+        teams: [active.teamId], team_roles: Object.fromEntries(Object.entries(org.team_roles).filter(([id]) => id === active.teamId)) }
+    : org;
   const accessToken = await signAccessToken({
     userId: params.userId,
     email: requireIdentityEmail(user.email),
@@ -215,12 +224,12 @@ export async function issueTokenPairForUser(
     tokenVersion: user.tokenVersion,
     assuranceId,
     assuranceConnectionId,
-    org,
+    org: scopedOrg,
     active,
     relyingPartyToken: accessTokenContext.relyingPartyToken,
   });
 
-  const firstLogin = params.includeFirstLogin
+  const firstLogin = params.includeFirstLogin && !teamInterface
     ? ((await buildFirstLoginBlock(
         { userId: params.userId, config: params.config },
         {
@@ -237,6 +246,7 @@ export async function issueTokenPairForUser(
     refreshToken: params.refreshToken,
     refreshTokenExpiresInSeconds: params.refreshTokenExpiresInSeconds,
     firstLogin,
+    teamInterface,
     assuranceRef,
     assuranceExpiresAt,
   };
