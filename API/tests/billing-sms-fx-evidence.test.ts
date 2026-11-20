@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSmsFxEvidence, smsCostReachesPrice, smsFinalUsdQuanta } from '../src/services/billing-sms-fx-evidence.service.js';
+import { parseSmsFxEvidence, smsCostReachesPrice, smsFinalUsdQuanta, smsMonthlyPriceMinor } from '../src/services/billing-sms-fx-evidence.service.js';
 
 const xml = '<gesmes:Envelope xmlns="http://www.ecb.int/vocabulary/2002-08-01/eurofxref">' +
   '<Cube><Cube time="2026-10-08"><Cube currency="USD" rate="1.1186"/></Cube></Cube></gesmes:Envelope>';
@@ -61,6 +61,24 @@ describe('UOA SMS FX and private rating', () => {
     expect(parseSmsFxEvidence(xml, now).gbpPerEur).toBeNull();
     expect(() => parseSmsFxEvidence(withGbp.replace('<Cube currency="GBP" rate="0.8437"/>',
       '<Cube currency="GBP" rate="0.8437"/><Cube currency="GBP" rate="0.9"/>'), now)).toThrow();
+  });
+
+  it.each([
+    ['15.8300', 1_599n],
+    ['15.99', 1_599n],
+    ['15.990000000001', 1_699n],
+    ['16.00', 1_699n],
+    ['0.0001', 99n],
+    ['999999.99', 99_999_999n],
+  ])('rounds %s EUR up to the closest .99 rental', (providerAmount, expected) => {
+    expect(smsMonthlyPriceMinor({ providerAmount, providerCurrency: 'EUR', currency: 'EUR',
+      markupBps: 0, rates: { usdPerEur: '1.1', gbpPerEur: null } })).toBe(expected);
+  });
+
+  it.each(['0', '999999.990001'])('refuses a rental of %s outside the supported amount', (providerAmount) => {
+    expect(() => smsMonthlyPriceMinor({ providerAmount, providerCurrency: 'EUR', currency: 'EUR',
+      markupBps: 0, rates: { usdPerEur: '1.1', gbpPerEur: null } }))
+      .toThrow('BILLING_SMS_MONTHLY_AMOUNT_UNSUPPORTED');
   });
 
   it('compares a provider cost with a price across USD, EUR and GBP exactly', () => {

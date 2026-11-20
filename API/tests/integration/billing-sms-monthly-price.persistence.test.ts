@@ -103,12 +103,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Monthly SMS number price', () => {
       resolvedAt: null } })).toBe(0);
   });
 
-  it('quotes the current country rental plus 45% in each billing currency', async () => {
+  it('quotes the current country rental plus 45%, rounded up to .99 in each billing currency', async () => {
     vi.stubEnv('UOA_SMS_PRICING_MODE', 'provider_markup');
     rental.CZ = '12.00';
     try {
-      for (const [organisationId, currency, gb, cz] of [[smsIds.org, 'EUR', '1.52', '15.82'],
-        ['sms-org-uk', 'GBP', '1.29', '13.45'], ['sms-org-us', 'USD', '1.67', '17.40']] as const) {
+      for (const [organisationId, currency, gb, cz] of [[smsIds.org, 'EUR', '1.99', '15.99'],
+        ['sms-org-uk', 'GBP', '1.99', '13.99'], ['sms-org-us', 'USD', '1.99', '17.99']] as const) {
         for (const [country, amount] of [['GB', gb], ['CZ', cz]] as const) {
           const quote = await monthly(country, organisationId);
           expect(quote).toMatchObject({ amount, currency, rate_basis: 'monthly_mobile', scope: { country } });
@@ -127,15 +127,15 @@ describe.skipIf(!process.env.DATABASE_URL)('Monthly SMS number price', () => {
     const quote = await monthly('GB');
     rental.GB = '4.00';
     try {
-      expect(await monthly('GB')).toMatchObject({ amount: '5.28', currency: 'EUR' });
+      expect(await monthly('GB')).toMatchObject({ amount: '5.99', currency: 'EUR' });
       await beginSmsNumber({ credential: fixture.lifecycle, actorToken: await fixture.actor('/billing/v1/sms/numbers/begin'),
         request: { ...subject, resource_id: 'sms-number-eur', quote_id: quote.id, phone_number: phone } },
       { prisma, provider, stripe: fixture.stripe, stripeLivemode: false });
       const resource = await prisma.billingSmsNumberResource.findUniqueOrThrow({ where: { id: 'sms-number-eur' } });
       const offer = await prisma.billingRecurringAddonOffer.findUniqueOrThrow({ where: { id: resource.offerId! },
         include: { catalogs: true } });
-      expect(offer).toMatchObject({ currency: 'EUR', monthlyAmountMinor: 152n, resourceKind: 'sms_mobile_number' });
-      expect(offer.catalogs).toEqual([expect.objectContaining({ currency: 'EUR', monthlyAmountMinor: 152n })]);
+      expect(offer).toMatchObject({ currency: 'EUR', monthlyAmountMinor: 199n, resourceKind: 'sms_mobile_number' });
+      expect(offer.catalogs).toEqual([expect.objectContaining({ currency: 'EUR', monthlyAmountMinor: 199n })]);
       expect(checkout.createRecurringAddonCheckout).toHaveBeenCalledWith(
         expect.objectContaining({ request: expect.objectContaining({ offerId: offer.id }) }), expect.anything());
     } finally {
