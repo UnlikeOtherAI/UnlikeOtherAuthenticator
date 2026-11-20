@@ -73,29 +73,31 @@ supplies a percentage or price default:
 
 - `UOA_SMS_COMMERCIAL_POLICY_VERSION`: a stable version identifier, 1–80 ASCII
   letters, digits, underscores or hyphens, required for both modes.
-- `UOA_SMS_PRICING_MODE=provider_markup`: uniform markup on provider number rental
-  and the complete SMS charge (transport, carrier and processing/failure charges
+- `UOA_SMS_PRICING_MODE=provider_markup`: markup on the current mobile rental
+  for the number's country and the complete SMS charge (transport, carrier and processing/failure charges
   included in the verified total). `UOA_SMS_PROVIDER_MARKUP_BPS` is the explicit
-  nonnegative integer markup in basis points, at most six digits. There is no
-  fixed monthly increment in this mode. Country is not a commercial-policy input.
+  nonnegative integer markup in basis points, at most six digits.
+  `UOA_SMS_NUMBER_MARKUP_BPS` can set a separate rental markup using the same format.
+  Without it, rental uses the provider markup. There is no fixed monthly increment.
 - `UOA_SMS_PRICING_MODE=legacy` (the compatibility default): preserve the existing
   `UOA_SMS_MONTHLY_FEE_EUR` fixed monthly increment and
   `UOA_SMS_MESSAGE_MARKUP_BPS` message markup. The exact nonnegative EUR increment
   permits at most six integer and six fractional digits; markup permits six
   integer digits. Both settings are required in this mode.
 
-For example, 1,500 basis points means a 15 percent markup. Provider-markup mode
-multiplies the rental price and each complete message charge by the same factor,
-converts through accepted FX when needed, then rounds upwards once at the
-established quantum. It does not mark up a previously marked-up amount. Quotes
+For example, 4,500 basis points means a 45 percent markup. Provider-markup mode
+applies the rental markup to Twilio's current mobile number price for that country.
+It converts at UOA's accepted ECB rates into the organisation's billing currency
+and rounds up once to the nearest minor unit. The separate message markup still
+applies to the complete SMS charge in USD. Quotes
 freeze separate rental/message markup fields and the policy version. The migration
 sets existing quotes' rental markup to zero, preserving their original fixed-fee
 terms. No existing paid subscription or reservation is repriced by a mode change.
 Only USD and EUR provider pricing is supported; other currencies fail closed.
 
-### Flat monthly number price
+### Legacy flat monthly number price
 
-A mobile number costs one flat monthly price per currency, the same in every
+In legacy mode, a mobile number costs one flat monthly price per currency, the same in every
 country. The organisation's billing region picks the currency (UK → GBP, US →
 USD, Europe → EUR; see `Docs/Requirements/billing-tariffs.md`). Until the region
 is chosen, monthly quotes and number purchases answer `409 BILLING_REGION_REQUIRED`.
@@ -104,8 +106,9 @@ one value per currency with its own Edit. The migration seeds EUR 4.99, GBP 4.49
 and USD 5.49. Prices are append-only: an edit adds a row, the newest row per
 currency is current, and every monthly quote names the row it used
 (`billing_sms_quotes.monthly_price_id`). The quote amount and currency are that
-price; its rate basis stays `monthly_mobile`. This replaces provider cost plus
-markup for the monthly charge only. Message quotes are unchanged (USD).
+price; its rate basis stays `monthly_mobile`. Provider-markup monthly quotes
+record the provider amount, exchange-rate snapshot and rental markup with no
+legacy price row attached. Message quotes are unchanged (USD).
 
 The price is never below cost. At quote time the account's Twilio monthly rental
 is converted at the quote's accepted ECB rates (USD per EUR and, since this
@@ -306,7 +309,9 @@ Use these repository variables with the existing deployment workflow:
 
 - `UOA_SMS_CONFIGURED=true`: attach the Secret Manager entries below. False is the
   default and attaches none of them.
-- `UOA_SMS_PRICING_MODE=provider_markup`: attach the uniform-markup secret below.
+- `UOA_SMS_PRICING_MODE=provider_markup`: attach the provider-markup secret below.
+  To set a separate rental markup, configure the `UOA_SMS_NUMBER_MARKUP_BPS`
+  Actions variable with the desired markup in basis points.
   Default `legacy` attaches the two legacy commercial settings instead.
 - `BILLING_SMS_TWILIO_REGION=ie1`: select the agreed IE1 messaging/Lookup region.
   Default is `us1`.

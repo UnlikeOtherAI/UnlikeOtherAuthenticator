@@ -15,7 +15,7 @@ let prisma: PrismaClient;
 let cleanup: () => Promise<void>;
 let fixture: Awaited<ReturnType<typeof smsPaidNumberFixture>>;
 const phone = '+447463595266';
-// Monthly rental per country in USD; CH is priced above the flat EUR 4.99 at the test rates.
+// Monthly rental per country in USD; CH is priced above the legacy flat EUR 4.99 at the test rates.
 const rental: Record<string, string> = { GB: '1.15', CZ: '2.20', CH: '6.00' };
 const provider = new BillingSmsProvider({ accountSid: smsAccount, apiKeySid: `SK${'b'.repeat(32)}`,
   apiKeySecret: 'synthetic-unused-secret' }, async (url) => {
@@ -35,11 +35,14 @@ function monthly(country: string, organisationId = smsIds.org) {
   { prisma, provider });
 }
 
-describe.skipIf(!process.env.DATABASE_URL)('Flat monthly SMS number price', () => {
+describe.skipIf(!process.env.DATABASE_URL)('Monthly SMS number price', () => {
   beforeAll(async () => {
     vi.stubEnv('UOA_SMS_COMMERCIAL_POLICY_VERSION', 'synthetic-policy');
-    vi.stubEnv('UOA_SMS_PRICING_MODE', 'provider_markup');
+    vi.stubEnv('UOA_SMS_PRICING_MODE', 'legacy');
+    vi.stubEnv('UOA_SMS_MONTHLY_FEE_EUR', '0');
+    vi.stubEnv('UOA_SMS_MESSAGE_MARKUP_BPS', '1500');
     vi.stubEnv('UOA_SMS_PROVIDER_MARKUP_BPS', '1500');
+    vi.stubEnv('UOA_SMS_NUMBER_MARKUP_BPS', '4500');
     const db = await createTestDb();
     if (!db) throw new Error('Monthly price tests require DATABASE_URL');
     prisma = db.prisma; cleanup = db.cleanup; fixture = await smsPaidNumberFixture(prisma);
@@ -100,18 +103,45 @@ describe.skipIf(!process.env.DATABASE_URL)('Flat monthly SMS number price', () =
       resolvedAt: null } })).toBe(0);
   });
 
-  it('begins a number on an EUR quote with an EUR offer and catalog at the exact minor amount', async () => {
+  it('quotes the current country rental plus 45% in each billing currency', async () => {
+    vi.stubEnv('UOA_SMS_PRICING_MODE', 'provider_markup');
+    rental.CZ = '12.00';
+    try {
+      for (const [organisationId, currency, gb, cz] of [[smsIds.org, 'EUR', '1.52', '15.82'],
+        ['sms-org-uk', 'GBP', '1.29', '13.45'], ['sms-org-us', 'USD', '1.67', '17.40']] as const) {
+        for (const [country, amount] of [['GB', gb], ['CZ', cz]] as const) {
+          const quote = await monthly(country, organisationId);
+          expect(quote).toMatchObject({ amount, currency, rate_basis: 'monthly_mobile', scope: { country } });
+          expect(await prisma.billingSmsQuote.findUniqueOrThrow({ where: { id: quote.id } })).toMatchObject({
+            monthlyPriceId: null, monthlyMarkupBps: 4500, messageMarkupBps: 1500, fxSnapshotId: 'sms-fx-gbp' });
+        }
+      }
+    } finally {
+      rental.CZ = '2.20';
+      vi.stubEnv('UOA_SMS_PRICING_MODE', 'legacy');
+    }
+  });
+
+  it('freezes the dynamic quote in the EUR offer and catalog even after the provider changes price', async () => {
+    vi.stubEnv('UOA_SMS_PRICING_MODE', 'provider_markup');
     const quote = await monthly('GB');
-    await beginSmsNumber({ credential: fixture.lifecycle, actorToken: await fixture.actor('/billing/v1/sms/numbers/begin'),
-      request: { ...subject, resource_id: 'sms-number-eur', quote_id: quote.id, phone_number: phone } },
-    { prisma, provider, stripe: fixture.stripe, stripeLivemode: false });
-    const resource = await prisma.billingSmsNumberResource.findUniqueOrThrow({ where: { id: 'sms-number-eur' } });
-    const offer = await prisma.billingRecurringAddonOffer.findUniqueOrThrow({ where: { id: resource.offerId! },
-      include: { catalogs: true } });
-    expect(offer).toMatchObject({ currency: 'EUR', monthlyAmountMinor: 499n, resourceKind: 'sms_mobile_number' });
-    expect(offer.catalogs).toEqual([expect.objectContaining({ currency: 'EUR', monthlyAmountMinor: 499n })]);
-    expect(checkout.createRecurringAddonCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ request: expect.objectContaining({ offerId: offer.id }) }), expect.anything());
+    rental.GB = '4.00';
+    try {
+      expect(await monthly('GB')).toMatchObject({ amount: '5.28', currency: 'EUR' });
+      await beginSmsNumber({ credential: fixture.lifecycle, actorToken: await fixture.actor('/billing/v1/sms/numbers/begin'),
+        request: { ...subject, resource_id: 'sms-number-eur', quote_id: quote.id, phone_number: phone } },
+      { prisma, provider, stripe: fixture.stripe, stripeLivemode: false });
+      const resource = await prisma.billingSmsNumberResource.findUniqueOrThrow({ where: { id: 'sms-number-eur' } });
+      const offer = await prisma.billingRecurringAddonOffer.findUniqueOrThrow({ where: { id: resource.offerId! },
+        include: { catalogs: true } });
+      expect(offer).toMatchObject({ currency: 'EUR', monthlyAmountMinor: 152n, resourceKind: 'sms_mobile_number' });
+      expect(offer.catalogs).toEqual([expect.objectContaining({ currency: 'EUR', monthlyAmountMinor: 152n })]);
+      expect(checkout.createRecurringAddonCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({ request: expect.objectContaining({ offerId: offer.id }) }), expect.anything());
+    } finally {
+      rental.GB = '1.15';
+      vi.stubEnv('UOA_SMS_PRICING_MODE', 'legacy');
+    }
   });
 
   it('admits a per-currency SMS Customer beside the organisation one and nothing else', async () => {
