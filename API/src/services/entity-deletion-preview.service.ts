@@ -132,6 +132,9 @@ export async function previewEntityDeletion(tx: PrismaClient, scope: LifecycleSc
   blockers.push(...await activeBillingBlockers(tx, effectiveScope, effectiveTargetId));
   for (const candidate of candidates.filter(c => c.eligible)) blockers.push(...await activeBillingBlockers(tx, 'USER', candidate.id));
   if (scope === 'USER' && await tx.organisation.count({ where: { ownerId: id, lifecycleStatus: { not: 'DELETED' } } })) blockers.push('Transfer ownership of every retained organisation before deleting this account.');
+  if (scope === 'USER' && await tx.productErasureJob.count({ where: { subject: id, completedAt: null } })) {
+    blockers.push('Finish pending product account erasure before removing its subject.');
+  }
   const evidence = await retainedEvidence(tx, effectiveScope, effectiveTargetId);
   for (const teamId of teamIds.filter(teamId => effectiveScope !== 'TEAM' || teamId !== effectiveTargetId)) evidence.push(...await retainedEvidence(tx, 'TEAM', teamId));
   for (const userId of candidateIds.filter(userId => effectiveScope !== 'USER' || userId !== effectiveTargetId)) evidence.push(...await retainedEvidence(tx, 'USER', userId));

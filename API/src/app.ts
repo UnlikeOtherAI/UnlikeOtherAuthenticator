@@ -37,6 +37,7 @@ import { startMachineEventDelivery } from './services/machine-delivery.service.j
 import { pruneMachineBrowsers } from './services/machine-retention.service.js';
 import { startEnterpriseRevocationDelivery } from './services/org-sso-delivery.service.js';
 import { pruneEnterpriseRevocations } from './services/org-sso-revocation.service.js';
+import { startProductDeletionNotices } from './services/product-erasure-notification.service.js';
 import { startEnterpriseMaintenance } from './services/enterprise-maintenance.service.js';
 
 export async function createApp(): Promise<FastifyInstance> {
@@ -287,6 +288,8 @@ export async function createApp(): Promise<FastifyInstance> {
       app.addHook('onClose', async () => machineDelivery.stop());
       const enterpriseDelivery = startEnterpriseRevocationDelivery(app.log);
       app.addHook('onClose', async () => enterpriseDelivery.stop());
+      const deletionNotices = startProductDeletionNotices(app.log);
+      app.addHook('onClose', async () => deletionNotices.stop());
       const enterpriseMaintenance = startEnterpriseMaintenance(app.log);
       app.addHook('onClose', async () => enterpriseMaintenance.stop());
 

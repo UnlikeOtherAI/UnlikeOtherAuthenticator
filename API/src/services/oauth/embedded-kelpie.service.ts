@@ -14,7 +14,7 @@ import { assertEmailDomainAllowedForLogin } from '../login-domain-policy.service
 import { lockSignaturePolicyForDecision } from '../signature-policy-lock.service.js';
 import { evaluateSignaturePolicy } from '../signature-policy.service.js';
 import { getAccessTokenPublicJwks, signEmbeddedKelpieToken } from './access-token.service.js';
-import { kelpieConnectResource, KELPIE_TICKET_TTL_SECONDS } from './kelpie-connect-policy.js';
+import { KELPIE_APP_ID, kelpieConnectResource, KELPIE_TICKET_TTL_SECONDS } from './kelpie-connect-policy.js';
 
 const SCOPES = 'profile email settings.read settings.write kelpie.connect';
 const Claims = z.object({
@@ -36,7 +36,7 @@ export async function authorizeEmbeddedKelpieAccount(account: EmbeddedKelpieAuth
   if (account.domain !== new URL(resource).host || account.exp <= Date.now() / 1000) reject();
   await lockTokenIssuanceProductPolicy({ clientDomainId: account.client_domain_id, domain: account.domain }, { prisma: tx });
   await lockAndAssertAuthenticationEpoch({ userId: account.sub, domain: account.domain, credentialEpoch: account.tv }, { prisma: tx });
-  const binding = { userId: account.sub, clientDomain: account.domain, credentialEpoch: account.tv,
+  const binding = { nativeApp: KELPIE_APP_ID, userId: account.sub, clientDomain: account.domain, credentialEpoch: account.tv,
     orgId: account.org_id, teamId: account.team_id, assuranceId: account.assurance_id };
   // Global profile/settings require independent original proof, including its live family and ancestors.
   await authorizeCredentialSurface('configured_access', binding, tx);

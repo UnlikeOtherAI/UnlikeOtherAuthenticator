@@ -44,6 +44,14 @@ export async function sendRegistrationVerificationEmail(params: {
   });
 }
 
+export async function sendProductDeletionEmail(to: string, product: string, receiptUrl: string): Promise<void> {
+  const env = getEnv();
+  await dispatchEmail({ to, from: env.EMAIL_FROM, replyTo: env.EMAIL_REPLY_TO, subject: 'Product account deletion complete',
+    text: 'Your account deletion for ' + product + ' has finished. You can check the result at ' + receiptUrl,
+    suppressContentLog: true,
+  }, { swallowFailures: false });
+}
+
 export async function sendActionVerificationEmail(params: {
   to: string; code: string; domain: string; description: string; theme?: Partial<EmailTheme>;
 }): Promise<void> {

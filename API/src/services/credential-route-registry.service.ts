@@ -1,3 +1,4 @@
+import { assertProductParticipation } from './product-participation.service.js';
 import { assertCredentialArtifactProof, type CredentialArtifactSource } from './credential-artifact.service.js';
 import { assertIndependentSourceStillAdmitted } from './credential-admission.service.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
@@ -36,13 +37,14 @@ export type CredentialSurface = keyof typeof credentialRouteRegistry;
 type Db = PrismaClient | Prisma.TransactionClient;
 export type CredentialAuthorityInput = {
   userId: string; clientDomain: string; credentialEpoch: number; orgId?: string | null; teamId?: string | null;
-  assuranceId?: string; assuranceReference?: string; authenticationEvidenceId?: string; method?: string;
+  nativeApp?: string; assuranceId?: string; assuranceReference?: string; authenticationEvidenceId?: string; method?: string;
   allowConsumedEvidence?: boolean; artifact?: CredentialArtifactSource;
 };
 function denied(): never { throw new AppError('FORBIDDEN', 403, 'INDEPENDENT_REAUTH_REQUIRED'); }
 
 /** Invoke only after the artifact's signature/purpose/browser binding has been verified. */
 export async function authorizeCredentialSurface(surface: CredentialSurface, input: CredentialAuthorityInput, db: Db) {
+  await assertProductParticipation(db, input.userId, input.clientDomain, input.nativeApp);
   const rule = credentialRouteRegistry[surface]; if (!rule) denied();
   const familySource = Boolean(input.assuranceId || input.assuranceReference);
   if ((familySource && input.authenticationEvidenceId) || (familySource && rule.source === 'evidence') ||

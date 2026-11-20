@@ -90,7 +90,7 @@ describe('UOA-owned direct product access', () => {
     );
     expect(transaction).toHaveBeenCalledWith(
       expect.any(Function),
-      expect.objectContaining({ isolationLevel: 'RepeatableRead' }),
+      expect.objectContaining({ isolationLevel: 'Serializable' }),
     );
   });
 

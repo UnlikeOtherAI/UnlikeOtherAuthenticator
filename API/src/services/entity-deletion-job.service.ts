@@ -16,7 +16,7 @@ export async function getDeletionPreview(scope: LifecycleScope, id: string, mode
   return previewEntityDeletion(getAdminPrisma(), scope, id, mode);
 }
 
-async function markDeleting(tx: PrismaClient, preview: DeletionPreview) {
+export async function markDeleting(tx: PrismaClient, preview: DeletionPreview) {
   const data = { lifecycleStatus: 'DELETING' as const, lifecycleChangedAt: new Date() };
   if (preview.scope === 'USER') {
     await protectLastAdmin(tx, preview.targetId);

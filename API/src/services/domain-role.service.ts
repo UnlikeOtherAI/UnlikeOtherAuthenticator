@@ -1,3 +1,4 @@
+import { assertProductParticipation } from './product-participation.service.js';
 import type { DomainRole, PrismaClient, UserRole } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 
@@ -64,6 +65,7 @@ export async function ensureDomainRoleForUser(params: {
   if (!domain) throw new AppError('BAD_REQUEST', 400);
   if (!params.userId) throw new AppError('BAD_REQUEST', 400);
 
+  const bootstrapClosed = await assertProductParticipation(prisma, params.userId, domain);
   const existing = await prisma.domainRole.findUnique({
     where: { domain_userId: { domain, userId: params.userId } },
   });
@@ -73,7 +75,7 @@ export async function ensureDomainRoleForUser(params: {
     where: { domain, role: 'SUPERUSER' },
     select: { userId: true },
   });
-  const role: UserRole = existingSuperuser || params.allowBootstrap === false ? 'USER' : 'SUPERUSER';
+  const role: UserRole = existingSuperuser || bootstrapClosed || params.allowBootstrap === false ? 'USER' : 'SUPERUSER';
 
   return await prisma.domainRole.create({
     data: { domain, userId: params.userId, role },

@@ -9561,8 +9561,11 @@ paths:
   /auth/delete-account:
     get:
       tags: [Auth]
-      summary: Open the first-party global account-deletion form
+      summary: Open the global or product account-deletion form
       operationId: accountDeletionForm
+      parameters:
+        - { in: query, name: product, schema: { type: string }, description: Registered product policy identifier }
+        - { in: query, name: action, schema: { type: string, enum: [rejoin] }, description: Fresh product registration after completed erasure }
       responses:
         '200':
           description: Account deletion request form.
@@ -9585,6 +9588,8 @@ paths:
               additionalProperties: false
               required: [email]
               properties:
+                product: { type: string }
+                rejoin: { type: boolean }
                 email:
                   type: string
                   format: email
@@ -9608,7 +9613,7 @@ paths:
       tags: [Auth]
       summary: Confirm a deletion request using a mailbox code and any enrolled authenticator
       operationId: confirmAccountDeletion
-      description: Requires the browser cookie issued by start. A successful request is queued for administrative review.
+      description: Requires the browser cookie issued by start. A global request enters administrative review. A product request returns its current impact for separate confirmation.
       requestBody:
         required: true
         content:
@@ -9618,9 +9623,12 @@ paths:
               additionalProperties: false
               required: [challengeId, code]
               properties:
+                product: { type: string }
+                rejoin: { type: boolean }
                 challengeId:
                   type: string
                   format: uuid
+                password: { type: string, format: password, description: Optional independent UOA password for managed product accounts }
                 code:
                   type: string
                   pattern: '^[0-9]{6}$'
@@ -9629,18 +9637,143 @@ paths:
                   pattern: '^[0-9]{6}$'
       responses:
         '200':
-          description: Confirmed request saved. No session is issued.
+          description: Global request accepted or product preview returned.
           content:
             application/json:
               schema:
-                type: object
-                required: [submitted]
-                properties:
-                  submitted:
-                    type: boolean
-                    enum: [true]
+                oneOf:
+                  - { type: object, required: [submitted], properties: { submitted: { type: boolean, enum: [true] } } }
+                  - { type: object, required: [digest, impact], properties: { digest: { type: string }, impact: { type: object } } }
         '401':
           description: The browser proof, mailbox code or required authenticator code could not be verified.
+  /auth/delete-account/product/{id}:
+    get:
+      tags: [Auth]
+      summary: Read the enabled product name and retention disclosure
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Product name and deletion disclosure }
+        '404': { description: Unknown or disabled product }
+  /auth/delete-account/submit-product:
+    post:
+      tags: [Auth]
+      summary: Confirm the exact product preview with the original browser cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [product, challengeId, digest]
+              properties:
+                product: { type: string }
+                challengeId: { type: string, format: uuid }
+                digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+                rejoin: { type: boolean }
+                container:
+                  type: object
+                  required: [scope, id]
+                  properties:
+                    scope: { type: string, enum: [TEAM, ORGANISATION] }
+                    id: { type: string }
+      responses:
+        '200': { description: Receipt identifier and completion flag }
+        '401': { description: Missing or stale proof }
+        '409': { description: Refresh the preview or check the original request }
+  /auth/delete-account/receipt/{id}:
+    get:
+      tags: [Auth]
+      summary: Check an opaque deletion receipt after sign-out
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Plain text progress or completion }
+        '404': { description: Receipt unavailable }
+  /domain/product-participation:
+    get:
+      security: [{ domainHashBearer: [] }]
+      summary: Check the current product participation generation before accepting a saved session or sync write
+      parameters:
+        - { in: query, name: domain, required: true, schema: { type: string } }
+        - { in: query, name: subject, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 'Product identifier, active flag and generation. Independently authenticate the subject.' }
+  /domain/product-erasure-jobs:
+    get:
+      security: [{ domainHashBearer: [] }]
+      summary: Pull pending personal erasure work for the authenticated backend
+      parameters:
+        - { in: query, name: domain, required: true, schema: { type: string } }
+        - { in: query, name: after, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Up to 100 assigned jobs and a next cursor }
+  /domain/product-erasure-jobs/{id}/acknowledge:
+    post:
+      security: [{ domainHashBearer: [] }]
+      summary: Acknowledge committed product data cleanup
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: domain, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision, outcome]
+              properties:
+                revision: { type: integer, minimum: 1 }
+                outcome: { type: string, enum: [PURGED, RETAINED_EVIDENCE] }
+      responses:
+        '200': { description: Acknowledgement recorded or exact replay accepted }
+        '409': { description: Conflicting acknowledgement }
+  /internal/admin/product-erasure:
+    get:
+      tags: [Internal Admin]
+      security: [{ adminBearer: [] }]
+      summary: List registered policies and outstanding work
+      responses:
+        '200': { description: Policies and outstanding jobs }
+    post:
+      tags: [Internal Admin]
+      security: [{ adminBearer: [] }]
+      summary: Save a product policy using its current revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, revision, name, mode, enabled, disclosure, domains, nativeApps, settings]
+              properties:
+                id: { type: string }
+                revision: { type: integer, minimum: 0 }
+                name: { type: string }
+                mode: { type: string, enum: [PERSONAL, ORGANISATION] }
+                enabled: { type: boolean }
+                disclosure: { type: string }
+                domains: { type: array, items: { type: string } }
+                nativeApps: { type: array, items: { type: string } }
+                settings: { type: array, items: { type: string } }
+      responses:
+        '200': { description: Saved policy and revision }
+  /internal/admin/product-erasure/{id}/container:
+    post:
+      tags: [Internal Admin]
+      security: [{ adminBearer: [] }]
+      summary: Review the exact requested container after checking external dependencies
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [decision], properties: { decision: { type: string, enum: [approve, preserve] } } }
+      responses:
+        '200': { description: Decision recorded }
+        '409': { description: Scope changed or review already closed }
   /internal/admin/users:
     post:
       tags: [Internal Admin]
