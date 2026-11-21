@@ -88,7 +88,7 @@ export function registerAuthTeamInviteLinkRoute(app: FastifyInstance): void {
 
       try {
         await assertTeamInviteLinkValidForLanding(
-          { token, domain: request.config.domain },
+          { token, domain: request.config.domain, config: request.config },
           { prisma: request.adminDb },
         );
       } catch {

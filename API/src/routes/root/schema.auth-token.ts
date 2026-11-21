@@ -46,6 +46,7 @@ export const authTokenEndpoint: EndpointSchema = {
       '"urn:ietf:params:oauth:token-type:access_token"; confidential token-exchange grant only',
     'scope?':
       'exact granted request subset of "ai.invoke", "billing.read", "token.provision", "memory.read", and/or "memory.write"; token.provision is never implied by ai.invoke; confidential token-exchange grant only',
+    'team_interface?': 'family or work, returned only when the exact active team was verified against the signed hosted application scope.',
     token_type: '"Bearer"',
     'firstLogin?':
       'object { memberships: { orgs, teams }, pending_invites, capabilities { can_create_org, can_accept_invite } } — included only on authorization_code exchange when org_features.enabled is true. Never included on refresh_token or team-switch grants.',

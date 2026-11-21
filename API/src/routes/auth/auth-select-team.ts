@@ -1,3 +1,4 @@
+import { assertEntryTeam } from '../../services/entry-team-interface.service.js';
 import { rememberCompletedSocialProvider } from '../../services/social/social-browser-preference.service.js';
 import { assertLoginOrganization } from '../../services/login-organization.service.js';
 import { assertIndependentChooserMutation } from '../../services/authentication-evidence.service.js';
@@ -150,9 +151,10 @@ export function registerAuthSelectTeamRoute(app: FastifyInstance): void {
             now: new Date(),
           });
           await assertIndependentChooserMutation(lockedSession, tx);
-          if (config.login_flow?.organization_id) {
-            const invite = await tx.teamInvite.findUnique({ where: { id: inviteId }, select: { orgId: true } });
+          if (config.login_flow?.organization_id || config.login_flow?.team_interface) {
+            const invite = await tx.teamInvite.findUnique({ where: { id: inviteId }, select: { orgId: true, teamId: true } });
             assertLoginOrganization(config, invite?.orgId);
+            await assertEntryTeam(config, invite, tx);
           }
           await declineTeamInviteForUser({
             prisma: tx,

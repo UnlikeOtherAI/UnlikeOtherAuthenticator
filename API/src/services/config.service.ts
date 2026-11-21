@@ -219,6 +219,7 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
     .object({
       email_code_enabled: z.boolean().default(false),
       team_selection: z.enum(['off', 'auto']).default('off'),
+      team_interface: z.enum(['family', 'work']).optional(),
       // Opt in to public team navigation hints after mail-bound acceptance.
       invitation_return_target: z.boolean().optional(),
       // Optional exact organisation for this interactive sign-in, carried in the signed config.
@@ -292,6 +293,11 @@ const ClientConfigSchema = RequiredConfigSchema.extend({
         path: ['ui_theme', 'logo', 'url'],
       });
     }
+  }
+
+  if (config.login_flow.team_interface && (config.login_flow.team_selection !== 'auto' || config.redirect_urls.length !== 1)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['login_flow', 'team_interface'],
+      message: 'team_interface requires auto selection and one registered redirect' });
   }
 
   const teamRedirect = config.login_flow.team_redirect;

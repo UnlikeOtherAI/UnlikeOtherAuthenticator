@@ -69,6 +69,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       docs: '/llm',
       api: '/api',
       team_redirect: { config: 'login_flow.team_redirect', description: 'Optional { redirect_url, template }: a sign-in that asks for that registered redirect URL and finishes inside a team receives its code at the team address the template names, a direct organisation subdomain of the registered host. The token exchange presents the address the code arrived at. No membership or access is granted.' },
+      app_team_sign_in: { config: 'login_flow.team_interface', description: 'Optional family or work. Requires auto team selection and a single signed callback. The Authenticator filters teams and invitations and offers matching first-team creation when enabled.' },
       organization_sign_in: { config: 'login_flow.organization_id', description: 'Optional exact UOA organization for hosted sign-in choices and completion; no membership grant. Omit for all eligible organizations.' },
       browser_team_reauthorization: { entry: '/auth', hint: 'team_hint', preference_cookie: 'uoa_social_preference',
         description: 'A signed host-only non-authentication provider preference may skip choices for a new S256 browser team entry. It is consumed before the existing real provider flow and renewed only after completed social authorization. No prompt, native, enterprise, invitation, management or continuation request auto-launches. Original proof and refresh admission are unchanged.' },

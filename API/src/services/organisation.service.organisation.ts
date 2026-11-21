@@ -130,6 +130,7 @@ export async function createOrganisation(
     name: string;
     /** Optional default-team visibility for the hosted first-team continuation. */
     defaultTeamJoinPolicy?: string;
+    entryInterface?: 'work' | 'family';
     /** Chosen tenant address. Omitted derives one from the name. */
     slug?: string;
     ownerId: string;
@@ -223,6 +224,7 @@ export async function createOrganisation(
           name,
         }),
         isDefault: true,
+        ...(params.entryInterface ? { entryInterface: params.entryInterface } : {}),
         ...(defaultTeamJoinPolicy === undefined ? {} : { joinPolicy: defaultTeamJoinPolicy }),
       },
       // Widened from `{ id }` so the create response can carry the whole team

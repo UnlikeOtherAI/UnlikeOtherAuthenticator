@@ -114,6 +114,9 @@ export const es = {
   'team.createOrg.submit': 'Crear equipo',
   'team.createOrg.cancel': 'Cancelar',
   'team.createOrg.organisationNameLabel': 'Nombre de la organización',
+  'team.createFamily.title': 'Crear una familia',
+  'team.createFamily.name': 'Nombre de la familia',
+  'team.createFamily.hint': 'Elige un nombre para tu familia. Puedes invitar a otras personas en Nessie Family.',
   'team.createOrg.firstTeamHint':
     'Tu primer equipo tendrá el mismo nombre que la organización; puedes cambiarle el nombre más adelante.',
   'team.createOrg.error.nameTaken':

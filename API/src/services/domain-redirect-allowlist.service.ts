@@ -19,7 +19,7 @@ import type { ClientConfig } from './config.service.js';
  *   never wider, so swallowing the error here cannot weaken redirect security.
  */
 export async function applyDomainRedirectAllowlist(config: ClientConfig): Promise<ClientConfig> {
-  if (!getEnv().DATABASE_URL) return config;
+  if (config.login_flow?.team_interface || !getEnv().DATABASE_URL) return config;
 
   let extra: string[];
   try {

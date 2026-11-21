@@ -2246,7 +2246,7 @@ direct membership additions use that exact-organisation uniqueness, so joining o
 does not prevent joining another. A single-team chooser auto-skips only when there is neither a
 new-organisation option nor an authorised existing-organisation destination to create in.
 
-##### Emailed invitation validity and failure copy (2026-09 clarification)
+##### App-specific team choice\n\nA registered product can set the signed login flow team interface to family or work.\nThe verified chooser uses the product’s classification of the eligible UOA organisation and\nteam references. The app’s chooser shows only matching teams and pending invitations.\nIf the person has no matching team and creation is enabled, they can create an organisation\nand its first team here. A family uses an internal address and invitation-only membership.\nThe token response confirms the app interface for the exact selected team.\n\n##### Emailed invitation validity and failure copy (2026-09 clarification)
 
 An emailed team invitation is valid for exactly 24 hours from its send or resend. The durable
 `TeamInvite.expiresAt` and the linked `VerificationToken.expiresAt` use that same deadline class;

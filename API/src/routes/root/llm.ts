@@ -77,6 +77,7 @@ export function registerLlmRoute(app: FastifyInstance): void {
   app.get('/llm', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
     reply.type('text/markdown; charset=utf-8').send(`${renderLlmMarkdown()}\n${machineEnrollmentMarkdown}\n${llmOrganisationBillingMarkdown}\n${llmSmsOperatorsMarkdown}\n${llmRegistrationMarkdown}\n${jobComputeContinuationMarkdown}\n${publicTeamLookupMarkdown}\n` +
+      'A registered product may set signed login_flow.team_interface to family or work with auto selection and one callback. The Authenticator lists only matching teams and invites, and can create a matching first team when organisation creation is enabled. Token responses confirm the applied team_interface.\n' +
       'Hosted sign-in may narrow its chooser with signed config login_flow.organization_id. Carry the same config URL through code exchange. Teams, invites and creation choices stay within that organization; no eligible team leaves a recoverable empty chooser. Omit the field for all organizations. This grants no membership and does not constrain later workspace-switch grants.\n' +
       'Nessie Ledger dispatch and replay refuse uncollected PAYG or a nonregular default with 402 NESSIE_PREPAID_SETUP_REQUIRED. Free usage requires an explicit organisation/team assignment. Paid admission still requires the separate funded atomic reservation. Settlement/reconciliation of existing work remains available.\n' +
       'Temporary source-JWKS DNS EAI_AGAIN returns 503 INTEGRATION_JWKS_UNAVAILABLE before identity admission. ' +

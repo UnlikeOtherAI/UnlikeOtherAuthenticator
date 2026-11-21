@@ -19,6 +19,7 @@ const visibilityDescriptionKeys = {
  */
 export function CreateFirstTeamForm(props: {
   loginToken: string;
+  family?: boolean;
   query: AuthFlowQuery;
   onOutcome: (outcome: TeamResponseOutcome) => void;
 }): React.JSX.Element {
@@ -58,18 +59,12 @@ export function CreateFirstTeamForm(props: {
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-4">
       <p className="text-sm text-[var(--uoa-color-muted)]">
-        {t('team.createDialog.newOrganisationDescription')}
+        {t(props.family ? 'team.createFamily.hint' : 'team.createDialog.newOrganisationDescription')}
       </p>
 
-      {/*
-        F3: this form creates an ORGANISATION (the route hard-codes its first team to
-        "General"), so the field is labelled for what it actually names, and the hint says
-        what the submit produces. `team.createOrg.nameLabel` stays as-is — the create dialog
-        still uses it for a genuine team name.
-      */}
       <div className="flex flex-col gap-1">
         <Input
-          label={t('team.createOrg.organisationNameLabel')}
+          label={t(props.family ? 'team.createFamily.name' : 'team.createOrg.organisationNameLabel')}
           value={name}
           onChange={(event) => setName(event.target.value)}
           disabled={submitting}
@@ -77,10 +72,10 @@ export function CreateFirstTeamForm(props: {
           autoFocus
           required
         />
-        <p className="text-xs text-[var(--uoa-color-muted)]">{t('team.createOrg.firstTeamHint')}</p>
+        {props.family ? null : <p className="text-xs text-[var(--uoa-color-muted)]">{t('team.createOrg.firstTeamHint')}</p>}
       </div>
 
-      <div>
+      {props.family ? null : <div>
         <label
           htmlFor={visibilityId}
           className="text-sm font-medium text-[var(--uoa-color-text)]"
@@ -104,12 +99,12 @@ export function CreateFirstTeamForm(props: {
         <p id={visibilityDescriptionId} className="mt-1 text-xs text-[var(--uoa-color-muted)]">
           {t(visibilityDescriptionKeys[joinPolicy])}
         </p>
-      </div>
+      </div>}
 
       {error ? <p className="text-sm text-[var(--uoa-color-danger)]">{error}</p> : null}
 
       <Button type="submit" disabled={submitting || !name.trim()}>
-        {submitting ? '...' : t('team.createDialog.submit')}
+        {submitting ? '...' : t(props.family ? 'team.createFamily.title' : 'team.createDialog.submit')}
       </Button>
     </form>
   );

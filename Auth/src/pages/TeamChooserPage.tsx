@@ -192,7 +192,7 @@ export function TeamChooserPage(): React.JSX.Element {
   // With no usable team or invitation there is no organisation destination to pick. Put the
   // first-team form directly in the chooser rather than stranding it behind a floating modal.
   const showInlineFirstTeamForm =
-    canCreateNewOrganisation && !hasTeams && !hasInvites && creatableOrgs.length === 0;
+    canCreateNewOrganisation && !hasTeams && (!hasInvites || Boolean(teamChoices.team_interface)) && creatableOrgs.length === 0;
   // The inline first-team form already exposes the only available creation destination, so
   // do not duplicate it with the floating trigger. Every other permitted destination opens the
   // custom picker.
@@ -225,7 +225,7 @@ export function TeamChooserPage(): React.JSX.Element {
       ) : null}
 
       <div>
-        <h1 className={`text-balance ${classNames.title}`}>{t('auth.teamChooser.title')}</h1>
+        <h1 className={`text-balance ${classNames.title}`}>{t(showInlineFirstTeamForm && teamChoices.team_interface === 'family' ? 'team.createFamily.title' : 'auth.teamChooser.title')}</h1>
         {pendingEmail ? (
           <p className="mt-1 text-sm text-[var(--uoa-color-muted)]">
             {t('teamChooser.subtitle', { email: pendingEmail })}
@@ -245,7 +245,8 @@ export function TeamChooserPage(): React.JSX.Element {
       ) : null}
 
       {showInlineFirstTeamForm ? (
-        <CreateFirstTeamForm loginToken={loginToken} query={query} onOutcome={handleOutcome} />
+        <CreateFirstTeamForm loginToken={loginToken} query={query} onOutcome={handleOutcome}
+          family={teamChoices.team_interface === 'family'} />
       ) : null}
 
       {hasInvites ? (

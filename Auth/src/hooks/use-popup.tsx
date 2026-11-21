@@ -76,6 +76,7 @@ export type InviteChoice = {
 /** Mirrors `buildSessionChoices` (API `first-login.service.ts`) field-for-field. */
 export type SessionChoices = {
   organization_id?: string;
+  team_interface?: 'family' | 'work';
   teams: TeamChoice[];
   pending_invites: InviteChoice[];
   can_create_org: boolean;

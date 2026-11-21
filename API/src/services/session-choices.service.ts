@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import { requireAuthenticationEvidence } from './authentication-evidence.service.js';
 import { activeAuthorityUserWhere,organisationManagedTeams } from './organisation-team-authority.service.js';
 
+import { matchingEntryTeams, type EntryTeamInterface } from './entry-team-interface.service.js';
 import type { ClientConfig } from './config.service.js';
 import { getAdminPrisma, getPrisma } from '../db/prisma.js';
 import { avatarImageBaseUrl, publicTeamAvatarImageUrl } from '../utils/avatar-url.js';
@@ -71,6 +72,7 @@ export type TeamChoiceCreatableOrg = {
 
 export type SessionChoices = {
   organization_id?: string;
+  team_interface?: EntryTeamInterface;
   manageable_orgs?: TeamChoiceCreatableOrg[];
   teams: TeamChoiceTeam[];
   pending_invites: TeamChoicePendingInvite[];
@@ -151,8 +153,10 @@ export async function buildSessionChoices(
   const prisma = deps?.prisma ?? (getPrisma() as unknown as TeamChooserPrisma);
   const now = deps?.now ? deps.now() : new Date();
   const requestedOrgId = params.config.login_flow?.organization_id;
+  const entryInterface = params.config.login_flow?.team_interface;
   const emptyChoices: SessionChoices = { teams: [], pending_invites: [], can_create_org: false, creatable_orgs: [],
-    ...(requestedOrgId ? { organization_id: requestedOrgId } : {}) };
+    ...(requestedOrgId ? { organization_id: requestedOrgId } : {}),
+    ...(entryInterface ? { team_interface: entryInterface } : {}) };
   let allowedOrgId: string | undefined;
   if (params.authenticationEvidenceId) {
     const authority = (deps?.crossProductPrisma ?? prisma) as PrismaClient;
@@ -189,7 +193,7 @@ export async function buildSessionChoices(
   // team TO. Only queried when the domain has opted in — otherwise the chooser offers no
   // creation and the read would be dead weight on every login.
   const canCreateTeams = Boolean(
-    !allowedOrgId && params.config.org_features?.enabled && params.config.org_features.allow_user_create_team,
+    !entryInterface && !allowedOrgId && params.config.org_features?.enabled && params.config.org_features.allow_user_create_team,
   );
 
   const [sameDomainTeamRows, inviteRows, orgRows] = await Promise.all([
@@ -223,6 +227,8 @@ export async function buildSessionChoices(
       }) },
       select: {
         id: true,
+        teamId: true,
+        orgId: true,
         team: { select: { name: true } },
         org: { select: { name: true } },
         invitedByName: true,
@@ -274,8 +280,11 @@ export async function buildSessionChoices(
     ).values(),
   ];
 
+  const referenceOf = (row: (typeof teamRows)[number]) => ({ teamId: row.teamId, orgId: row.team.orgId });
+  const matches = await matchingEntryTeams(params.config, [...teamRows.map(referenceOf), ...inviteRows], prisma);
+  const eligibleInvites = inviteRows.filter(matches);
   const avatarBaseUrl = avatarImageBaseUrl();
-  const teams: TeamChoiceTeam[] = teamRows.map((row) => ({
+  const teams: TeamChoiceTeam[] = teamRows.filter((row) => matches(referenceOf(row))).map((row) => ({
     teamId: row.teamId,
     orgId: row.team.orgId,
     name: row.team.name,
@@ -288,8 +297,8 @@ export async function buildSessionChoices(
   }));
 
   // Member-initiated invitations record only `invitedByUserId` — resolve those inviters.
-  const invitedBy = await resolveInviterLabel(inviteRows, { prisma });
-  const pendingInvites: TeamChoicePendingInvite[] = inviteRows.map((row) => ({
+  const invitedBy = await resolveInviterLabel(eligibleInvites, { prisma });
+  const pendingInvites: TeamChoicePendingInvite[] = eligibleInvites.map((row) => ({
     inviteId: row.id,
     teamName: row.team.name,
     orgName: row.org?.name ?? null,
@@ -306,7 +315,7 @@ export async function buildSessionChoices(
       row.org.ownerId===params.userId?'owner':row.role, 'teams.manage'))
     .map((row) => ({ orgId: row.orgId, orgName: row.org.name }));
 
-  const manageableOrgs = allowedOrgId ? [] : await (deps?.crossProductPrisma ?? prisma).orgMember.findMany({
+  const manageableOrgs = allowedOrgId || entryInterface ? [] : await (deps?.crossProductPrisma ?? prisma).orgMember.findMany({
     where: { userId: params.userId, status: 'ACTIVE', ...(requestedOrgId ? { orgId: requestedOrgId } : {}), org: { ownerId: params.userId, lifecycleStatus: 'ACTIVE',
       ...(policy.scope === 'all_active_memberships' ? {} : { domain }) } },
     select: { orgId: true, org: { select: { name: true } } },
@@ -314,10 +323,12 @@ export async function buildSessionChoices(
 
   return {
     ...(requestedOrgId ? { organization_id: requestedOrgId } : {}),
+    ...(entryInterface ? { team_interface: entryInterface } : {}),
     teams,
     pending_invites: pendingInvites,
     ...(manageableOrgs.length ? { manageable_orgs: manageableOrgs.map((m) => ({ orgId: m.orgId, orgName: m.org.name })) } : {}),
-    can_create_org: !allowedOrgId && !requestedOrgId && Boolean(params.config.org_features?.allow_user_create_org),
+    can_create_org: !allowedOrgId && !requestedOrgId && (!entryInterface || teams.length === 0)
+      && Boolean(params.config.org_features?.allow_user_create_org),
     creatable_orgs: creatableOrgs,
   };
 }

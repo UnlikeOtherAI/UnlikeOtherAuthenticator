@@ -1,3 +1,4 @@
+import { assertEntryTeam } from './entry-team-interface.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import type { ClientConfig } from './config.service.js';
@@ -308,7 +309,7 @@ async function findValidInviteLink(
  * redemption; callers render the generic invalid-link page on any thrown error.
  */
 export async function assertTeamInviteLinkValidForLanding(
-  params: { token: string; domain: string },
+  params: { token: string; domain: string; config?: ClientConfig },
   deps?: InviteLinkDeps,
 ): Promise<void> {
   const env = deps?.env ?? getEnv();
@@ -323,7 +324,8 @@ export async function assertTeamInviteLinkValidForLanding(
   void params.domain;
   const tokenHash = hashToken(params.token, sharedSecret);
 
-  await findValidInviteLink(prisma, { tokenHash, now });
+  const { link } = await findValidInviteLink(prisma, { tokenHash, now });
+  if (params.config) await assertEntryTeam(params.config, link, prisma);
 }
 
 export type RedeemTeamInviteLinkResult = { teamId: string; orgId: string };
@@ -345,7 +347,6 @@ export async function redeemTeamInviteLink(
   },
   deps?: InviteLinkDeps,
 ): Promise<RedeemTeamInviteLinkResult> {
-  void params.config;
   const env = deps?.env ?? getEnv();
   assertDatabaseEnabled(env);
 
@@ -358,6 +359,7 @@ export async function redeemTeamInviteLink(
 
   const result = await runInTransaction(prisma, async (tx) => {
     const { link, team } = await findValidInviteLink(tx, { tokenHash, now });
+    await assertEntryTeam(params.config, link, tx);
     await lockTeamMembershipRows(
       { userId: params.userId, orgId: team.orgId, teamId: team.id },
       { prisma: tx },

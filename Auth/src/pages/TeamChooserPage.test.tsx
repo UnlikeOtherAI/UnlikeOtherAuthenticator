@@ -222,6 +222,16 @@ describe('TeamChooserPage SSR rendering', () => {
     expect(withExistingTeams).toContain('aria-label="Create team"');
   });
 
+  it('offers family creation beside a matching invitation without work setup fields', () => {
+    const html = renderChooser({ team_interface: 'family', teams: [], can_create_org: true,
+      pending_invites: [{ inviteId: 'invite-1', teamName: 'The Oaks', invitedBy: null }] });
+    expect(html).toContain('Create a family');
+    expect(html).toContain('Family name');
+    expect(html).toContain('The Oaks');
+    expect(html).not.toContain('Organisation name');
+    expect(html).not.toContain('Visibility');
+  });
+
   it('auto-skips a single team with no pending invites (never shows a one-item chooser)', () => {
     const html = renderChooser({
       teams: [{ teamId: 't1', orgId: 'o1', name: 'Solo Team', role: 'owner' }],
