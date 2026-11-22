@@ -1,4 +1,8 @@
 import { credentialArtifactSource } from './credential-artifact.service.js';
+import {
+  admitAgentGrantAssertion, isAgentGrantResourceScope, type AdmittedAgentGrant,
+} from './agent-connection-grant-policy.service.js';
+import { assertProductParticipation } from './product-participation.service.js';
 import { authorizeCredentialSurfaceWhenAvailable } from './credential-route-registry.service.js';
 import { requireIdentityEmail } from './entity-lifecycle.service.js';
 import type { PrismaClient } from '@prisma/client';
@@ -59,6 +63,8 @@ const SubjectAssertionSchema = z
     sub: z.string().trim().min(1).max(256),
     tv: z.number().int().nonnegative(),
     assurance_ref: z.string().min(32).max(256).optional(),
+    /** An agent connection grant handle in place of a session proof; only where the caller opts in. */
+    agent_grant: z.string().uuid().optional(),
     source_domain: z.string().trim().min(1),
     jti: z.string().trim().min(1).max(256),
     iat: z.number().int().positive(),
@@ -74,7 +80,11 @@ const SubjectAssertionSchema = z
   })
   .passthrough();
 
-export type VerifiedSubjectAssertion = z.infer<typeof SubjectAssertionSchema> & { verifiedAssuranceId?: string };
+export type VerifiedSubjectAssertion = z.infer<typeof SubjectAssertionSchema> & {
+  verifiedAssuranceId?: string;
+  /** Set only for an opted-in caller; never a session proof and never an assurance id. */
+  verifiedAgentGrant?: AdmittedAgentGrant;
+};
 
 export interface ConfidentialTokenExchangeResult {
   accessToken: string;
@@ -115,6 +125,8 @@ export async function verifyConfidentialSubjectToken(
     configJwt: string;
     sourceDomain: string;
     audience: string;
+    /** Admit an `agent_grant` assertion. Only token exchange and organisation reads opt in. */
+    allowAgentGrant?: boolean;
   },
   deps: Pick<ExchangeDeps, 'fetchJwks' | 'now' | 'prisma'> = {},
 ): Promise<VerifiedSubjectAssertion> {
@@ -162,6 +174,17 @@ export async function verifyConfidentialSubjectToken(
       throw invalidSubjectToken();
     }
 
+    if (assertion.agent_grant !== undefined) {
+      if (!params.allowAgentGrant || assertion.assurance_ref !== undefined || !assertion.active
+        || 'assurance_id' in assertion || 'authentication_evidence_id' in assertion
+        || 'assurance_version' in assertion) throw invalidSubjectToken();
+      const db = deps.prisma ?? getAdminPrisma();
+      await assertProductParticipation(db, assertion.sub, sourceDomain);
+      const verifiedAgentGrant = await admitAgentGrantAssertion({ handle: assertion.agent_grant, sourceDomain,
+        subjectId: assertion.sub, orgId: assertion.active.orgId, teamId: assertion.active.teamId,
+        tokenVersion: assertion.tv }, db, new Date(now * 1000));
+      return { ...assertion, verifiedAgentGrant };
+    }
     const artifact = credentialArtifactSource(assertion, 'reference');
     const assurance = await authorizeCredentialSurfaceWhenAvailable('confidential_subject', {
       artifact, method: artifact.method,
@@ -205,6 +228,10 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
   );
   const { assertion, issuer, sourceDomain } = verified;
   const credentialEpoch = assertion.tv;
+  // A connected program's grant reaches only ordinary downstream scopes, never brokering or provisioning.
+  if (assertion.verifiedAgentGrant && !isAgentGrantResourceScope(delegation.scope)) {
+    throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_SUBJECT_FORBIDDEN');
+  }
   if (delegation.scope === 'session:broker' && !assertion.active) {
     throw new AppError('FORBIDDEN', 403, 'TOKEN_EXCHANGE_TEAM_CONTEXT_REQUIRED');
   }
@@ -271,6 +298,7 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
             domain: sourceDomain,
             orgId: assertion.active.orgId,
             assuranceId: assertion.verifiedAssuranceId,
+            agentGrant: assertion.verifiedAgentGrant?.evidence,
             groupsEnabled: params.config.org_features?.groups_enabled,
           },
           { crossProductPrisma: prisma, policyPrisma: prisma, prisma },
@@ -320,6 +348,8 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
     expiresAtEpochSeconds: now + expiresInSeconds,
     scope: delegation.scope,
     ...teamClaims,
+    ...(assertion.verifiedAgentGrant ? { agentConnection: { grant_handle: assertion.verifiedAgentGrant.id,
+      connection_id: assertion.verifiedAgentGrant.connectionId } } : {}),
   });
 
   return {
@@ -364,6 +394,7 @@ export async function exchangeConfidentialSubjectToken(
       configJwt: params.configJwt,
       sourceDomain,
       audience: `${issuer}/auth/token`,
+      allowAgentGrant: true,
     },
     deps,
   );

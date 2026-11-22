@@ -1,3 +1,4 @@
+import type { AgentGrantEvidence } from './agent-connection-grant-evidence.service.js';
 import { credentialArtifactSource } from './credential-artifact.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { decodeProtectedHeader, jwtVerify } from 'jose';
@@ -63,6 +64,8 @@ const AccessTokenClaimsSchema = z
   .passthrough();
 
 export type AccessTokenClaims = {
+  /** Set when a product's subject assertion named an agent connection grant; never a session proof. */
+  agentGrant?: AgentGrantEvidence;
   userId: string;
   tokenVersion: number;
   email: string;

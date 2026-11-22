@@ -160,6 +160,7 @@ async function resolveSubjectAssertionClaims(
     configJwt,
     sourceDomain,
     audience: ORG_SUBJECT_ASSERTION_AUDIENCE,
+    allowAgentGrant: true,
   });
   if (!assertion.active) throw invalidSubjectAssertion();
 
@@ -194,6 +195,7 @@ async function resolveSubjectAssertionClaims(
         domain: sourceDomain,
         orgId: assertion.active.orgId,
         assuranceId: assertion.verifiedAssuranceId,
+        agentGrant: assertion.verifiedAgentGrant?.evidence,
         groupsEnabled: request.config?.org_features?.groups_enabled,
       },
       {
@@ -219,6 +221,7 @@ async function resolveSubjectAssertionClaims(
     email: requireIdentityEmail(user.email),
     domain: sourceDomain,
     ...(assertion.verifiedAssuranceId ? { assuranceId: assertion.verifiedAssuranceId } : {}),
+    ...(assertion.verifiedAgentGrant ? { agentGrant: assertion.verifiedAgentGrant.evidence } : {}),
     // Assertions identify a user and their live team, not an OAuth client.
     // A request may name another team in the same organisation: its service
     // must resolve the actor's current capability for that exact target rather

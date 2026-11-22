@@ -15,6 +15,7 @@ import {
   revokeAgentConnectionGrant,
 } from '../../src/services/agent-connection-grant.service.js';
 import { resolveConfidentialDelegation } from '../../src/services/confidential-delegation.service.js';
+import { verifyConfidentialSubjectToken } from '../../src/services/confidential-token-exchange.service.js';
 
 const enabled = Boolean(process.env.DATABASE_URL);
 const sourceDomain = 'app.nessie.test';
@@ -192,6 +193,31 @@ describe.skipIf(!enabled)('agent connection grants', () => {
       .rejects.toThrow('AGENT_GRANT_REQUEST_INVALID');
     await expect(resolveConfidentialDelegation({ authenticatedClientDomainId: clientDomainId, sourceDomain,
       product, resource, scope: 'agent.connection' }, { prisma: db })).rejects.toThrow();
+  });
+
+  it('stands in for a session proof only where the caller opts in, and never once revoked', async () => {
+    const requestId = randomUUID();
+    const grant = await issue(requestId);
+    const audience = `${baseUrl}/auth/token`;
+    const grantToken = (claims: Record<string, unknown> = {}) => new SignJWT({ source_domain: sourceDomain, tv: 0,
+      active: { orgId, teamId }, agent_grant: grant.grantHandle, ...claims })
+      .setProtectedHeader({ alg: 'RS256', kid: 'agent-grant-source', typ: 'JWT' })
+      .setIssuer(sourceDomain).setAudience(audience).setSubject(subjectId)
+      .setIssuedAt(nowSeconds).setExpirationTime(nowSeconds + 45).setJti(randomUUID()).sign(sourcePrivateKey);
+    const verify = async (allowAgentGrant: boolean, claims: Record<string, unknown> = {}) =>
+      verifyConfidentialSubjectToken({ subjectToken: await grantToken(claims), configJwt: fakeConfigJwt(),
+        sourceDomain, audience, allowAgentGrant },
+      { prisma: db, now: () => nowSeconds, fetchJwks: async () => ({ keys: [sourcePublicJwk] }) });
+    const admitted = await verify(true);
+    expect(admitted.verifiedAgentGrant?.id).toBe(grant.grantHandle);
+    expect(admitted.verifiedAssuranceId).toBeUndefined();
+    await expect(verify(false)).rejects.toThrow('INVALID_SUBJECT_TOKEN');
+    await expect(verify(true, { assurance_ref: assuranceRef })).rejects.toThrow('INVALID_SUBJECT_TOKEN');
+    await expect(verify(true, { active: { orgId, teamId: 'agent-grant-other-team' } }))
+      .rejects.toThrow('INVALID_SUBJECT_TOKEN');
+    await revokeAgentConnectionGrant({ grantHandle: grant.grantHandle, clientDomainId, sourceDomain, requestId },
+      { prisma: db });
+    await expect(verify(true)).rejects.toThrow('INVALID_SUBJECT_TOKEN');
   });
 
   it('needs an enabled mapping for a product that is not first-party', async () => {
