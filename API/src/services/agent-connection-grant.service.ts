@@ -7,6 +7,9 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { asPrismaClient } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { assertAgentGrantEvidence, type AgentGrantEvidence } from './agent-connection-grant-evidence.service.js';
+import {
+  DAY_MS, RESOURCE_SCOPES, effectiveExpiry, evidenceOf, isFirstPartyAgentConnection, type Grant,
+} from './agent-connection-grant-policy.service.js';
 import { isAuthenticationEpochMismatchError, lockAndAssertAuthenticationEpoch } from './authentication-epoch.service.js';
 import { consumeConfidentialAssertion } from './confidential-assertion-use.service.js';
 import { resolveConfidentialDelegation } from './confidential-delegation.service.js';
@@ -29,34 +32,18 @@ import { validateSessionAssurance } from './session-assurance.service.js';
  * carry only the scopes the product's mapping lists.
  */
 
+export { FIRST_PARTY_AGENT_CONNECTIONS } from './agent-connection-grant-policy.service.js';
+
 export const AGENT_GRANT_AUDIENCE_PATH = '/auth/agent-grants';
 export const AGENT_GRANT_IDLE_MS = 90 * 24 * 60 * 60 * 1000;
 export const AGENT_GRANT_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
 export const AGENT_GRANT_RESOURCE_TOKEN_TTL_SECONDS = 120;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * First-party products that hold agent connection grants without an operator mapping: on from the
- * start, at exactly this source domain and resource. Any other product needs an enabled
- * `agent.connection` mapping.
- */
-export const FIRST_PARTY_AGENT_CONNECTIONS: Readonly<Record<string, { sourceDomain: string; resource: string }>> = {
-  nessie: { sourceDomain: 'api.nessie.works', resource: 'https://api.nessie.works/mcp' },
-};
-
-const isFirstPartyAgentConnection = (product: string, sourceDomain: string, resource: string): boolean => {
-  const binding = FIRST_PARTY_AGENT_CONNECTIONS[product];
-  return Boolean(binding && binding.sourceDomain === sourceDomain && binding.resource === resource);
-};
 
 const Uuid = z.string().uuid();
 const ConnectionId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u);
 const Product = z.string().regex(/^[a-z][a-z0-9-]{0,99}$/u);
 const Resource = z.string().url().max(2048);
-/** Scopes a renewal may mint for a downstream resource. Never `agent.connection`, brokering or provisioning. */
-const RESOURCE_SCOPES = new Set(['ai.invoke', 'billing.read', 'memory.read', 'memory.write']);
 
-type Grant = NonNullable<Awaited<ReturnType<PrismaClient['agentConnectionGrant']['findUnique']>>>;
 type Config = { org_features?: { enabled?: boolean; groups_enabled?: boolean } };
 
 function unavailable(): never {
@@ -94,12 +81,6 @@ async function serializable<T>(db: PrismaClient, action: (tx: Prisma.Transaction
   throw new AppError('INTERNAL', 503, 'AGENT_GRANT_RETRY_EXHAUSTED');
 }
 
-const evidenceOf = (row: Grant): AgentGrantEvidence => ({
-  subjectId: row.subjectId, sourceDomain: row.sourceDomain, orgId: row.orgId, method: row.method,
-  connectionRef: row.connectionRef, connectionRevision: row.connectionRevision,
-  connectionGeneration: row.connectionGeneration, externalIdentityId: row.externalIdentityId,
-  mfaSource: row.mfaSource, amr: row.amr, policyGeneration: row.policyGeneration,
-});
 
 /** The organisation's absolute ceiling, read live so lowering it applies to existing grants. */
 async function maxExpiresAt(tx: Prisma.TransactionClient, orgId: string, createdAt: Date): Promise<Date | null> {
@@ -107,8 +88,6 @@ async function maxExpiresAt(tx: Prisma.TransactionClient, orgId: string, created
   return org?.agentConnectionMaxDays ? new Date(createdAt.getTime() + org.agentConnectionMaxDays * DAY_MS) : null;
 }
 
-const effectiveExpiry = (idle: Date, max: Date | null): Date =>
-  max && max.getTime() < idle.getTime() ? max : idle;
 
 /** Live authority for one person in one team, standing in for a session only where evidence allows. */
 async function currentAuthority(tx: Prisma.TransactionClient, args: {
@@ -283,3 +262,4 @@ export async function revokeAgentConnectionGrant(
   });
   return { revoked: true };
 }
+

@@ -215,6 +215,7 @@ export async function getUserOrgContext(
     config: ClientConfig;
     /** Resolve one requested organisation instead of the first active membership. */
     orgId?: string;
+    agentGrant?: AgentGrantEvidence;
   },
   deps?: OrgContextDeps,
 ): Promise<OrgContext | null> {
@@ -226,6 +227,7 @@ export async function getUserOrgContext(
       authenticationEvidenceId: params.authenticationEvidenceId,
       domain: params.domain,
       orgId: params.orgId,
+      agentGrant: params.agentGrant,
       groupsEnabled: params.config.org_features?.groups_enabled,
     },
     deps,
