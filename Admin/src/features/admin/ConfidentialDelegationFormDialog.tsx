@@ -56,6 +56,12 @@ const scopeOptions: Array<{
     description:
       'Allows Coder (coder.unlikeotherai.com, product coder) to broker Selkie sessions at exactly https://api.selkie.live. Select only this scope.',
   },
+  {
+    value: 'agent.connection',
+    label: 'Agent connections',
+    description:
+      'Allows the product to hold idle-expiring grants for programs a person connects to it, at its own API resource above. Never mintable as a token.',
+  },
 ];
 
 const emptyValues: ConfidentialDelegationFormValues = {

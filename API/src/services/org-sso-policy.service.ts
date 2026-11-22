@@ -1,3 +1,4 @@
+import { agentGrantSatisfiesSsoPolicy, type AgentGrantEvidence } from './agent-connection-grant-evidence.service.js';
 import type { PrismaClient } from '@prisma/client';
 import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
@@ -25,7 +26,9 @@ export async function enterpriseReadiness(clientDomain: string, db = getAdminPri
 
 /** The direct lookup invokes this seam too: callers cannot bypass policy via a lower-level helper. */
 export async function assertOrgAccessPolicy(
-  binding: { userId: string; domain: string; orgId: string; assuranceId?: string; authenticationEvidenceId?: string; allowConsumedEvidence?: boolean },
+  binding: { userId: string; domain: string; orgId: string; assuranceId?: string; authenticationEvidenceId?: string; allowConsumedEvidence?: boolean;
+    /** An agent connection grant's evidence, already rechecked by its renewal. Never a session proof. */
+    agentGrant?: AgentGrantEvidence },
   db: AssuranceDb & Pick<PrismaClient, 'organisationEmailDomain'> = getAdminPrisma(),
 ): Promise<void> {
   let evidence: Awaited<ReturnType<typeof requireAuthenticationEvidence>> | undefined;
@@ -54,6 +57,11 @@ export async function assertOrgAccessPolicy(
   }
   if (!governed) return;
   if (evidence?.provenance === 'sso' && evidence.orgId === binding.orgId) return;
+  if (binding.agentGrant) {
+    if (binding.agentGrant.subjectId === binding.userId && binding.agentGrant.sourceDomain === binding.domain
+      && agentGrantSatisfiesSsoPolicy(binding.agentGrant, binding.orgId)) return;
+    throw new AppError('FORBIDDEN', 403, 'SSO_TEAM_REAUTH_REQUIRED');
+  }
   const proof = binding.assuranceId ? await db.sessionAssurance.findUnique({ where: { id: binding.assuranceId } }) : currentSessionAssurance();
   if (!proof || proof.userId !== binding.userId || proof.clientDomain !== binding.domain ||
     proof.orgId !== binding.orgId || proof.method !== 'sso') {

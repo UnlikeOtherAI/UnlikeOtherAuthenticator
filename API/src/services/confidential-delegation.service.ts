@@ -30,6 +30,7 @@ export const CONFIDENTIAL_DELEGATION_SCOPES = [
   'memory.read',
   'memory.write',
   'session:broker',
+  'agent.connection',
 ] as const;
 export type ConfidentialDelegationScopeName = (typeof CONFIDENTIAL_DELEGATION_SCOPES)[number];
 
@@ -40,6 +41,7 @@ const databaseScope = {
   'memory.read': ConfidentialDelegationScope.MEMORY_READ,
   'memory.write': ConfidentialDelegationScope.MEMORY_WRITE,
   'session:broker': ConfidentialDelegationScope.SESSION_BROKER,
+  'agent.connection': ConfidentialDelegationScope.AGENT_CONNECTION,
 } satisfies Record<ConfidentialDelegationScopeName, ConfidentialDelegationScope>;
 
 const publicScope = {
@@ -49,6 +51,7 @@ const publicScope = {
   [ConfidentialDelegationScope.MEMORY_READ]: 'memory.read',
   [ConfidentialDelegationScope.MEMORY_WRITE]: 'memory.write',
   [ConfidentialDelegationScope.SESSION_BROKER]: 'session:broker',
+  [ConfidentialDelegationScope.AGENT_CONNECTION]: 'agent.connection',
 } satisfies Record<ConfidentialDelegationScope, ConfidentialDelegationScopeName>;
 
 type MutationActor = {
@@ -396,6 +399,11 @@ export async function resolveConfidentialDelegation(
     product: string;
     resource: string;
     scope: string;
+    /**
+     * Only the agent connection grant service sets this. `agent.connection` is a
+     * product's permission to hold grants, never a scope a token exchange can mint.
+     */
+    agentConnectionGrant?: boolean;
   },
   deps?: { prisma?: PrismaClient },
 ): Promise<{
@@ -440,6 +448,11 @@ export async function resolveConfidentialDelegation(
 
   if (requestedScopes.includes('session:broker') && (sourceDomain !== 'coder.unlikeotherai.com' ||
     product !== 'coder' || params.resource !== 'https://api.selkie.live' || requestedScopes.length !== 1)) {
+    throw invalidDelegation();
+  }
+  const asksAgentConnection = requestedScopes.includes('agent.connection');
+  if (asksAgentConnection !== Boolean(params.agentConnectionGrant)
+    || (asksAgentConnection && requestedScopes.length !== 1)) {
     throw invalidDelegation();
   }
   const allowedScopes = new Set(scopeNamesFromDatabase(mapping.scopes));

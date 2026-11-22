@@ -446,6 +446,7 @@ enum ConfidentialDelegationScope {
   MEMORY_READ     @map("memory.read")
   MEMORY_WRITE    @map("memory.write")
   SESSION_BROKER  @map("session:broker")
+  AGENT_CONNECTION @map("agent.connection")
 }
 
 model User {
@@ -1001,6 +1002,7 @@ model ClientDomain {
   agreementSignatures   AgreementSignature[]
   delegationMappings    ConfidentialDelegationMapping[]
   salesResearchJobGrants SalesResearchJobGrant[]
+  agentConnectionGrants AgentConnectionGrant[]
 
   @@index([status])
   @@map("client_domains")
@@ -1401,6 +1403,8 @@ model Organisation {
   // only after an owner/admin approves) | "disabled" (only owner/admin may invite). Validated at the
   // app layer, not the DB, matching the org_features JSON pattern.
   memberInvites       String       @default("allowed") @map("member_invites")
+  // Optional absolute lifetime for agent connection grants, in days from issue. Null: idle expiry only.
+  agentConnectionMaxDays Int?     @map("agent_connection_max_days")
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
@@ -3595,6 +3599,47 @@ model BillingJobComputeRenewal {
   @@index([ledgerJobId, waterJobId, revokedAt])
   @@index([subjectId, tokenVersion, expiresAt])
   @@map("billing_job_compute_renewals")
+}
+
+// A program a person connected to a product (an MCP client), as one person in one
+// organisation team. Issued only from a live session proof; afterwards it lives on its
+// own idle clock and never passes for a session proof or a human presence check.
+// The source proof's evidence is copied so renewal can recheck SSO connection,
+// external identity, provisioning and policy generation after the session has ended.
+model AgentConnectionGrant {
+  id                   String    @id @default(uuid())
+  clientDomainId       String    @map("client_domain_id")
+  requestId            String    @map("request_id") @db.Uuid
+  connectionId         String    @map("connection_id") @db.VarChar(160)
+  sourceDomain         String    @map("source_domain") @db.VarChar(255)
+  subjectId            String    @map("subject_id") @db.VarChar(256)
+  orgId                String    @map("org_id") @db.VarChar(256)
+  teamId               String    @map("team_id") @db.VarChar(256)
+  tokenVersion         Int       @map("token_version")
+  originTokenJti       String    @map("origin_token_jti") @db.VarChar(256)
+  product              String    @db.VarChar(100)
+  resource             String    @db.VarChar(2048)
+  bindingHash          String    @map("binding_hash") @db.Char(64)
+  sourceAssuranceId    String    @map("source_assurance_id")
+  method               String    @db.VarChar(20)
+  connectionRef        String?   @map("sso_connection_id")
+  connectionRevision   Int?      @map("sso_connection_revision")
+  connectionGeneration Int?      @map("sso_connection_generation")
+  externalIdentityId   String?   @map("external_identity_id")
+  mfaSource            String    @map("mfa_source")
+  amr                  String[]
+  policyGeneration     Int       @map("policy_generation")
+  idleExpiresAt        DateTime  @map("idle_expires_at") @db.Timestamptz(3)
+  lastTouchedAt        DateTime  @map("last_touched_at") @db.Timestamptz(3)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  revokedAt            DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  clientDomain ClientDomain @relation(fields: [clientDomainId], references: [id], onDelete: Cascade)
+
+  @@unique([clientDomainId, requestId])
+  @@index([subjectId, tokenVersion])
+  @@index([orgId, teamId])
+  @@map("agent_connection_grants")
 }
 
 // A bounded continuation authority captured from one fresh SalesNerd team

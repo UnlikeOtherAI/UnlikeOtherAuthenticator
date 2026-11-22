@@ -103,6 +103,7 @@ export type OrganisationRecord = {
   slug: string;
   ownerId: string | null;
   memberInvites: OrgMemberInvitesValue;
+  agentConnectionMaxDays: number | null;
   iconUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -255,6 +256,7 @@ export function toOrganisationRecord(row: {
   slug: string;
   ownerId: string | null;
   memberInvites?: string;
+  agentConnectionMaxDays?: number | null;
   iconUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -266,6 +268,7 @@ export function toOrganisationRecord(row: {
     slug: row.slug,
     ownerId: row.ownerId,
     memberInvites: (row.memberInvites ?? 'allowed') as OrgMemberInvitesValue,
+    agentConnectionMaxDays: row.agentConnectionMaxDays ?? null,
     iconUrl: row.iconUrl ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
