@@ -187,7 +187,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
       const config = requireVerifiedConfig(request);
 
       const orgId = getOrgIdFromParams(request.params);
-      const { name, member_invites, icon_url, slug } = OrgBodySchema.parse(request.body ?? {});
+      const { name, member_invites, icon_url, slug, agent_connection_max_days } = OrgBodySchema.parse(request.body ?? {});
 
       setTenantContextFromRequest(request, { orgId, userId: tenantUserId(request) });
       const org = await request.withTenantTx((tx) =>
@@ -200,6 +200,7 @@ export function registerOrganisationRoutes(app: FastifyInstance) {
             config,
             memberInvites: member_invites,
             iconUrl: icon_url,
+            agentConnectionMaxDays: agent_connection_max_days,
             slug,
           },
           { prisma: asPrismaClient(tx) },

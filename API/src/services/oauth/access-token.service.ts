@@ -191,6 +191,8 @@ export type ConfidentialAccessTokenClaims = {
     purpose: 'research_job';
     authorized_until: number;
   };
+  /** A token minted from an agent connection grant, never from a person's session. */
+  agentConnection?: { grant_handle: string; connection_id: string };
 } & ConfidentialTeamClaims;
 
 /**
@@ -222,6 +224,7 @@ export async function signConfidentialAccessToken(
   if (claims.actor) payload.act = claims.actor;
   if (claims.jobCompute) payload.job_compute = claims.jobCompute;
   if (claims.jobAuthorization) payload.job_authorization = claims.jobAuthorization;
+  if (claims.agentConnection) payload.agent_connection = claims.agentConnection;
 
   try {
     const token = new SignJWT(payload)

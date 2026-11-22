@@ -44,6 +44,7 @@ const ORGANISATION_SELECT = {
   slug: true,
   ownerId: true,
   memberInvites: true,
+  agentConnectionMaxDays: true,
   iconUrl: true,
   createdAt: true,
   updatedAt: true,
@@ -325,6 +326,8 @@ export async function updateOrganisation(
     config: ClientConfig;
     memberInvites?: string;
     iconUrl?: string | null;
+    /** Absolute agent connection grant lifetime in days; null clears it, omitted leaves it. */
+    agentConnectionMaxDays?: number | null;
     /** Deliberate re-slug. Omitted leaves the tenant's address untouched. */
     slug?: string;
   },
@@ -376,6 +379,8 @@ export async function updateOrganisation(
       // Team icon (design §11.3, gap-fix A Task 3) — omitted leaves the current icon
       // unchanged; `null` clears it; validated https-only/≤2048 chars by normalizeIconUrl.
       ...(params.iconUrl !== undefined ? { iconUrl: normalizeIconUrl(params.iconUrl) } : {}),
+      ...(params.agentConnectionMaxDays !== undefined
+        ? { agentConnectionMaxDays: normalizeAgentConnectionMaxDays(params.agentConnectionMaxDays) } : {}),
     },
     select: ORGANISATION_SELECT,
   }));
@@ -392,10 +397,18 @@ export async function updateOrganisation(
       slug: updated.slug,
       ...(params.memberInvites !== undefined ? { memberInvites: updated.memberInvites } : {}),
       ...(params.iconUrl !== undefined ? { iconUrlSet: updated.iconUrl !== null } : {}),
+      ...(params.agentConnectionMaxDays !== undefined
+        ? { agentConnectionMaxDays: updated.agentConnectionMaxDays } : {}),
     },
   });
 
   return toOrganisationRecord(updated);
+}
+
+function normalizeAgentConnectionMaxDays(value: number | null): number | null {
+  if (value === null) return null;
+  if (!Number.isInteger(value) || value < 1 || value > 3650) throw new AppError('BAD_REQUEST', 400);
+  return value;
 }
 
 export async function deleteOrganisation(

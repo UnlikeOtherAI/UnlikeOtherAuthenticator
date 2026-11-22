@@ -9,6 +9,7 @@ const ORGANISATION_SELECT = {
   slug: true,
   ownerId: true,
   memberInvites: true,
+  agentConnectionMaxDays: true,
   iconUrl: true,
   createdAt: true,
   updatedAt: true,
@@ -21,6 +22,7 @@ export type ResolvedOrganisationRow = {
   slug: string;
   ownerId: string;
   memberInvites?: string;
+  agentConnectionMaxDays?: number | null;
   iconUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;

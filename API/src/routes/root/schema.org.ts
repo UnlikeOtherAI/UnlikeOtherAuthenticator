@@ -68,6 +68,8 @@ export const orgEndpoints: EndpointSchema[] = [
       name: 'string (optional)',
       'member_invites?':
         'string — "allowed" (default) | "admin_approval" | "disabled"; same organisation.manage gate, omitted leaves it unchanged; gates the member-initiated invite endpoint',
+      'agent_connection_max_days?':
+        'integer 1–3650 | null — absolute lifetime of connected programs’ agent grants in days from issue; same organisation.manage gate; applies to existing grants on their next renewal; null clears it (90-day idle expiry only); omitted leaves it unchanged',
       'icon_url?':
         'string | null — external HTTPS URL only, max 2048 chars; same organisation.manage gate; omitted leaves the current icon unchanged, null clears it; non-https/oversized/invalid rejected with a generic error',
     },

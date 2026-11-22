@@ -1,3 +1,4 @@
+import type { AgentGrantEvidence } from './agent-connection-grant-evidence.service.js';
 import type { PrismaClient } from '@prisma/client';
 
 import { getEnv } from '../config/env.js';
@@ -53,6 +54,8 @@ export async function getActiveUserOrgContext(
     groupsEnabled?: boolean;
     /** Server-owned product policy only; callers must never derive this from browser input. */
     allowCrossDomain?: boolean;
+    /** An agent connection grant's rechecked evidence, standing in for a session proof's SSO method only. */
+    agentGrant?: AgentGrantEvidence;
   },
   deps?: OrgContextDeps,
 ): Promise<OrgContext | null> {
@@ -87,7 +90,8 @@ export async function getActiveUserOrgContext(
 
   if (!orgMembership) return null;
 
-  await assertOrgAccessPolicy({ userId, domain, orgId: orgMembership.orgId, assuranceId: params.assuranceId, authenticationEvidenceId: params.authenticationEvidenceId }, prisma);
+  await assertOrgAccessPolicy({ userId, domain, orgId: orgMembership.orgId, assuranceId: params.assuranceId,
+    authenticationEvidenceId: params.authenticationEvidenceId, agentGrant: params.agentGrant }, prisma);
 
   // The function exposes only this person's unpaid seat scopes to this relying party; the
   // tenant connection has no read privileges on the underlying financial or credential tables.
@@ -179,6 +183,7 @@ export async function getActiveClientOrgContext(
     domain: string;
     orgId: string;
     groupsEnabled?: boolean;
+    agentGrant?: AgentGrantEvidence;
   },
   deps?: OrgContextDeps,
 ): Promise<OrgContext | null> {

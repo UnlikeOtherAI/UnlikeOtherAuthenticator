@@ -166,6 +166,20 @@ export async function confidentialJobGrantRateLimiter(request: FastifyRequest): 
   await confidentialJobGrantDomainLimiter(request);
 }
 
+const agentConnectionGrantDomainLimiter = createRateLimiter({
+  limit: 3000,
+  windowMs: MINUTE_MS,
+  keyBuilder: (request) => {
+    const domain = normalizePart(request.config?.domain);
+    return domain ? `auth:agent-grant:domain:${hashPart(domain)}` : '';
+  },
+});
+
+/** Agent connection grants renew on connected programs' calls; backend-only, after config and app auth. */
+export async function agentConnectionGrantRateLimiter(request: FastifyRequest): Promise<void> {
+  await agentConnectionGrantDomainLimiter(request);
+}
+
 function isConfidentialTokenExchange(request: FastifyRequest): boolean {
   return bodyString(request, 'grant_type') === TOKEN_EXCHANGE_GRANT_TYPE;
 }

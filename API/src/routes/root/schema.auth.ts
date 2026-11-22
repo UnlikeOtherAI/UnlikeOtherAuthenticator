@@ -3,6 +3,7 @@ import { actionVerificationEndpoints } from './schema.action-verification.js';
 import { authTokenEndpoint } from './schema.auth-token.js';
 import { authEmailEndpoints } from './schema.auth-email.js';
 import { salesResearchJobGrantEndpoints } from './schema.auth-job-grants.js';
+import { agentConnectionGrantEndpoints } from './schema.auth-agent-grants.js';
 
 export const authEndpoints: EndpointSchema[] = [
   { method: 'POST', path: '/auth/account-renewal/start',
@@ -15,6 +16,7 @@ export const authEndpoints: EndpointSchema[] = [
     body: { challengeId: 'UUID returned by start', code: 'six-digit mailbox code', twoFactorCode: 'six-digit TOTP when enabled' },
     response: { 200: '{ ok: true } (non-enumerating)', 401: 'invalid or expired proof' } },
   ...salesResearchJobGrantEndpoints,
+  ...agentConnectionGrantEndpoints,
   ...actionVerificationEndpoints,
   { method: 'POST', path: '/auth/session-broker/validate',
     description: 'Validate a direct Coder-to-Selkie short-lived session:broker capability against current UOA authority.',
