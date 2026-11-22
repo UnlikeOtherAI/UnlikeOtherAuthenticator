@@ -10,8 +10,8 @@ export const agentConnectionGrantEndpoints: EndpointSchema[] = [
     body: {
       request_id: 'UUID the product generates once per (connection, team) before issue; exact retries recover the same grant.',
       connection_id: 'The product’s own id for the connected program, 1–160 of [A-Za-z0-9._:-].',
-      product: 'Product name of an enabled confidential delegation mapping that lists agent.connection.',
-      resource: 'Exact resource of that mapping (the product’s own API).',
+      product: 'nessie (first-party, on by default at api.nessie.works), or the product of an enabled confidential delegation mapping that lists agent.connection.',
+      resource: 'https://api.nessie.works/mcp for Nessie, or the exact resource of that mapping (the product’s own API).',
       subject_token: 'Fresh source-config RS256 assertion, aud=PUBLIC_BASE_URL+/auth/agent-grants, with active org/team, sub/tv/jti and the person’s live assurance_ref for that exact team.',
       subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
     },

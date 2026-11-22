@@ -9,6 +9,7 @@ import { getAccessTokenPublicJwks, resetAccessTokenKeyCache } from '../../src/se
 import {
   AGENT_GRANT_AUDIENCE_PATH,
   AGENT_GRANT_IDLE_MS,
+  FIRST_PARTY_AGENT_CONNECTIONS,
   issueAgentConnectionGrant,
   renewAgentConnectionGrant,
   revokeAgentConnectionGrant,
@@ -191,5 +192,17 @@ describe.skipIf(!enabled)('agent connection grants', () => {
       .rejects.toThrow('AGENT_GRANT_REQUEST_INVALID');
     await expect(resolveConfidentialDelegation({ authenticatedClientDomainId: clientDomainId, sourceDomain,
       product, resource, scope: 'agent.connection' }, { prisma: db })).rejects.toThrow();
+  });
+
+  it('needs an enabled mapping for a product that is not first-party', async () => {
+    expect(FIRST_PARTY_AGENT_CONNECTIONS.nessie).toEqual({ sourceDomain: 'api.nessie.works',
+      resource: 'https://api.nessie.works/mcp' });
+    const requestId = randomUUID();
+    const grant = await issue(requestId);
+    const where = { clientDomainId_product_resource: { clientDomainId, product, resource } };
+    await db.confidentialDelegationMapping.update({ where, data: { enabled: false } });
+    await expect(renew(grant.grantHandle, requestId, nowSeconds * 1000)).rejects.toThrow();
+    await db.confidentialDelegationMapping.update({ where, data: { enabled: true } });
+    expect((await renew(grant.grantHandle, requestId, nowSeconds * 1000)).org.teams).toContain(teamId);
   });
 });

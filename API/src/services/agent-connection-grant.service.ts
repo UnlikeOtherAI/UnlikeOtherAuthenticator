@@ -35,6 +35,20 @@ export const AGENT_GRANT_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
 export const AGENT_GRANT_RESOURCE_TOKEN_TTL_SECONDS = 120;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * First-party products that hold agent connection grants without an operator mapping: on from the
+ * start, at exactly this source domain and resource. Any other product needs an enabled
+ * `agent.connection` mapping.
+ */
+export const FIRST_PARTY_AGENT_CONNECTIONS: Readonly<Record<string, { sourceDomain: string; resource: string }>> = {
+  nessie: { sourceDomain: 'api.nessie.works', resource: 'https://api.nessie.works/mcp' },
+};
+
+const isFirstPartyAgentConnection = (product: string, sourceDomain: string, resource: string): boolean => {
+  const binding = FIRST_PARTY_AGENT_CONNECTIONS[product];
+  return Boolean(binding && binding.sourceDomain === sourceDomain && binding.resource === resource);
+};
+
 const Uuid = z.string().uuid();
 const ConnectionId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u);
 const Product = z.string().regex(/^[a-z][a-z0-9-]{0,99}$/u);
@@ -112,9 +126,11 @@ async function currentAuthority(tx: Prisma.TransactionClient, args: {
   }
   await lockProductTeamPolicyShared(tx);
   await lockTokenIssuanceProductPolicy({ clientDomainId: args.clientDomainId, domain: args.sourceDomain }, { prisma });
-  await resolveConfidentialDelegation({ authenticatedClientDomainId: args.clientDomainId,
-    sourceDomain: args.sourceDomain, product: args.product, resource: args.resource,
-    scope: 'agent.connection', agentConnectionGrant: true }, { prisma });
+  if (!isFirstPartyAgentConnection(args.product, args.sourceDomain, args.resource)) {
+    await resolveConfidentialDelegation({ authenticatedClientDomainId: args.clientDomainId,
+      sourceDomain: args.sourceDomain, product: args.product, resource: args.resource,
+      scope: 'agent.connection', agentConnectionGrant: true }, { prisma });
+  }
   if (args.agentGrant) await assertAgentGrantEvidence(args.agentGrant, prisma);
   const [user, domainRole, org] = await Promise.all([
     tx.user.findFirst({ where: { id: args.subjectId, lifecycleStatus: 'ACTIVE' }, select: { email: true } }),
