@@ -85,8 +85,11 @@
         "rate_basis": {
           "enum": [
             "monthly_mobile",
+            "monthly_number",
             "inbound_mobile",
-            "maximum_mobile_carrier"
+            "inbound_number",
+            "maximum_mobile_carrier",
+            "maximum_number_carrier"
           ]
         },
         "scope": {
@@ -113,7 +116,12 @@
               "pattern": "^[A-Z]{2}$"
             },
             "number_type": {
-              "const": "mobile"
+              "enum": [
+                "mobile",
+                "local",
+                "national",
+                "toll-free"
+              ]
             },
             "direction": {
               "enum": [
@@ -732,8 +740,11 @@
                 "rate_basis": {
                   "enum": [
                     "monthly_mobile",
+                    "monthly_number",
                     "inbound_mobile",
-                    "maximum_mobile_carrier"
+                    "inbound_number",
+                    "maximum_mobile_carrier",
+                    "maximum_number_carrier"
                   ]
                 },
                 "scope": {
@@ -760,7 +771,12 @@
                       "pattern": "^[A-Z]{2}$"
                     },
                     "number_type": {
-                      "const": "mobile"
+                      "enum": [
+                        "mobile",
+                        "local",
+                        "national",
+                        "toll-free"
+                      ]
                     },
                     "direction": {
                       "enum": [
@@ -1006,8 +1022,11 @@
             "rate_basis": {
               "enum": [
                 "monthly_mobile",
+                "monthly_number",
                 "inbound_mobile",
-                "maximum_mobile_carrier"
+                "inbound_number",
+                "maximum_mobile_carrier",
+                "maximum_number_carrier"
               ]
             },
             "scope": {
@@ -1034,7 +1053,12 @@
                   "pattern": "^[A-Z]{2}$"
                 },
                 "number_type": {
-                  "const": "mobile"
+                  "enum": [
+                    "mobile",
+                    "local",
+                    "national",
+                    "toll-free"
+                  ]
                 },
                 "direction": {
                   "enum": [
@@ -1164,7 +1188,12 @@
           "pattern": "^[A-Z]{2}$"
         },
         "number_type": {
-          "const": "mobile"
+          "enum": [
+            "mobile",
+            "local",
+            "national",
+            "toll-free"
+          ]
         },
         "direction": {
           "enum": [
@@ -1881,7 +1910,12 @@
           "pattern": "^[A-Z]{2}$"
         },
         "number_type": {
-          "const": "mobile"
+          "enum": [
+            "mobile",
+            "local",
+            "national",
+            "toll-free"
+          ]
         },
         "direction": {
           "enum": [

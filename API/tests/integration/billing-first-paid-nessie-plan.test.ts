@@ -58,7 +58,8 @@ describe.skipIf(!process.env.DATABASE_URL)('first paid Nessie plan', () => {
       monthlyAmountMinor: 399n, stripeMonthlyPriceId: 'price_seat' } });
 
     async function buyer(slug: string) {
-      const org = await db.organisation.create({ data: { slug, name: slug, ownerId: owner.id, domain: slug + '.example' } });
+      const org = await db.organisation.create({ data: { slug, name: slug, ownerId: owner.id, domain: slug + '.example' },
+        select: { id: true, domain: true } });
       const team = await db.team.create({ data: { orgId: org.id, name: 'Team', slug: 'team' }, select: { id: true } });
       await db.orgMember.create({ data: { orgId: org.id, userId: owner.id, role: 'owner' } });
       const key = await db.billingAppKey.create({ data: { serviceId: service.id, purpose: 'CUSTOMER_LIFECYCLE', name: slug,

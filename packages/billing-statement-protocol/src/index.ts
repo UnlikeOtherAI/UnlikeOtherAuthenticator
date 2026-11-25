@@ -260,3 +260,4 @@ export * from './billing-authority-openapi.js';
 export * from './browser-types.js';
 export * from './browser-schema.js';
 export * from './browser-openapi.js';
+export * from './phone-number-rental.js';

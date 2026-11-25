@@ -12,15 +12,15 @@ function provider(body: unknown, inspect?: (url: string) => void) {
 }
 
 describe('SMS private provider evidence', () => {
-  it('admits only the exact SMS-capable mobile inventory identity', async () => {
+  it('requires a matching mobile inventory number with an explicit capability', async () => {
     const phone = '+420777111222';
     await provider({ available_phone_numbers: [{ phone_number: phone, iso_country: 'CZ',
-      capabilities: { sms: true } }] }).assertAvailableMobile('CZ', phone);
+      capabilities: { sms: true } }] }).assertAvailableNumber('CZ', phone);
     await expect(provider({ available_phone_numbers: [{ phone_number: phone, iso_country: 'GB',
-      capabilities: { sms: true } }] }).assertAvailableMobile('CZ', phone))
+      capabilities: { sms: true } }] }).assertAvailableNumber('CZ', phone))
       .rejects.toThrow('BILLING_SMS_MOBILE_NUMBER_UNAVAILABLE');
     await expect(provider({ available_phone_numbers: [{ phone_number: phone, iso_country: 'CZ',
-      capabilities: { sms: false } }] }).assertAvailableMobile('CZ', phone))
+      capabilities: { sms: false } }] }).assertAvailableNumber('CZ', phone))
       .rejects.toThrow('BILLING_SMS_MOBILE_NUMBER_UNAVAILABLE');
   });
   it('reads the uppercase capability keys the AvailablePhoneNumbers resource actually returns', async () => {
@@ -30,18 +30,44 @@ describe('SMS private provider evidence', () => {
       friendly_name: '+44 7463 595266', phone_number: phone, lata: null, locality: null, rate_center: null,
       latitude: null, longitude: null, region: null, postal_code: null, iso_country: 'GB',
       address_requirements: 'none', beta: false, capabilities }], uri: '/2010-04-01/Accounts/x/AvailablePhoneNumbers/GB/Mobile.json' });
-    await live({ MMS: false, SMS: true, voice: true }).assertAvailableMobile('GB', phone);
-    for (const capabilities of [{ MMS: true, SMS: false, voice: true }, { MMS: false, voice: true },
+    await live({ MMS: false, SMS: true, voice: true }).assertAvailableNumber('GB', phone);
+    await live({ MMS: false, SMS: false, voice: true }).assertAvailableNumber('GB', phone);
+    for (const capabilities of [{ MMS: true, SMS: false, voice: false }, { MMS: false },
       { SMS: true, sms: false }, { SMS: false, sms: true }]) {
-      await expect(live(capabilities).assertAvailableMobile('GB', phone))
+      await expect(live(capabilities).assertAvailableNumber('GB', phone))
         .rejects.toThrow('BILLING_SMS_MOBILE_NUMBER_UNAVAILABLE');
     }
   });
+  it('binds a Czech voice-only national offer to its exact country, rental class and E.164', async () => {
+    const phone = '+420910123456';
+    const reads: string[] = [];
+    const api = new BillingSmsProvider({ accountSid, apiKeySid: `SK${'2'.repeat(32)}`, apiKeySecret: 'unused' },
+      async (url) => {
+        reads.push(String(url));
+        return new Response(JSON.stringify(String(url).includes('pricing.twilio.com')
+          ? { iso_country: 'CZ', country: 'Czechia', price_unit: 'USD',
+            phone_number_prices: [{ number_type: 'national', current_price: '1.50' }] }
+          : { available_phone_numbers: [{ phone_number: phone, iso_country: 'CZ', capabilities: { voice: true, SMS: false } }] }));
+      });
+    await api.assertAvailableNumber('CZ', phone, 'national');
+    expect(new URL(reads[1] ?? '').pathname).toMatch(/CZ\/Local\.json$/);
+    await expect(api.assertAvailableNumber('CZ', phone, 'local')).rejects.toThrow('BILLING_SMS_PROVIDER_EVIDENCE_UNAVAILABLE');
+  });
+
+  it('uses the sending or receiving number class for SMS rates', async () => {
+    const prices = [{ number_type: 'mobile', current_price: '0.01' }, { number_type: 'toll free', current_price: '0.04' }];
+    const api = provider({ country: 'US', iso_country: 'US', price_unit: 'USD', inbound_sms_prices: prices,
+      outbound_sms_prices: [{ carrier: 'Fixture', mcc: '310', mnc: '001', prices }] });
+    expect((await api.price('US', 'outbound', 'toll-free')).amount).toBe('0.04');
+    expect((await api.price('US', 'inbound', 'toll-free')).amount).toBe('0.04');
+    await expect(api.price('US', 'inbound', 'national')).rejects.toThrow('BILLING_SMS_PROVIDER_EVIDENCE_UNAVAILABLE');
+  });
+
   it('binds owned number evidence to the configured provider account and exact SID', async () => {
     const sid = `PN${'4'.repeat(32)}`;
     expect(await provider({ sid, account_sid: accountSid, phone_number: '+420777111222',
       capabilities: { sms: true } }).ownedNumber(accountSid, sid))
-      .toEqual({ phone: '+420777111222', sms: true });
+      .toEqual({ phone: '+420777111222', sms: true, voice: false });
     await expect(provider({}).ownedNumber(`AC${'5'.repeat(32)}`, sid))
       .rejects.toThrow('BILLING_SMS_PROVIDER_EVIDENCE_UNAVAILABLE');
     await expect(provider({ sid: `PN${'6'.repeat(32)}`, account_sid: accountSid,

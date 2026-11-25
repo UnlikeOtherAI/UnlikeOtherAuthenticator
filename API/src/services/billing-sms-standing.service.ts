@@ -36,8 +36,9 @@ export async function fundSmsStanding(input: { request: BillingSmsStandingHoldRe
     throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_NUMBER_NOT_ACTIVE');
   }
   const number = await prisma.billingSmsNumberResource.findUniqueOrThrow({ where: { id: body.number_id } });
+  if (!number.smsCapable) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_NUMBER_NOT_ACTIVE');
   const quote = await issueSmsQuote({ credential: input.credential, request: { ...body,
-    country: number.country, number_type: 'mobile', direction: 'inbound', destination: null,
+    country: number.country, number_type: paid.quote.scope.number_type, direction: 'inbound', destination: null,
     carrier: null, mcc: null, mnc: null,
   }, authorize: (tx) => lockSmsSubject(tx, { subject: body, actor, credential: input.credential }) }, { ...deps, prisma });
   const configured = deps.stripe ? { client: deps.stripe, livemode: deps.stripeLivemode ?? false }
@@ -52,7 +53,7 @@ export async function fundSmsStanding(input: { request: BillingSmsStandingHoldRe
     await tx.$queryRaw(Prisma.sql`SELECT id FROM billing_sms_number_resources WHERE id = ${body.number_id} FOR SHARE`);
     const currentNumber = await tx.billingSmsNumberResource.findFirst({ where: {
       id: body.number_id, serviceId: input.credential.service.id, orgId: body.organisation_id,
-      state: 'active', accountSid: deps.provider.configuration.accountSid, phoneNumberSid: number.phoneNumberSid,
+      state: 'active', smsCapable: true, accountSid: deps.provider.configuration.accountSid, phoneNumberSid: number.phoneNumberSid,
     } });
     if (!currentNumber || !currentNumber.phoneNumberSid) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_NUMBER_NOT_ACTIVE');
     await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`sms-inbound:${body.number_id}:${body.allocation_id}`}, 0))::text`);

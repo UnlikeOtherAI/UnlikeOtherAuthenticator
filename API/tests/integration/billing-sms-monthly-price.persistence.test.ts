@@ -1,3 +1,4 @@
+import { listSmsMonthlyPrices, type RentalNumberType } from '../../src/services/billing-sms-monthly-price.service.js';
 import { vi } from 'vitest';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -22,16 +23,19 @@ const provider = new BillingSmsProvider({ accountSid: smsAccount, apiKeySid: `SK
   const address = String(url);
   const country = /Countries\/([A-Z]{2})/.exec(address)?.[1] ?? 'GB';
   if (address.includes('/PhoneNumbers/Countries/')) return new Response(JSON.stringify({ country, iso_country: country,
-    price_unit: 'usd', phone_number_prices: [{ number_type: 'mobile', base_price: rental[country], current_price: rental[country] }] }));
+    price_unit: 'usd', phone_number_prices: [{ number_type: 'mobile', base_price: rental[country], current_price: rental[country] },
+      { number_type: 'national', current_price: '2.25' }, { number_type: 'local', current_price: '1.55' },
+      { number_type: 'toll free', current_price: '7.00' }] }));
   if (address.includes('/AvailablePhoneNumbers/')) return new Response(JSON.stringify({ available_phone_numbers: [{
-    phone_number: phone, iso_country: 'GB', capabilities: { MMS: false, SMS: true, voice: true } }] }));
+    phone_number: address.includes('/CZ/Local') ? '+420910123456' : phone,
+    iso_country: address.includes('/CZ/Local') ? 'CZ' : 'GB', capabilities: { SMS: !address.includes('/CZ/Local'), voice: true } }] }));
   return new Response('{}', { status: 404 });
 });
 const subject = { product: 'nessie', organisation_id: smsIds.org, team_id: smsIds.team, user_id: smsIds.user };
-function monthly(country: string, organisationId = smsIds.org) {
+function monthly(country: string, organisationId = smsIds.org, numberType: RentalNumberType = 'mobile') {
   return issueSmsQuote({ credential: fixture.entitlement, authorize: async () => undefined, request: { ...subject,
     organisation_id: organisationId,
-    country, number_type: 'mobile', direction: 'monthly', destination: null, carrier: null, mcc: null, mnc: null } },
+    country, number_type: numberType, direction: 'monthly', destination: null, carrier: null, mcc: null, mnc: null } },
   { prisma, provider });
 }
 
@@ -142,6 +146,57 @@ describe.skipIf(!process.env.DATABASE_URL)('Monthly SMS number price', () => {
       rental.GB = '1.15';
       vi.stubEnv('UOA_SMS_PRICING_MODE', 'legacy');
     }
+  });
+
+  it('requires a price for the exact rental class and currency, including in mobile markup mode', async () => {
+    vi.stubEnv('UOA_SMS_PRICING_MODE', 'provider_markup');
+    try {
+      await expect(monthly('CZ', smsIds.org, 'national')).rejects.toThrow('BILLING_SMS_MONTHLY_PRICE_REQUIRED');
+      const price = await prisma.billingSmsMonthlyPrice.create({ data: { amount: '8.75', currency: 'EUR',
+        numberType: 'national', setBy: 'operator', setByUserId: smsIds.user } });
+      const legacy = await listSmsMonthlyPrices(false, prisma);
+      expect(legacy).toHaveLength(3);
+      expect(legacy.every((row) => !('number_type' in row))).toBe(true);
+      expect(await listSmsMonthlyPrices(true, prisma)).toEqual(expect.arrayContaining([
+        expect.objectContaining({ number_type: 'national', amount: '8.75', currency: 'EUR' }),
+        expect.objectContaining({ number_type: 'mobile', amount: '4.99', currency: 'EUR' }),
+      ]));
+      const quote = await monthly('CZ', smsIds.org, 'national');
+      expect(quote).toMatchObject({ amount: '8.75', currency: 'EUR', rate_basis: 'monthly_number',
+        scope: { country: 'CZ', number_type: 'national' } });
+      expect(await prisma.billingSmsQuote.findUniqueOrThrow({ where: { id: quote.id } })).toMatchObject({
+        monthlyPriceId: price.id, numberType: 'national', monthlyMarkupBps: 0 });
+      const checkout = await beginSmsNumber({ credential: fixture.lifecycle,
+        actorToken: await fixture.actor('/billing/v1/sms/numbers/begin'), request: { ...subject, resource_id: 'national-cz-eur',
+          quote_id: quote.id, phone_number: '+420910123456' } }, { prisma, provider, stripe: fixture.stripe, stripeLivemode: false });
+      expect(checkout).toMatchObject({ phone_number: '+420910123456', state: 'payment_required',
+        quote: { amount: '8.75', scope: { number_type: 'national' } } });
+      await expect(monthly('CZ', 'sms-org-uk', 'national')).rejects.toThrow('BILLING_SMS_MONTHLY_PRICE_REQUIRED');
+      await expect(monthly('CZ', smsIds.org, 'local')).rejects.toThrow('BILLING_SMS_MONTHLY_PRICE_REQUIRED');
+      await prisma.billingSmsMonthlyPrice.create({ data: { amount: '5.00', currency: 'EUR', numberType: 'toll-free',
+        setBy: 'operator', setByUserId: smsIds.user } });
+      await expect(monthly('CZ', smsIds.org, 'toll-free')).rejects.toThrow('BILLING_SMS_MONTHLY_PRICE_BELOW_COST');
+    } finally { vi.stubEnv('UOA_SMS_PRICING_MODE', 'legacy'); }
+  });
+
+  it('requires fee evidence for the SMS sender class even when a mobile route is approved', async () => {
+    const lookup = vi.spyOn(provider, 'destinationCountry').mockResolvedValue('CZ');
+    const cost = vi.spyOn(provider, 'price').mockResolvedValue({ amount: '0.022', country: 'CZ', currency: 'USD',
+      source: 'https://pricing.twilio.com/v1/Messaging/Countries/CZ', observedAt: new Date() });
+    const req = () => issueSmsQuote({ credential: fixture.entitlement, authorize: async () => undefined,
+      request: { ...subject, country: 'CZ', number_type: 'local', direction: 'outbound', destination: '+420777000002',
+        carrier: null, mcc: null, mnc: null } }, { prisma, provider });
+    try {
+      await expect(req()).rejects.toThrow('BILLING_SMS_ROUTE_BOUND_REQUIRED');
+      const route = await prisma.billingSmsRoutePolicy.create({ data: { accountSid: smsAccount,
+        country: 'CZ', direction: 'outbound', currency: 'USD', numberType: 'local', additionalPerSegment: '0.008',
+        additionalPerMessage: '0.004', source: 'https://example.test/account-fees', evidenceDigest: '9'.repeat(64),
+        expiresAt: new Date(Date.now() + 3_600_000), acceptedByUserId: smsIds.user, acceptanceReason: 'Local sender fees test' } });
+      const quote = await req();
+      expect(quote).toMatchObject({ rate_basis: 'maximum_number_carrier', scope: { number_type: 'local' } });
+      expect(await prisma.billingSmsQuote.findUniqueOrThrow({ where: { id: quote.id } }))
+        .toMatchObject({ routePolicyId: route.id, numberType: 'local' });
+    } finally { lookup.mockRestore(); cost.mockRestore(); }
   });
 
   it('admits a per-currency SMS Customer beside the organisation one and nothing else', async () => {

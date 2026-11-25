@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { localPhoneNumberRentalType, type BillingSmsQuoteRequestV1 } from '@unlikeotherai/billing-statement-protocol';
 import { AppError } from '../utils/errors.js';
 
 const money = z.string().regex(/^\d+(?:\.\d+)?$/).max(80);
@@ -38,9 +39,12 @@ export type SmsProviderConfiguration = {
 
 // AvailablePhoneNumbers returns `SMS` (upper case); IncomingPhoneNumbers and Twilio's
 // published schema name `sms`. Require an explicit true and refuse contradictory flags.
-const availableCapabilities = z.object({ sms: z.boolean().optional(), SMS: z.boolean().optional() })
-  .transform((value) => ({ sms: (value.sms === true || value.SMS === true) &&
-    value.sms !== false && value.SMS !== false }));
+const availableCapabilities = z.object({
+  sms: z.boolean().optional(), SMS: z.boolean().optional(), voice: z.boolean().optional(), Voice: z.boolean().optional(),
+}).transform((value) => ({
+  sms: (value.sms === true || value.SMS === true) && value.sms !== false && value.SMS !== false,
+  voice: (value.voice === true || value.Voice === true) && value.voice !== false && value.Voice !== false,
+}));
 
 function unavailable(): AppError {
   return new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SMS_PROVIDER_EVIDENCE_UNAVAILABLE');
@@ -103,30 +107,37 @@ export class BillingSmsProvider {
     }
   }
 
-  public async assertAvailableMobile(country: string, phone: string): Promise<void> {
+  public async assertAvailableNumber(country: string, phone: string,
+    numberType: BillingSmsQuoteRequestV1['number_type'] = 'mobile'): Promise<void> {
     if (!/^[A-Z]{2}$/.test(country) || !/^\+[1-9]\d{6,14}$/.test(phone)) throw unavailable();
-    const query = new URLSearchParams({ Contains: phone, SmsEnabled: 'true', PageSize: '100' });
+    const resource = numberType === 'mobile' ? 'Mobile' : numberType === 'toll-free' ? 'TollFree' : 'Local';
+    if (resource === 'Local') {
+      const catalog = numbers.parse(await this.read('https://pricing.twilio.com/v1/PhoneNumbers/Countries/' + country));
+      if (catalog.iso_country !== country || localPhoneNumberRentalType(country, phone,
+        catalog.phone_number_prices.map((entry) => entry.number_type)) !== numberType) throw unavailable();
+    }
+    const query = new URLSearchParams({ Contains: phone, PageSize: '100' });
     const result = z.object({ available_phone_numbers: z.array(z.object({
       phone_number: z.string(), iso_country: z.string(), capabilities: availableCapabilities,
     })) }).safeParse(await this.read(`https://api.twilio.com/2010-04-01/Accounts/` +
-      `${this.configuration.accountSid}/AvailablePhoneNumbers/${country}/Mobile.json?${query}`));
+      `${this.configuration.accountSid}/AvailablePhoneNumbers/${country}/${resource}.json?${query}`));
     if (!result.success || !result.data.available_phone_numbers.some((number) =>
-      number.phone_number === phone && number.iso_country === country && number.capabilities.sms)) {
-      throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_MOBILE_NUMBER_UNAVAILABLE');
+      number.phone_number === phone && number.iso_country === country && (number.capabilities.sms || number.capabilities.voice))) {
+      throw new AppError('BAD_REQUEST', 409, numberType === 'mobile' ? 'BILLING_SMS_MOBILE_NUMBER_UNAVAILABLE' : 'BILLING_SMS_NUMBER_UNAVAILABLE');
     }
   }
 
-  public async ownedNumber(accountSid: string, sid: string): Promise<{ phone: string; sms: boolean } | null> {
+  public async ownedNumber(accountSid: string, sid: string): Promise<{ phone: string; sms: boolean; voice: boolean } | null> {
     if (accountSid !== this.configuration.accountSid || !/^PN[0-9a-fA-F]{32}$/.test(sid)) throw unavailable();
     const raw = await this.read(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/` +
       `IncomingPhoneNumbers/${sid}.json`, true);
     if (raw === null) return null;
     const number = z.object({ sid: z.literal(sid), account_sid: z.literal(accountSid),
       phone_number: z.string().regex(/^\+[1-9]\d{6,14}$/),
-      capabilities: z.object({ sms: z.boolean() }),
+      capabilities: availableCapabilities,
     }).safeParse(raw);
     if (!number.success) throw unavailable();
-    return { phone: number.data.phone_number, sms: number.data.capabilities.sms };
+    return { phone: number.data.phone_number, sms: number.data.capabilities.sms, voice: number.data.capabilities.voice };
   }
 
   public async destinationCountry(destination: string): Promise<string> {
@@ -140,9 +151,11 @@ export class BillingSmsProvider {
     return parsed.data.country_code;
   }
 
-  public async price(country: string, direction: 'monthly' | 'inbound' | 'outbound'):
+  public async price(country: string, direction: 'monthly' | 'inbound' | 'outbound',
+    numberType: 'mobile' | 'local' | 'national' | 'toll-free' = 'mobile'):
     Promise<SmsPrivatePrice> {
     if (!/^[A-Z]{2}$/.test(country)) throw unavailable();
+    const providerType = numberType === 'toll-free' ? 'toll free' : numberType;
     const source = direction === 'monthly'
       ? `https://pricing.twilio.com/v1/PhoneNumbers/Countries/${country}`
       : `https://pricing.twilio.com/v1/Messaging/Countries/${country}`;
@@ -152,17 +165,17 @@ export class BillingSmsProvider {
     if (direction === 'monthly') {
       const parsed = numbers.safeParse(raw);
       if (!parsed.success || parsed.data.iso_country !== country) throw unavailable();
-      const mobile = parsed.data.phone_number_prices.filter((entry) => entry.number_type === 'mobile');
-      if (mobile.length !== 1 || mobile[0]?.current_price == null) throw unavailable();
-      amount = mobile[0].current_price;
+      const rental = parsed.data.phone_number_prices.filter((entry) => entry.number_type === providerType);
+      if (rental.length !== 1 || rental[0]?.current_price == null) throw unavailable();
+      amount = rental[0].current_price;
       unit = parsed.data.price_unit;
     } else {
       const parsed = messaging.safeParse(raw);
       if (!parsed.success || parsed.data.iso_country !== country) throw unavailable();
       const entries = direction === 'inbound'
-        ? parsed.data.inbound_sms_prices.filter((entry) => entry.number_type === 'mobile')
+        ? parsed.data.inbound_sms_prices.filter((entry) => entry.number_type === providerType)
         : parsed.data.outbound_sms_prices.flatMap((carrier) =>
-          carrier.prices.filter((entry) => entry.number_type === 'mobile'));
+          carrier.prices.filter((entry) => entry.number_type === providerType));
       if (!entries.length || entries.some((entry) => entry.current_price == null)) throw unavailable();
       // A carrier supplied by a consumer cannot narrow the authorization bound.
       amount = entries.map((entry) => {

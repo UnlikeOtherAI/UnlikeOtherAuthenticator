@@ -1,5 +1,18 @@
 # Phone number pricing and prepaid SMS
 
+## Number rental types
+
+Under **Billing → SMS policies → Monthly number prices**, edit the price for the number’s class
+and the organisation’s billing currency. Local, national and toll-free rentals each need an
+operator price before checkout. New mobile quotes continue to follow the configured commercial
+mode. Every accepted number subscription keeps its original amount and currency.
+
+A number can support calls, texts or both. Billing verifies the offered type against the
+account’s current inventory and checks that the acquired number supports a service.
+A text needs the receiving or sending class’s message rate and an accepted route-fee bound.
+Automatic mobile route bounds apply to mobile senders; configure evidenced route bounds
+for other classes. Voice-only numbers cannot fund SMS holds or authorize text dispatch.
+
 ## Current implementation — 2026-10-09
 
 The implementation includes dynamic final mobile-number quotes, an exact-number
@@ -54,7 +67,7 @@ organisation billing management authority.
 
 | Path | Additional body | Result |
 | --- | --- | --- |
-| `/billing/v1/sms/quotes` | country, number_type=mobile, direction, nullable destination/carrier/mcc/mnc | exact final quote |
+| `/billing/v1/sms/quotes` | country, number_type (mobile, local, national or toll-free), direction, nullable destination/carrier/mcc/mnc | exact final quote |
 | `/billing/v1/sms/quotes/verify` | same scope plus quote_id | same accepted quote or refusal |
 | `/billing/v1/sms/numbers/begin` | resource_id, quote_id, phone_number | number payment state and hosted Checkout URL |
 | `/billing/v1/sms/numbers/status` | resource_id | exact payment/acquisition state |
@@ -406,6 +419,8 @@ SMS final maximum quotes round upward only to the established USD-per-microcredi
 Financial database tests exercise PostgreSQL advisory locks through Prisma's supported text result and combine resource advisory locking with row locks. Final reserve, claim and standing-fund admission take the exact number row lock so a concurrent release after a serializable snapshot forces retry rather than admitting stale active state.
 
 The outgoing financial service fixture exercises canonical fresh signed actor admission, one-winner claim, exact cash-backed monthly projection, actual provider receipt debit/replay, held unknown/above-bound outcomes, historical receipt rejection, ordinary-member grant refusal and verified provider release before monthly cancellation. Fixture providers and Stripe evidence are injected; no live charges are generated.
+
+Manual SMS route evidence applies to the selected number type. Add country and existing policies cover mobile. Use **Enter evidence manually** for the account, country, direction and type of any other sender. A rental quote needs no SMS route policy.
 
 ### Private deployment policy and accepted terms
 

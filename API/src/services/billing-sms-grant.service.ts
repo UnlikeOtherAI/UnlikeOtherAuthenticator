@@ -77,7 +77,7 @@ export async function createSmsGrant(input: { request: BillingSmsGrantRequestV1;
     }
     const number = await tx.billingSmsNumberResource.findFirst({ where: {
       id: input.request.number_id, orgId: input.request.organisation_id, serviceId: input.credential.service.id,
-      state: 'active', phoneNumberSid: { not: null },
+      state: 'active', smsCapable: true, phoneNumberSid: { not: null },
     } });
     if (!number) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_NUMBER_NOT_ACTIVE');
     return publicSmsGrant(await tx.billingSmsDispatchGrant.create({ data: {

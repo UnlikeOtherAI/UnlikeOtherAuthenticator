@@ -83,6 +83,7 @@ describe('requireOrgRole — subject assertion user mode', () => {
       configJwt: 'verified-nessie-config.jwt',
       sourceDomain: 'api.nessie.works',
       audience: 'https://authentication.unlikeotherai.com/org',
+      allowAgentGrant: true,
     });
     expect(lockEpochShared).toHaveBeenCalledWith(
       { userId: 'user_1', domain: 'api.nessie.works', credentialEpoch: 7 },

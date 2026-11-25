@@ -14,9 +14,10 @@ type AlertDb = Pick<PrismaClient, 'billingSmsPolicyAlert'>;
 /** The FX subject; route subjects are `account:country:direction:currency`. */
 export const SMS_FX_ALERT_SUBJECT = 'ECB_REFERENCE_USD_PER_EUR_V1';
 export function smsRouteAlertSubject(route: {
-  accountSid: string; country: string; direction: string; currency: string;
+  accountSid: string; country: string; direction: string; currency: string; numberType?: string;
 }): string {
-  return `${route.accountSid}:${route.country}:${route.direction}:${route.currency}`;
+  return `${route.accountSid}:${route.country}:${route.direction}:${route.currency}` +
+    (route.numberType && route.numberType !== 'mobile' ? `:${route.numberType}` : '');
 }
 
 /**

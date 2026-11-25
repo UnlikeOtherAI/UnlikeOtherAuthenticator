@@ -6,7 +6,8 @@ import type { SmsPolicies, SmsPolicyAlert } from '../../schemas/billing-sms-poli
 import { billingDateTime } from './billing-format';
 
 type Route = SmsPolicies['routes'][number];
-const routeSubject = (route: Route) => `${route.account_sid}:${route.country}:${route.direction}:${route.currency}`;
+const routeSubject = (route: Route) => `${route.account_sid}:${route.country}:${route.direction}:${route.currency}` +
+  (route.number_type && route.number_type !== 'mobile' ? `:${route.number_type}` : '');
 
 /** Open renewal-job conditions; each names the route or rate and what a person has to do. */
 export function BillingSmsPolicyAlerts({ alerts }: { alerts: SmsPolicyAlert[] }) {
@@ -51,7 +52,7 @@ export function BillingSmsPolicyHistory({ data, loading, failed, onReload }: {
         <EvidenceRecord source={record.value.source} digest={record.value.source_digest} expiresAt={record.value.expires_at}
           acceptedAt={record.value.accepted_at} actor={record.value.accepted_by_user_id} reason={record.value.acceptance_reason} />
       </div> : <div key={record.value.id} className="rounded-lg border border-gray-200 p-3 text-sm">
-        <PolicyStatus expiresAt={record.value.expires_at} attention={record.attention} /> <strong>{record.value.country} · {record.value.direction} · {record.value.currency}</strong>
+        <PolicyStatus expiresAt={record.value.expires_at} attention={record.attention} /> <strong>{record.value.country} · {record.value.direction} · {record.value.currency}{record.value.number_type && record.value.number_type !== 'mobile' ? ` · ${record.value.number_type}` : ''}</strong>
         <p className="mt-1 break-all font-mono text-xs">{record.value.account_sid} · segment {record.value.additional_per_segment} · message {record.value.additional_per_message}</p>
         <p className="mt-1 text-xs text-gray-600">{record.value.provider_price === null
           ? 'No account price recorded: renews only when a person accepts it again.'

@@ -63,7 +63,7 @@ export async function lockSmsQuote(tx: Prisma.TransactionClient, input: {
     tx.billingSmsRoutePolicy.findUnique({ where: { id: quote.routePolicyId } }),
   ]);
   if (!fx || fx.expiresAt <= input.now || !policy || policy.expiresAt <= input.now ||
-      policy.accountSid !== input.accountSid || policy.country !== quote.country ||
+      policy.accountSid !== input.accountSid || policy.country !== quote.country || policy.numberType !== quote.numberType ||
       policy.direction !== quote.direction || policy.currency !== quote.providerCurrency) {
     throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SMS_ROUTE_BOUND_UNAVAILABLE');
   }

@@ -20,6 +20,7 @@ export const SmsRoutePolicyImportSchema = z.object({
   account_sid: z.string().regex(/^AC[0-9a-fA-F]{32}$/),
   country: z.string().regex(/^[A-Z]{2}$/),
   direction: z.enum(['inbound', 'outbound']),
+  number_type: z.enum(['mobile', 'local', 'national', 'toll-free']).optional(),
   currency: z.enum(['USD', 'EUR']),
   additional_per_segment: Bound,
   additional_per_message: Bound,
@@ -139,12 +140,12 @@ export async function insertSmsRoutePolicy(tx: Prisma.TransactionClient, value: 
   baseline: { providerPrice?: string | null; renewalOfId?: string | null } = {}) {
   const existing = await tx.billingSmsRoutePolicy.findFirst({ where: {
     evidenceDigest: value.evidence_digest, accountSid: value.account_sid, country: value.country,
-    direction: value.direction, currency: value.currency,
+    direction: value.direction, currency: value.currency, numberType: value.number_type ?? 'mobile',
   } });
   if (existing) return existing;
   return tx.billingSmsRoutePolicy.create({ data: {
     accountSid: value.account_sid, country: value.country, direction: value.direction,
-    currency: value.currency, additionalPerSegment: value.additional_per_segment,
+    currency: value.currency, numberType: value.number_type ?? 'mobile', additionalPerSegment: value.additional_per_segment,
     additionalPerMessage: value.additional_per_message, source: value.source,
     evidenceDigest: value.evidence_digest, expiresAt: new Date(value.expires_at),
     ...acceptedBy(acceptor), acceptedAt: now, acceptanceReason,
@@ -213,11 +214,11 @@ export async function acceptSmsRoutePolicy(actor: SmsPolicyActor, token: string,
   });
 }
 
-export async function listSmsPolicies() {
+export async function listSmsPolicies(byType = false) {
   const db = getAdminPrisma();
   const [fx, routes, alerts] = await Promise.all([
     db.billingSmsFxSnapshot.findMany({ orderBy: { acceptedAt: 'desc' }, take: 50 }),
-    db.billingSmsRoutePolicy.findMany({ orderBy: { acceptedAt: 'desc' }, take: 100 }),
+    db.billingSmsRoutePolicy.findMany({ where: byType ? {} : { numberType: 'mobile' }, orderBy: { acceptedAt: 'desc' }, take: 100 }),
     listOpenSmsPolicyAlerts(db),
   ]);
   return { fx: fx.map(serializeSmsFxPolicy), routes: routes.map(serializeSmsRoutePolicy), alerts };
@@ -230,7 +231,8 @@ export function serializeSmsFxPolicy(value: Awaited<ReturnType<typeof acceptSmsF
     acceptance_reason: value.acceptanceReason };
 }
 export function serializeSmsRoutePolicy(value: Awaited<ReturnType<typeof acceptSmsRoutePolicy>>) {
-  return { id: value.id, account_sid: value.accountSid, country: value.country,
+  return { ...(value.numberType && value.numberType !== 'mobile' ? { number_type: value.numberType } : {}),
+    id: value.id, account_sid: value.accountSid, country: value.country,
     direction: value.direction, currency: value.currency,
     additional_per_segment: value.additionalPerSegment.toString(),
     additional_per_message: value.additionalPerMessage.toString(), source: value.source,

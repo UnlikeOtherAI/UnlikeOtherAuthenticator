@@ -16,6 +16,10 @@ export function BillingSmsRoutePolicyForm({ pending, error, onPreview }: {
         <TextField {...form.register('account_sid')} placeholder="AC…" /></FieldShell>
       <FieldShell label="Country" error={form.formState.errors.country?.message}>
         <TextField {...form.register('country')} placeholder="GB" maxLength={2} /></FieldShell>
+      <FieldShell label="Number type"><SelectField {...form.register('number_type')} className="w-full">
+        <option value="mobile">Mobile</option><option value="local">Local</option>
+        <option value="national">National</option><option value="toll-free">Toll-free</option>
+      </SelectField></FieldShell>
       <FieldShell label="Direction"><SelectField {...form.register('direction')} className="w-full">
         <option value="outbound">Outbound</option><option value="inbound">Inbound</option>
       </SelectField></FieldShell>

@@ -11,6 +11,7 @@ import { getAdminPrisma } from '../db/prisma.js';
 import { AppError } from '../utils/errors.js';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { lockSmsCredential, lockSmsSubject, smsSubject, verifySmsActor } from './billing-sms-authority.service.js';
+import { RentalNumberType } from './billing-sms-monthly-price.service.js';
 import { publicSmsQuote } from './billing-sms-quote.service.js';
 import { requireOrganisationBillingRegion } from './billing-organisation-region.service.js';
 import type { BillingSmsProvider } from './billing-sms-provider.service.js';
@@ -135,8 +136,11 @@ export async function beginSmsNumber(input: { request: BillingSmsNumberBeginRequ
   assertCanManageRecurringAddonScope(viewer, 'ORGANISATION');
   const existing = await prisma.billingSmsNumberResource.findUnique({ where: { id: input.request.resource_id } });
   if (!existing) {
-    const quote = await prisma.billingSmsQuote.findUniqueOrThrow({ where: { id: input.request.quote_id } });
-    await deps.provider.assertAvailableMobile(quote.country, input.request.phone_number);
+    const quote = await prisma.billingSmsQuote.findFirst({ where: { id: input.request.quote_id,
+      serviceId: input.credential.service.id, orgId: input.request.organisation_id, direction: 'monthly',
+      expiresAt: { gt: deps.now?.() ?? new Date() } }, select: { country: true, numberType: true } });
+    if (!quote) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_QUOTE_NOT_ACCEPTABLE');
+    await deps.provider.assertAvailableNumber(quote.country, input.request.phone_number, RentalNumberType.parse(quote.numberType));
   }
   const configured = deps.stripe ? { client: deps.stripe, livemode: deps.stripeLivemode ?? false }
     : existing ? await requireSmsResourceStripe(existing, prisma) : await requireOrganisationStripeBilling(subject.organisationId, prisma);
@@ -185,14 +189,14 @@ export async function beginSmsNumber(input: { request: BillingSmsNumberBeginRequ
     const key = `sms-${createHash('sha256').update(input.request.resource_id).digest('hex')}`;
     const offer = await tx.billingRecurringAddonOffer.create({ data: {
       serviceId: input.credential.service.id, key, version: 1,
-      name: `Mobile number ${input.request.phone_number}`, description: 'Monthly mobile phone number service.',
+      name: `Phone number ${input.request.phone_number}`, description: `Monthly ${quote.numberType} number rental.`,
       monthlyAmountMinor: minor, currency: quote.finalCurrency, resourceKind: 'sms_mobile_number', resourceId: input.request.resource_id,
     } });
     await tx.billingRecurringAddonCatalog.create({ data: { accountId: account.id, serviceId: offer.serviceId,
       offerId: offer.id, currency: quote.finalCurrency, monthlyAmountMinor: minor, stripeLookupKey: `${key}:1:${account.id}` } });
     return tx.billingSmsNumberResource.create({ data: { id: input.request.resource_id,
       serviceId: input.credential.service.id, appKeyId: input.credential.id, orgId: input.request.organisation_id,
-      quoteId: quote.id, phoneNumber: input.request.phone_number, country: quote.country,
+      quoteId: quote.id, phoneNumber: input.request.phone_number, country: quote.country, smsCapable: false,
       offerId: offer.id, state: 'payment_required' } });
   }, 'BILLING_SMS_RESOURCE_RETRY_EXHAUSTED');
   const status = await readSmsNumber({ product: input.request.product, resource_id: resource.id,

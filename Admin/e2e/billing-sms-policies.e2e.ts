@@ -26,7 +26,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   let countryRoutes: Array<Record<string, unknown> & { direction: string; observed_at: string }> = [];
   const thirty = new Date(Date.now() + 30 * 86_400_000).toISOString();
   const writes: string[] = [];
-  const seed = (currency: string, amount: string) => ({ id: `price-seed-${currency}`, amount, currency, set_by: 'seed',
+  const seed = (currency: string, amount: string, number_type = 'mobile') => ({ id: `price-seed-${currency}`, amount, currency, number_type, set_by: 'seed',
     set_by_user_id: null as string | null, set_at: now });
   const monthlyPrices = [seed('EUR', '4.99'), seed('GBP', '4.49'), seed('USD', '5.49')];
   const resource = { id: 'resource-fixture', service_id: 'nessie', organisation_id: 'org-fixture',
@@ -37,10 +37,11 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
       headers: { 'Cache-Control': 'private, no-store' }, body: JSON.stringify(value) });
     if (url.pathname.endsWith('/monthly-prices')) {
       if (request.method() === 'POST') {
-        writes.push(url.pathname); expect(request.postDataJSON()).toEqual({ amount: '5.49', currency: 'EUR' });
-        monthlyPrices[0] = { ...seed('EUR', '5.49'), id: 'price-2', set_by: 'operator',
+        writes.push(url.pathname); expect(request.postDataJSON()).toEqual({ amount: '6.49', currency: 'EUR', number_type: 'national' });
+        const added = { ...seed('EUR', '6.49', 'national'), id: 'price-2', set_by: 'operator',
           set_by_user_id: 'operator-fixture' };
-        return json(monthlyPrices[0]);
+        monthlyPrices.push(added);
+        return json(added);
       }
       return json({ prices: monthlyPrices });
     }
@@ -104,7 +105,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
     if (url.pathname.endsWith('/routes/preview')) {
       const { evidence, ...dimensions } = input; evidenceDocument = evidence;
       expect(dimensions).toMatchObject({ account_sid: `AC${'a'.repeat(32)}`, country: 'IE', currency: 'USD',
-        direction: 'outbound', additional_per_segment: '0.003', additional_per_message: '0.001' });
+        direction: 'outbound', number_type: 'local', additional_per_segment: '0.003', additional_per_message: '0.001' });
       routeEvidence = { ...dimensions, evidence_digest: 'b'.repeat(64), observed_at: now };
       return json({ evidence: routeEvidence, evidence_document: evidenceDocument,
         preview_token: 'synthetic-route-preview', preview_expires_at: expiry });
@@ -127,13 +128,14 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   await expect(page.getByText(/automatically by the renewal job/)).toBeVisible();
   await expect(page.getByText(/Account price USD 0.0075 at acceptance/)).toBeVisible();
   for (const price of ['EUR 4.99', 'GBP 4.49', 'USD 5.49']) await expect(page.getByText(price, { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Edit Europe (EUR) price', exact: true }).click();
-  const amount = page.getByRole('textbox', { name: /^Europe \(EUR\) amount/ });
+  await page.getByRole('button', { name: 'Edit National · Europe (EUR) price', exact: true }).click();
+  const amount = page.getByRole('textbox', { name: /^National · Europe \(EUR\) amount/ });
   await amount.fill('5.4');
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
-  await amount.fill('5.49');
+  await amount.fill('6.49');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('EUR 5.49', { exact: true })).toBeVisible();
+  await expect(page.getByText('EUR 6.49', { exact: true })).toBeVisible();
+  await expect(page.getByText('EUR 4.99', { exact: true })).toBeVisible();
   await expect(page.getByText('GBP 4.49', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Refresh and accept', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'No ECB rate has been accepted yet' })).toBeVisible();
@@ -169,6 +171,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   await page.getByText('Enter evidence manually', { exact: true }).click();
   await page.getByLabel(/^Provider account SID/).fill(`AC${'a'.repeat(32)}`);
   await page.getByLabel('Country', { exact: true }).fill('IE');
+  await page.getByRole('combobox', { name: /^Number type/ }).selectOption('local');
   await page.getByLabel(/^Additional charge per segment/).fill('0.003');
   await page.getByLabel(/^Additional charge per message/).fill('0.001');
   await page.getByLabel(/^Evidence source/).fill('https://provider.example/account-terms');
@@ -185,7 +188,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   if (proof) { await mkdir(proof, { recursive: true });
     await page.screenshot({ path: path.join(proof, `sms-route-review-${info.project.name}.png`), fullPage: true }); }
   await dialog.getByRole('button', { name: 'Accept immutable policy' }).click();
-  await expect(dialog).toHaveCount(0); await expect(page.getByText('IE · outbound · USD', { exact: true })).toBeVisible();
+  await expect(dialog).toHaveCount(0); await expect(page.getByText('IE · outbound · USD · local', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Review resource', exact: true }).click();
   const recovery = page.getByRole('dialog', { name: 'SMS number recovery' });
   await expect(recovery).toContainText('Frozen customer quote: USD 12.34 per month');
@@ -193,7 +196,7 @@ test('operator reviews exact SMS evidence, retries acceptance, checks history an
   await expect(recovery).toContainText('in_fixture');
   if (proof) await page.screenshot({ path: path.join(proof, `sms-recovery-${info.project.name}.png`), fullPage: true });
   await page.keyboard.press('Escape'); await page.reload();
-  await expect(page.getByText('IE · outbound · USD', { exact: true })).toBeVisible();
+  await expect(page.getByText('IE · outbound · USD · local', { exact: true })).toBeVisible();
   await page.getByText('Uncollected · SM_fixture', { exact: true }).click();
   await expect(page.getByText('Uncollected credits: 1.234567', { exact: true })).toBeVisible();
   await expect(page.getByText('Consumed credits: Unknown', { exact: true })).toBeVisible();

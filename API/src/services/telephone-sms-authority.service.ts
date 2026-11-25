@@ -1,3 +1,4 @@
+import { RentalNumberType } from './billing-sms-monthly-price.service.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { VerifiedBillingAppKey } from './billing-app-key.service.js';
 import { lockAndAssertGlobalAuthenticationEpoch } from './authentication-epoch.service.js';
@@ -38,7 +39,7 @@ export async function lockTelephoneSmsAuthority(tx: Prisma.TransactionClient, ch
   const [number, hold, retired] = await Promise.all([
     tx.billingSmsNumberResource.findFirst({ where: { id: binding.number_id, serviceId: credential.service.id,
       orgId: live.organisationId, accountSid: binding.account_sid, phoneNumber: binding.from,
-      phoneNumberSid: { not: null }, state: 'active' } }),
+      phoneNumberSid: { not: null }, state: 'active', smsCapable: true }, include: { quote: { select: { numberType: true } } } }),
     tx.billingSmsStandingHold.findFirst({ where: { serviceId: credential.service.id, orgId: live.organisationId,
       teamId: live.teamId, numberId: binding.number_id, allocationId: binding.allocation_id,
       state: 'active', retiredAt: null, reservedMicrocredits: { gt: 0n } } }),
@@ -46,5 +47,5 @@ export async function lockTelephoneSmsAuthority(tx: Prisma.TransactionClient, ch
       serviceId: credential.service.id, numberId: binding.number_id, allocationId: binding.allocation_id } } }),
   ]);
   if (!number || !hold || retired) throw telephoneDenied();
-  return { challenge: live, senderCountry: number.country };
+  return { challenge: live, senderCountry: number.country, senderType: RentalNumberType.parse(number.quote.numberType) };
 }
