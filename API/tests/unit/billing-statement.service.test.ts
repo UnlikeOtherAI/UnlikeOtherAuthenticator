@@ -34,7 +34,7 @@ describe('canonical UOA billing statement', () => {
         findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
         findMany: vi.fn().mockResolvedValue([]),
       },
-      billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(perSeatTerm) },
+      billingTariffTermEvent: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(perSeatTerm) },
       billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
       billingCommercialAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
       teamMember: { findMany: vi.fn().mockResolvedValue([]) },
@@ -74,6 +74,35 @@ describe('canonical UOA billing statement', () => {
     expect(quoteSubscription).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the active Free plan while retaining the monthly fee already in effect', async () => {
+    const cutoff = new Date('2026-07-10T11:22:33.456Z');
+    const free = { ...effectiveTerm, tariffId: 'free', assignmentId: 'new-assignment',
+      tariff: { ...effectiveTerm.tariff, id: 'free', mode: 'FREE', collectionMode: 'NONE',
+        markupBps: 0, monthlyAmountMinor: 0n } };
+    const prisma = {
+      billingService: { findUnique: async () => ({ tariffHistoryFromMonth: '2026-01' }), findMany: async () => [] },
+      billingOrganisationContractVersion: { findMany: async () => [] },
+      billingTariffTermEvent: {
+        findMany: async () => [{ createdAt: cutoff }],
+        findFirst: async ({ where }: { where: { OR: [unknown, { createdAt: { lte: Date } }] } }) =>
+          where.OR[1].createdAt.lte >= cutoff ? free : effectiveTerm,
+      },
+      teamMember: { findMany: async () => [] }, billingCommercialAdjustment: { findMany: async () => [] },
+    };
+    const statement = await getCanonicalBillingStatement(
+      { request, actorToken: 'signed-actor', credential, billingMonth: '2026-07' },
+      { prisma: prisma as never, now: () => new Date('2026-07-15T00:00:00Z'),
+        resolveSummary: vi.fn().mockResolvedValue({ ...summary, subscription: null }),
+        fetchMetering: async ({ groupBy }) => ({ ...metering(groupBy), lines: [],
+          billingCompleteness: { state: 'complete', unresolvedPaidAttempts: '0' } }),
+        listDirectAccess: async () => [], resolveControlledBy: async () => null },
+    );
+    expect(statement.plan).toMatchObject({ collection_mode: 'none', monthly_subscription: { amount_minor: '0' },
+      assignment: { id: 'new-assignment' } });
+    expect(statement.commercial_lines.find(line => line.kind === 'monthly_subscription')?.amount)
+      .toMatchObject({ amount: '20', currency: 'GBP' });
+  });
+
   it('rates immutable raw metering centrally and emits a display-ready v1 model', async () => {
     const fetchMetering = vi.fn(async (params: { groupBy: 'service' | 'user' }) =>
       metering(params.groupBy),
@@ -94,7 +123,7 @@ describe('canonical UOA billing statement', () => {
           { identifier: 'deepsignal', name: 'DeepSignal' },
         ]),
       },
-      billingTariffTermEvent: {
+      billingTariffTermEvent: { findMany: vi.fn().mockResolvedValue([]),
         findFirst: vi.fn().mockResolvedValue(effectiveTerm),
       },
       billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
@@ -282,7 +311,7 @@ describe('canonical UOA billing statement', () => {
         findMany: vi.fn().mockResolvedValue([]),
         findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-01' }),
       },
-      billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(effectiveTerm) },
+      billingTariffTermEvent: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(effectiveTerm) },
       billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
       billingCommercialAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
       teamMember: { findMany: vi.fn().mockResolvedValue([]) },

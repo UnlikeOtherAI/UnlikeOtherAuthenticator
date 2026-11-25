@@ -23,6 +23,7 @@ import {
 } from './billing-stripe-tariff-guard.service.js';
 import { lockProductTeamPolicyExclusive } from './product-team-policy-lock.service.js';
 import {
+  appendImmediateAssignment,
   appendTariffTermEvent,
   lockTariffHistoryService,
   nextUtcBillingMonth,
@@ -322,7 +323,12 @@ export async function upsertBillingTariffAssignment(
       },
       select: { id: true, tariffId: true },
     });
-    if (current?.tariffId !== params.tariffId) {
+    const pending = current?.tariffId === params.tariffId
+      ? (await assignmentEffectiveFromMonths(tx, [current.id])).get(current.id)
+      : null;
+    const activatesAssignment = current?.tariffId !== params.tariffId ||
+      Boolean(pending && pending.effectiveFromMonth > utcBillingMonth(new Date()));
+    if (activatesAssignment) {
       await assertTariffAssignmentChangeAllowed(tx, {
         serviceId: params.serviceId,
         orgId: params.organisationId,
@@ -355,15 +361,13 @@ export async function upsertBillingTariffAssignment(
       },
       include: { tariff: true },
     });
-    if (current?.tariffId !== params.tariffId) {
-      await appendTariffTermEvent(tx, {
+    if (activatesAssignment) {
+      await appendImmediateAssignment(tx, {
         serviceId: params.serviceId,
         source: params.teamId ? BillingTariffSource.TEAM : BillingTariffSource.ORGANISATION,
         scopeKey,
-        effectiveFromMonth: nextUtcBillingMonth(new Date()),
         tariffId: params.tariffId,
         assignmentId: assignment.id,
-        reason: 'assignment-changed',
         actorEmail: params.actor.email,
       });
     }
@@ -383,7 +387,8 @@ export async function upsertBillingTariffAssignment(
     });
     const effectiveFrom = await assignmentEffectiveFromMonths(tx, [assignment.id]);
     return { ...assignment, tariff: await describeTariff(tx, assignment.tariff),
-      effectiveFromMonth: effectiveFrom.get(assignment.id) ?? null };
+      effectiveFromMonth: effectiveFrom.get(assignment.id)?.effectiveFromMonth ?? null,
+      effectiveAt: effectiveFrom.get(assignment.id)?.effectiveAt ?? null };
   });
 }
 
@@ -407,15 +412,13 @@ export async function removeBillingTariffAssignment(
     await assertContractAssignmentRemovalAllowed(tx, assignment.id);
     await assertTariffAssignmentRemovalAllowed(tx, assignment.id);
     await tx.billingTariffAssignment.delete({ where: { id: assignment.id } });
-    await appendTariffTermEvent(tx, {
+    await appendImmediateAssignment(tx, {
       serviceId: params.serviceId,
       source: assignment.scope === BillingAssignmentScope.TEAM
         ? BillingTariffSource.TEAM : BillingTariffSource.ORGANISATION,
       scopeKey: assignment.teamId
         ? `${assignment.orgId}:${assignment.teamId}` : assignment.orgId,
-      effectiveFromMonth: nextUtcBillingMonth(new Date()),
       tariffId: null,
-      reason: 'assignment-removed',
       actorEmail: params.actor.email,
     });
     await tx.adminAuditLog.create({

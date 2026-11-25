@@ -94,7 +94,7 @@ describe('BillingOrganisationView', () => {
     mutations.save.mockRejectedValueOnce(new ApiRequestError(409, 'STRIPE_TARIFF_PINNED'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
     const dialog = screen.getByRole('dialog', { name: 'Move Zeta to Standard?' });
-    expect(dialog.textContent).toContain('This month keeps its current terms.');
+    expect(dialog.textContent).toContain('Previous charges stay as billed.');
     // A routine move is confirmed with the primary button, never the destructive one.
     const move = within(dialog).getByRole('button', { name: 'Move Zeta to Standard' });
     expect(move.className).toContain('bg-indigo');
@@ -131,7 +131,7 @@ describe('BillingOrganisationView', () => {
     await user.selectOptions(select('Tariff for Hugo'), '');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     const dialog = screen.getByRole('dialog', { name: "Remove Hugo's own tariff?" });
-    expect(dialog.textContent).toContain('(UTC) Hugo uses Standard.');
+    expect(dialog.textContent).toContain('Hugo uses Standard immediately.');
     const removeButton = within(dialog).getByRole('button', { name: "Remove Hugo's own tariff" });
     expect(removeButton.className).toContain('bg-red');
     await user.click(removeButton);

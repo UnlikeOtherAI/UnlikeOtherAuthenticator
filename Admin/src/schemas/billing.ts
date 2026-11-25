@@ -60,6 +60,7 @@ export const BillingAssignmentSchema = z.object({
   team: z.object({ id: z.string(), name: z.string() }).nullable(),
   tariff: BillingTariffSchema,
   // First UTC month (YYYY-MM) the assignment applies to; null for rows older than tariff history.
+  effective_at: z.string().datetime().nullable().optional(),
   effective_from_month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).nullable().default(null),
   created_by_email: z.string().nullable(),
   created_at: z.string(),

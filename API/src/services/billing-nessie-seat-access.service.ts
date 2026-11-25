@@ -21,7 +21,7 @@ const hold = (reason: NessieSeatAccess['reason'], deadline: Date | null = null):
 export async function readNessieSeatAccess(tx: Prisma.TransactionClient, scope: {
   serviceId: string; organisationId: string; teamId: string | null; userId?: string;
 }, now = new Date(), intent: 'projection' | 'admission' = 'admission'): Promise<NessieSeatAccess> {
-  const effective = await resolveCurrentBillingTariff(tx, { ...scope, billingMonth: utcBillingMonth(now) }, 'nessie');
+  const effective = await resolveCurrentBillingTariff(tx, { ...scope, asOf: now, billingMonth: utcBillingMonth(now) }, 'nessie');
   if (!effective.tariff.anniversarySeats) return effective.source === 'SERVICE_DEFAULT' ? hold('setup_required')
     : { allowed: true, status: 'agreement', deadline: null, reason: null };
   const teamId = effective.source === 'TEAM' ? scope.teamId : null;

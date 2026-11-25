@@ -79,6 +79,7 @@ describe('requireOrgRole — subject assertion user mode', () => {
     await requireOrgRole('owner')(input, {} as FastifyReply);
 
     expect(verifySubjectAssertion).toHaveBeenCalledWith({
+      allowAgentGrant: true,
       subjectToken: 'nessie.subject.assertion',
       configJwt: 'verified-nessie-config.jwt',
       sourceDomain: 'api.nessie.works',

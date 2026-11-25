@@ -74,7 +74,7 @@ export function BillingRecordDetail({ service }: { service: BillingService }) {
         ? [
             ['Scope', billingLabel(assignment.scope)],
             ['Tariff', `${assignment.tariff.name} · ${assignment.tariff.key} v${assignment.tariff.version}`],
-            ['Starts', assignment.effective_from_month
+            ['Starts', assignment.effective_at ? billingDateTime(assignment.effective_at) : assignment.effective_from_month
               ? billingMonthStart(assignment.effective_from_month) : '—'],
             ['Created', billingDateTime(assignment.created_at)],
             ['Updated', billingDateTime(assignment.updated_at)],

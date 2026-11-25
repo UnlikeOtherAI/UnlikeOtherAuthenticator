@@ -113,7 +113,7 @@ export function registerRootRoute(app: FastifyInstance): void {
       config_verification: configVerificationEndpointDocumentation,
       endpoints: [...endpoints, jobComputeContinuationEndpoint, publicTeamLookupEndpoint],
       browser_billing: 'Server-only BROWSER_RUNTIME reserves and settles original-payer browser minutes at provider cost plus 10%; Nessie absorbs the fixed provider subscription. Platform superusers manage dated policies in Billing > Nessie > Cloud browsers. See /api endpoint schemas and /llm.',
-      tariff_retirement: 'Tariff versions are never deleted. POST /internal/admin/billing/services/:serviceId/tariffs/:tariffId/retire and /restore (platform SUPERUSER) soft-retire one; serialised tariffs carry retired_at and retire_blocked_by, assignments effective_from_month. A retired version answers 409 BILLING_TARIFF_RETIRED for new business and still resolves for past months.',
+      tariff_retirement: 'Tariff versions are never deleted. POST /internal/admin/billing/services/:serviceId/tariffs/:tariffId/retire and /restore (platform SUPERUSER) soft-retire one; serialised tariffs carry retired_at and retire_blocked_by, assignments effective_from_month and exact effective_at for immediate Admin changes. A retired version answers 409 BILLING_TARIFF_RETIRED for new business and still resolves for past months.',
       customer_invoices: 'Actual prepaid payment and monthly service charge invoices use the /billing/v1/invoices/* endpoints; their canonical JSON Schema and examples are at /schemas/billing-customer-invoices-v1.json.',
       // Includes explicit TEAM-only deletion and preserved empty-org recovery authority.
       lifecycle: lifecycleDocumentation,

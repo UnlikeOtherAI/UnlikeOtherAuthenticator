@@ -89,6 +89,7 @@ type ListedService = {
     createdAt: Date;
     updatedAt: Date;
     effectiveFromMonth: string | null;
+    effectiveAt: Date | null;
     tariff: Tariff;
     org: { id: string; name: string };
     team: { id: string; name: string } | null;
@@ -186,6 +187,7 @@ export function serializeBillingService(service: ListedService) {
       team: assignment.team,
       tariff: serializeBillingTariff(assignment.tariff),
       effective_from_month: assignment.effectiveFromMonth,
+      effective_at: assignment.effectiveAt?.toISOString() ?? null,
       created_by_email: assignment.createdByEmail,
       created_at: assignment.createdAt.toISOString(),
       updated_at: assignment.updatedAt.toISOString(),

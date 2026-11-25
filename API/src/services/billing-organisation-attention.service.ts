@@ -32,7 +32,7 @@ export async function readOrganisationAttention(context:OrganisationBillingConte
   const wallet=await ensureOrganisationCreditAccount({account,organisationId:context.request.organisationId},{prisma});
   const period=currentBillingCreditPeriod(now);
   const effective=await resolveBillingTariffForMonth(prisma,{serviceId:context.credential.service.id,
-    organisationId:context.request.organisationId,teamId:null,financialScope:'organisation',billingMonth:period.key});
+    organisationId:context.request.organisationId,teamId:null,financialScope:'organisation',asOf:now,billingMonth:period.key});
   return prisma.$transaction(async tx=>{
     const current=await tx.billingCreditAccount.findUniqueOrThrow({where:{id:wallet.id},include:{
       autoTopUpConsentRevision:{include:{policy:true,option:{include:{refillOffer:true}}}}}});

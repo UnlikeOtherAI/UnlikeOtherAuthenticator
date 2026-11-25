@@ -22,7 +22,7 @@ export async function nessieBillingAccess(context: OrganisationBillingContext,
   const account = await organisationFinancialAccount(selection, prisma);
   const state = await runBillingSerializableTransaction(prisma, async tx => {
     const seats = await readNessieSeatAccess(tx, scope, now, 'projection');
-    const effective = await resolveCurrentBillingTariff(tx, { ...scope, billingMonth: utcBillingMonth(now) }, 'nessie');
+    const effective = await resolveCurrentBillingTariff(tx, { ...scope, asOf: now, billingMonth: utcBillingMonth(now) }, 'nessie');
     const subsidised = effective.source !== 'SERVICE_DEFAULT' && effective.tariff.mode === 'FREE';
     const wallet = await tx.billingCreditAccount.findUnique({ where: { accountId_scopeKey_currency: {
       accountId: account.id, scopeKey: scope.organisationId, currency: 'USD',

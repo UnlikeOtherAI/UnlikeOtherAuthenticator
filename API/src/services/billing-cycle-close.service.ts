@@ -19,7 +19,7 @@ import {
   projectMonthlySubscriptionLine,
 } from './billing-cycle-quote-projection.service.js';
 import {
-  aggregateOrganisationCycleUsage, cycleUsageContentFingerprint, projectCycleUsage,
+  aggregateOrganisationCycleUsage, cycleUsageContentFingerprint, mixedCycleLines, projectCycleUsage,
   type CycleUsageEvidence,
 } from './billing-cycle-usage-projection.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
@@ -127,15 +127,18 @@ export async function prepareBillingCycleClose(
         BigInt(teamCreditEvidence.funded_debit_microcredits ?? '-1') !== collectible)) {
       hold('BILLING_CROSS_CURRENCY_USAGE_UNCOVERED');
     }
-    const line = projected.lines.map((item) => ({ ...item,
-      customer_charge: item.usage_payment_mode === 'prepaid' ? null :
-        exactMoney(usdFromRatedMicrocredits(collectible), tariff.usageCurrency) }));
+    const mixedUsage = teamCreditEvidence.mixed_usage;
+    const lines = mixedUsage
+      ? projected.lines.flatMap(item => mixedCycleLines(item, mixedUsage, tariff.usageCurrency))
+      : projected.lines.map(item => ({
+        ...item,
+        customer_charge: item.usage_payment_mode === 'prepaid' ? null :
+          exactMoney(usdFromRatedMicrocredits(collectible), tariff.usageCurrency),
+        credits_consumed: decimalCredits(BigInt(teamCreditEvidence.consumed_microcredits)),
+      }));
     creditEvidence.push(teamCreditEvidence);
-    if (initial.teamId !== null) usageLines = line;
-    else organisationUsageLines.push(...line.map((item) => ({ ...item,
-      credits_consumed: teamCreditEvidence.covered ?
-        decimalCredits(BigInt(teamCreditEvidence.consumed_microcredits ?? '0')) : null,
-    })));
+    if (initial.teamId !== null) usageLines = lines;
+    else organisationUsageLines.push(...lines);
   }
   const consumedMicrocredits = creditEvidence.every((row) => row.covered) ?
     creditEvidence.reduce((sum, row) => sum + BigInt(row.consumed_microcredits ?? '0'), 0n) : null;
@@ -147,10 +150,6 @@ export async function prepareBillingCycleClose(
   });
   if (initial.teamId === null) {
     usageLines = aggregateOrganisationCycleUsage(organisationUsageLines);
-  }
-  if (initial.teamId !== null) {
-    usageLines = usageLines.map((line) => ({ ...line,
-      credits_consumed: consumedMicrocredits === null ? null : decimalCredits(consumedMicrocredits) }));
   }
 
   const closeInTransaction = () => prisma.$transaction(async (tx) => {

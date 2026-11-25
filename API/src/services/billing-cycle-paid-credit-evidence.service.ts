@@ -1,3 +1,4 @@
+import { assignmentCutoffs } from './billing-tariff-history.service.js';
 import { createHash } from 'node:crypto';
 
 import {
@@ -22,6 +23,7 @@ export type VerifiedCycleCreditEvidence = {
   covered: true;
   consumed_microcredits: string;
   funded_debit_microcredits: string | null;
+  mixed_usage?: { prepaid: string; payg: string; paygWaived: string };
   waived_microcredits: string;
   source_ids: string[];
   receipt_count: number;
@@ -95,9 +97,26 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
     grossRatedMicrocredits: true, collectibleMicrocredits: true,
     waivedMicrocredits: true } });
   const byException = new Map(exceptions.map((row) => [row.dispatchId, row]));
+  if (forward.some(row => row.currency !== 'USD')) hold('BILLING_CYCLE_PAID_LIABILITY_TERMS_CONFLICT');
+  const mixed = forward.some(row => row.tariffId !== tariff.id);
+  if (mixed) {
+    const cutoffs = await assignmentCutoffs(reader, { ...scope });
+    if (!cutoffs.length) hold('BILLING_CYCLE_PAID_LIABILITY_TERMS_CONFLICT');
+    const holds = await reader.billingCreditBudgetDispatch.findMany({
+      where: { ...where, dispatchId: { in: forward.map(row => row.dispatchId) } },
+      select: { dispatchId: true, tariffId: true, paymentMode: true },
+    });
+    const frozen = new Map(holds.map(row => [row.dispatchId, row]));
+    if (forward.some(row => frozen.get(row.dispatchId)?.tariffId !== row.tariffId ||
+      frozen.get(row.dispatchId)?.paymentMode !== row.paymentMode)) hold('BILLING_CYCLE_PAID_LIABILITY_TERMS_CONFLICT');
+  }
   let waived = 0n;
+  let prepaidWaived = 0n;
+  const prepaid = forward.filter(row => row.paymentMode === BillingUsagePaymentMode.PREPAID);
+  const prepaidGross = prepaid.reduce((sum, row) => sum + row.ratedMicrocredits, matched.legacyMicrocredits);
+  const paygGross = matched.ratedMicrocredits - prepaidGross;
   for (const row of forward) {
-    if (row.currency!=='USD'||row.tariffId !== tariff.id || row.paymentMode !== tariff.usagePaymentMode ||
+    if ((!mixed && row.paymentMode !== tariff.usagePaymentMode) ||
       row.ratedMicrocredits < 0n ||
       (row.paymentMode === BillingUsagePaymentMode.PREPAID) !==
         (row.creditAccountId !== null)) hold('BILLING_CYCLE_PAID_LIABILITY_TERMS_CONFLICT');
@@ -110,17 +129,18 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
       exception.collectibleMicrocredits + exception.waivedMicrocredits !==
         row.ratedMicrocredits) hold('BILLING_CYCLE_PAID_WAIVER_UNRESOLVED');
     waived += exception.waivedMicrocredits;
+    if (row.paymentMode === BillingUsagePaymentMode.PREPAID) prepaidWaived += exception.waivedMicrocredits;
   }
 
   const sourceIds: string[] = [];
   let fundedDebit: bigint | null = null;
-  if (tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID) {
+  if (tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID || prepaid.length || (mixed && legacy.length)) {
     const reservations = await reader.billingPrepaidReservation.findMany({ where,
       include: { creditAccount: { select: { orgId: true, teamId: true, scope: true,accountId:true } },
         creditEntry: { select: { id: true, direction: true, kind: true,
           amountMicrocredits: true } } } });
     const byDispatch = new Map(reservations.map((row) => [row.dispatchId, row]));
-    const expected = [...forward.map((row) => row.dispatchId),
+    const expected = [...prepaid.map((row) => row.dispatchId),
       ...legacy.map((row) => row.dispatchId)];
     if (reservations.length !== expected.length) hold('BILLING_CYCLE_PREPAID_COVERAGE_MISMATCH');
     fundedDebit = 0n;
@@ -128,7 +148,7 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
       const row = byDispatch.get(dispatchId);
       if (!row || row.status !== BillingPrepaidReservationStatus.SETTLED ||
         row.rawCostActual === null || row.debitedMicrocredits === null ||
-        row.debitedMicrocredits < 0n || row.tariffId !== tariff.id ||
+        row.debitedMicrocredits < 0n || row.tariffId !== (prepaid.find(item => item.dispatchId === dispatchId)?.tariffId ?? tariff.id) ||
         !correctPayer(row.creditAccount, scope, params.payer,params.accountId) ||
         (row.debitedMicrocredits > 0n && (!row.creditEntry ||
           row.creditEntry.direction !== BillingCreditEntryDirection.DEBIT ||
@@ -148,12 +168,14 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
       fundedDebit += row.debitedMicrocredits;
       sourceIds.push(row.id);
     }
-    if (fundedDebit !== matched.ratedMicrocredits - waived) {
+    if (fundedDebit !== prepaidGross - prepaidWaived) {
       hold('BILLING_CYCLE_PREPAID_DEBIT_UNPROVEN');
     }
   } else if (legacy.length !== 0) {
     hold('BILLING_CYCLE_LEGACY_PAYMENT_MODE_CONFLICT');
-  } else {
+  }
+  if (tariff.usagePaymentMode !== BillingUsagePaymentMode.PREPAID || (mixed && forward.length > prepaid.length)) {
+    const prepaidDebit = fundedDebit ?? 0n;
     const settlements = await reader.billingCreditUsageSettlement.findMany({ where: {
       serviceId: scope.serviceId, teamId: scope.teamId,
       billingMonth: scope.billingMonth,
@@ -166,20 +188,22 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
     if (row) {
       const adjustment = row.adjustments[0];
       if (!correctPayer(row.creditAccount, scope, params.payer,params.accountId) ||
-        row.tariffId !== tariff.id || row.currency !== 'USD' ||
+        (row.tariffId !== tariff.id && !forward.some(liability =>
+          liability.paymentMode === BillingUsagePaymentMode.PAY_AS_YOU_GO && liability.tariffId === row.tariffId)) ||
+        row.currency !== 'USD' ||
         row.cumulativeCreditsConsumedMicrocredits < 0n ||
-        row.cumulativeCreditsConsumedMicrocredits > matched.ratedMicrocredits - waived ||
+        row.cumulativeCreditsConsumedMicrocredits > paygGross - (waived - prepaidWaived) ||
         row.status !== 'APPLIED' ||
         adjustment?.cumulativeCreditsConsumedMicrocredits !==
           row.cumulativeCreditsConsumedMicrocredits) {
         hold('BILLING_CYCLE_PAYG_SETTLEMENT_UNPROVEN');
       }
       if (!adjustment) hold('BILLING_CYCLE_PAYG_SETTLEMENT_UNPROVEN');
-      fundedDebit = row.cumulativeCreditsConsumedMicrocredits;
+      fundedDebit = prepaidDebit + row.cumulativeCreditsConsumedMicrocredits;
       // A zero-delta portfolio observation can append a new adjustment ID
       // without changing a customer's financial facts or cycle identity.
       sourceIds.push(row.id);
-    } else if (matched.ratedMicrocredits === 0n || params.allowUnsettled) fundedDebit = 0n;
+    } else fundedDebit = paygGross === 0n || params.allowUnsettled ? prepaidDebit : null;
   }
 
   sourceIds.sort(compareBillingCycleUtf8);
@@ -194,6 +218,8 @@ export async function readVerifiedCycleCreditEvidence(reader: Reader,
     waived_microcredits: waived.toString(),
     funded_debit_microcredits: fundedDebit?.toString() ?? null, source_ids: sourceIds };
   return { team_id: scope.teamId, source: 'verified_paid_receipts', covered: true,
+    ...(mixed ? { mixed_usage: { prepaid: prepaidGross.toString(), payg: paygGross.toString(),
+      paygWaived: (waived - prepaidWaived).toString() } } : {}),
     consumed_microcredits: matched.ratedMicrocredits.toString(),
     funded_debit_microcredits: fundedDebit?.toString() ?? null,
     waived_microcredits: waived.toString(), source_ids: sourceIds,

@@ -1,6 +1,7 @@
 import { BillingTariffSource, Prisma, type BillingTariff } from '@prisma/client';
 
 import { AppError } from '../utils/errors.js';
+import { observedBillingTime } from './billing-seat-observed-time.service.js';
 
 type Reader = Pick<Prisma.TransactionClient,
   'billingService' | 'billingTariffTermEvent' | 'billingOrganisationContractVersion'>;
@@ -39,6 +40,7 @@ export async function appendTariffTermEvent(
     effectiveFromMonth: string;
     tariffId: string | null;
     assignmentId?: string | null;
+    createdAt?: Date;
     actorEmail?: string | null;
     reason: string;
   },
@@ -55,6 +57,27 @@ export async function appendTariffTermEvent(
   });
 }
 
+const immediateAssignmentReason = 'admin-assignment-effective';
+
+/** Preserve a previously queued next-month decision in the audit trail, but supersede
+ * it at its own boundary. Write the immediate event last for the Admin read model. */
+export async function appendImmediateAssignment(
+  tx: Prisma.TransactionClient,
+  params: Omit<Parameters<typeof appendTariffTermEvent>[1], 'effectiveFromMonth' | 'reason' | 'createdAt'>,
+) {
+  const instant = await observedBillingTime(tx);
+  const month = utcBillingMonth(instant);
+  const queued = await tx.billingTariffTermEvent.findFirst({
+    where: { serviceId: params.serviceId, source: params.source, scopeKey: params.scopeKey,
+      effectiveFromMonth: nextUtcBillingMonth(instant), reason: { in: ['assignment-changed', 'assignment-removed', 'assignment-superseded'] } },
+    select: { effectiveFromMonth: true },
+  });
+  if (queued) await appendTariffTermEvent(tx, { ...params, createdAt: instant,
+    effectiveFromMonth: queued.effectiveFromMonth, reason: 'assignment-superseded' });
+  await appendTariffTermEvent(tx, { ...params, createdAt: instant,
+    effectiveFromMonth: month, reason: immediateAssignmentReason });
+}
+
 export async function resolveBillingTariffForMonth(
   reader: Reader,
   params: {
@@ -62,6 +85,7 @@ export async function resolveBillingTariffForMonth(
     organisationId: string;
     teamId: string | null;
     billingMonth: string;
+    asOf?: Date;
     financialScope?: 'organisation';
   },
 ): Promise<EffectiveTariff> {
@@ -136,6 +160,10 @@ export async function resolveBillingTariffForMonth(
         serviceId: params.serviceId,
         source: choice.source,
         scopeKey: choice.scopeKey,
+        OR: [
+          { reason: { not: immediateAssignmentReason } },
+          { createdAt: { lte: params.asOf ?? new Date(`${params.billingMonth}-01T00:00:00.000Z`) } },
+        ],
         effectiveFromMonth: { lte: params.billingMonth },
       },
       orderBy: [{ effectiveFromMonth: 'desc' }, { sequence: 'desc' }],
@@ -152,4 +180,27 @@ export async function resolveBillingTariffForMonth(
     return { tariff: event.tariff, source: choice.source, assignmentId: event.assignmentId };
   }
   throw new AppError('INTERNAL', 500, 'BILLING_DEFAULT_TARIFF_MISSING');
+}
+
+export async function assignmentCutoffs(reader: Reader, scope: {
+  serviceId: string; organisationId: string; teamId: string | null; billingMonth: string;
+}): Promise<Date[]> {
+  const rows = await reader.billingTariffTermEvent.findMany({
+    where: { serviceId: scope.serviceId, reason: immediateAssignmentReason, effectiveFromMonth: scope.billingMonth,
+      OR: [{ source: 'ORGANISATION', scopeKey: scope.organisationId },
+        { source: 'TEAM', scopeKey: `${scope.organisationId}:${scope.teamId}` }] },
+    orderBy: { createdAt: 'asc' }, select: { createdAt: true },
+  });
+  if (!rows.length) return [];
+  // An organisation edit cannot change usage priced by an explicit team term.
+  // Avoid requiring new metering or credit evidence for an unaffected team.
+  let previous = (await resolveBillingTariffForMonth(reader, scope)).tariff.id;
+  const changes: Date[] = [];
+  for (const instant of new Set(rows.map(row => row.createdAt.getTime()))) {
+    const asOf = new Date(instant);
+    const current = (await resolveBillingTariffForMonth(reader, { ...scope, asOf })).tariff.id;
+    if (current !== previous) changes.push(asOf);
+    previous = current;
+  }
+  return changes;
 }

@@ -1,3 +1,4 @@
+import { meteringWithAssignmentTerms } from './billing-assignment-metering.service.js';
 import { billingSubscriptionProjection } from './billing-subscription-projection.service.js';
 import { organisationHistoryAccount } from './billing-organisation-history.service.js';
 import { requireBillingManager } from './billing-financial-authority.service.js';
@@ -200,13 +201,14 @@ async function buildCanonicalBillingStatement(
             groupBy: 'user',
           }),
         ]).then(([service, user]) => ({ service, user }));
-  const [effective, products, accesses, adjustments, members, metering] = await Promise.all([
-    resolveBillingTariffForMonth(prisma, {
-      serviceId: context.credential.service.id,
-      organisationId: context.request.organisationId,
-      teamId: context.request.teamId,
-      billingMonth: period.key,
-    }),
+  const tariffScope = {
+    serviceId: context.credential.service.id,
+    organisationId: context.request.organisationId,
+    teamId: context.request.teamId,
+    billingMonth: period.key,
+  };
+  const [opening, products, accesses, adjustments, members, metering] = await Promise.all([
+    resolveBillingTariffForMonth(prisma, tariffScope),
     prisma.billingService.findMany({
       where: { active: true },
       select: { identifier: true, name: true },
@@ -246,6 +248,9 @@ async function buildCanonicalBillingStatement(
     }),
     meteringPromise,
   ]);
+  const effective = period.state === 'open'
+    ? await resolveBillingTariffForMonth(prisma, { ...tariffScope, asOf: now })
+    : opening;
   const tariff = effective.tariff;
   const modeFromTerm = billingModeToPublic(tariff.mode);
   const collectionMode = billingCollectionModeToPublic(tariff.collectionMode);
@@ -293,9 +298,12 @@ async function buildCanonicalBillingStatement(
     version === 'v2'
       ? filterPortfolioForProduct(userMetering as NormalizedMeteringPortfolio, statementProduct)
       : (userMetering as NormalizedMeteringUsage);
+  const userUsage = await meteringWithAssignmentTerms(prisma, context.credential.service.id, ratedUserMetering, fetchMetering);
+  const serviceUsage = version === 'v2' ? userUsage :
+    await meteringWithAssignmentTerms(prisma, context.credential.service.id, ratedServiceMetering, fetchMetering);
   const rated = rateBillingStatementUsage({
-    serviceMetering: ratedServiceMetering,
-    userMetering: ratedUserMetering,
+    serviceMetering: serviceUsage,
+    userMetering: userUsage,
     plan: {
       product: statementProduct,
       mode,
@@ -313,26 +321,28 @@ async function buildCanonicalBillingStatement(
   );
   const teamSubscriptionId = summary.subscription?.scope === 'team'
     ? summary.subscription.id : null;
-  const perSeat = tariff.monthlyChargeBasis === 'PER_SEAT';
+  const feeCurrency = opening.tariff.currency;
+  const perSeat = opening.tariff.monthlyChargeBasis === 'PER_SEAT';
   const quoted = perSeat && teamSubscriptionId && period.state === 'closed'
     ? await (deps?.quoteSubscription ?? quoteSubscriptionMonthlyCharge)({
       source: { kind: 'stripe', id: teamSubscriptionId }, billingMonth: period.key,
     }, { prisma }) : null;
   if (quoted && (quoted.serviceId !== context.credential.service.id ||
-      quoted.teamId !== context.request.teamId || quoted.currency !== currency)) {
+      quoted.teamId !== context.request.teamId || quoted.currency !== feeCurrency)) {
     throw new AppError('INTERNAL', 409, 'BILLING_MONTHLY_QUOTE_SCOPE_MISMATCH');
   }
   const subscriptionAmount = quoted
-    ? minorAmountToMajor(quoted.amountMinor.toString(), currency) : monthlyAmount;
+    ? minorAmountToMajor(quoted.amountMinor.toString(), feeCurrency)
+    : minorAmountToMajor(opening.tariff.monthlyAmountMinor.toString(), feeCurrency);
   const includeSubscriptionLine = !perSeat || quoted !== null;
   const commercialLines: BillingStatementV1['commercial_lines'] = [
     ...(includeSubscriptionLine && (!summary.subscription || teamSubscriptionId) ? [{
-      id: `monthly_${summary.tariff.id}`,
+      id: `monthly_${opening.tariff.id}`,
       kind: 'monthly_subscription' as const,
       product: statementProduct,
       label: copy.monthlySubscription,
       detail: quoted ? copy.seatDetails : copy.subscriptionDetails,
-      amount: exactMoney(subscriptionAmount, currency, context.locale),
+      amount: exactMoney(subscriptionAmount, feeCurrency, context.locale),
     }] : []),
     ...rated.commercialLines,
     ...adjustments.map((adjustment) => {

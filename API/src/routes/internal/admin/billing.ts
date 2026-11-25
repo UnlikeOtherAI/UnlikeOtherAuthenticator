@@ -229,6 +229,7 @@ export function registerInternalAdminBillingRoutes(app: FastifyInstance): void {
         scope: assignment.scope.toLowerCase(),
         tariff: serializeBillingTariff(assignment.tariff),
         effective_from_month: assignment.effectiveFromMonth,
+        effective_at: assignment.effectiveAt?.toISOString() ?? null,
       };
     },
   );

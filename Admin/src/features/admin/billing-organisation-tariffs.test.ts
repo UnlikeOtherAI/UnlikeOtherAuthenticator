@@ -140,28 +140,28 @@ describe('billingTariffChange', () => {
   if (!hugo || !zeta) throw new Error('Missing team rows');
 
   it('asks before moving a team or the organisation', () => {
-    expect(billingTariffChange(nessie, zeta, 'standard', now)).toEqual({
+    expect(billingTariffChange(nessie, zeta, 'standard')).toEqual({
       kind: 'save', tariffId: 'standard', title: 'Move Zeta to Standard?',
-      body: 'Zeta uses Standard for Nessie from 1 December 2026 (UTC). This month keeps its current terms.',
+      body: 'Zeta uses Standard for Nessie immediately. Previous charges stay as billed.',
     });
-    expect(billingTariffChange(nessie, organisationRow, 'standard', now)?.body).toBe(
-      'Acme uses Standard for Nessie from 1 December 2026 (UTC). This month keeps its current terms. '
+    expect(billingTariffChange(nessie, organisationRow, 'standard')?.body).toBe(
+      'Acme uses Standard for Nessie immediately. Previous charges stay as billed. '
         + 'Teams with their own tariff are not affected.',
     );
   });
 
   it('removes an own tariff when the first option is chosen', () => {
-    expect(billingTariffChange(nessie, hugo, '', now)).toEqual({
+    expect(billingTariffChange(nessie, hugo, '')).toEqual({
       kind: 'remove', assignmentId: 'a2', title: "Remove Hugo's own tariff?",
-      body: 'From 1 December 2026 (UTC) Hugo uses Free.',
+      body: 'Hugo uses Free immediately. Previous charges stay as billed.',
     });
-    expect(billingTariffChange(nessie, organisationRow, '', now)?.body)
-      .toBe('From 1 December 2026 (UTC) Acme uses Standard.');
+    expect(billingTariffChange(nessie, organisationRow, '')?.body)
+      .toBe('Acme uses Standard immediately. Previous charges stay as billed.');
   });
 
   it('does nothing when the selection is what is saved', () => {
-    expect(billingTariffChange(nessie, hugo, 'standard', now)).toBeNull();
-    expect(billingTariffChange(nessie, zeta, '', now)).toBeNull();
+    expect(billingTariffChange(nessie, hugo, 'standard')).toBeNull();
+    expect(billingTariffChange(nessie, zeta, '')).toBeNull();
   });
 });
 
@@ -179,7 +179,7 @@ describe('two active tariffs with one name', () => {
     expect(teamRows[0]?.options[0]?.label).toBe('Same as organisation — Standard · standard v2');
     expect(billingOrganisationListRows({ organisations, teams, services: [twins], productId: 'nessie',
       query: '', customOnly: false })[0]?.tariffLines).toEqual(['Standard · standard v2']);
-    expect(billingTariffChange(twins, organisationRow, 'standard', now)?.title)
+    expect(billingTariffChange(twins, organisationRow, 'standard')?.title)
       .toBe('Move Acme to Standard · standard v1?');
   });
 });

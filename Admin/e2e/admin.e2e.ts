@@ -353,7 +353,7 @@ test('new billing terms show the prospective 30 percent default', async ({ page 
   await page.keyboard.press('Escape');
   await serviceDialog.getByRole('button', { name: 'Discard changes' }).click();
   await page.getByRole('link', { name: 'Fixture product', exact: true }).click();
-  await expect(page.getByText(/A change starts on the 1st of next month \(UTC\)/)).toBeVisible();
+  await expect(page.getByText(/Assignment changes take effect immediately/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add product' })).toHaveCount(0);
   await page.screenshot({
     path: `e2e/artifacts/billing-effective-month-${testInfo.project.name}.png`,

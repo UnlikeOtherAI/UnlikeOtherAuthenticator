@@ -1,3 +1,4 @@
+import { assignmentCreditRating } from './billing-assignment-credit-rating.service.js';
 import { assertBillingPeriodMode } from './billing-mode-period.service.js';
 import { BillingUsagePaymentMode, Prisma, type PrismaClient } from '@prisma/client';
 
@@ -161,6 +162,7 @@ async function settleInTransaction(
       },
     },
   });
+  const existingSnapshotId = snapshot?.id;
   if (snapshot) {
     assertExistingSnapshot(snapshot, {
       accountId: account.accountId,
@@ -280,6 +282,18 @@ async function settleInTransaction(
     };
   });
 
+  const absentFromReplay = new Set<string>();
+  const frozenPaygByService = new Map<string, ReadonlyMap<string | null, bigint>>();
+  for (const service of ratingServices) {
+    const frozen = await assignmentCreditRating(tx, service, params.portfolio, existingSnapshotId);
+    if (!frozen) continue;
+    frozenPaygByService.set(service.id, frozen.amounts);
+    if (existingSnapshotId && !frozen.paygTariffId) absentFromReplay.add(service.id);
+    if (frozen.paygTariffId && service.tariff.usagePaymentMode === BillingUsagePaymentMode.PREPAID) {
+      service.tariff = await tx.billingTariff.findUniqueOrThrow({ where: { id: frozen.paygTariffId, serviceId: service.id } });
+    }
+  }
+
   const allocations = existingSettlements.length
     ? await tx.billingCreditUsageAllocation.findMany({
         where: { settlementId: { in: existingSettlements.map((row) => row.id) } },
@@ -319,6 +333,7 @@ async function settleInTransaction(
   const gross = rateCreditPortfolio({
     portfolio: params.portfolio,
     services: ratingServices,
+    frozenPaygByService,
     previousAllocations: [],
     balanceMicrocredits: 0n,
     validTeamUserIds: new Set(teamMembers.map((member) => member.userId)),
@@ -351,6 +366,7 @@ async function settleInTransaction(
   const rated = rateCreditPortfolio({
     portfolio: params.portfolio,
     services: ratingServices,
+    frozenPaygByService,
     previousAllocations,
     balanceMicrocredits: account.balanceMicrocredits,
     validTeamUserIds: new Set(teamMembers.map((member) => member.userId)),
@@ -363,6 +379,9 @@ async function settleInTransaction(
     row.cumulativeCreditsConsumedMicrocredits !== 0n)) {
     throw new AppError('INTERNAL', 409, 'PREPAID_LEGACY_USAGE_RECONCILIATION_REQUIRED');
   }
+  // A later change from prepaid to PAYG can introduce a settlement after
+  // the original snapshot. Replaying the earlier snapshot must leave it alone.
+  for (const serviceId of absentFromReplay) prepaidServiceIds.add(serviceId);
   const settlements = existingSettlements.filter((row) => !prepaidServiceIds.has(row.serviceId));
   for (const service of ratingServices.filter((row) => !prepaidServiceIds.has(row.id))) {
     if (settlements.some((settlement) => settlement.serviceId === service.id)) continue;

@@ -64,7 +64,7 @@ function serviceLines(metering: NormalizedMeteringUsage, plan: RatingPlan,
         caller_product: line.callerProduct ?? UNATTRIBUTED_BILLING_PRODUCT,
         origin_product: line.originProduct ?? UNATTRIBUTED_BILLING_PRODUCT,
       },
-      customer_charge: ratedCharge(cost, plan, locale),
+      customer_charge: ratedCharge(cost, { ...plan, ...line.terms }, locale),
     };
   });
 }

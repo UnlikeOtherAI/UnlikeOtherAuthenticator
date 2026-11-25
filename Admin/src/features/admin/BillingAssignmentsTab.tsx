@@ -89,7 +89,7 @@ export function BillingAssignmentsTab({ service }: { service: BillingService }) 
                     onClick={() =>
                       confirm(
                         'Remove tariff assignment?',
-                        'The subject falls back to the next applicable tariff next UTC month. Active Stripe subscriptions may block this change.',
+                        'The subject falls back to the next applicable tariff immediately. Active Stripe subscriptions may block this change.',
                         async () => {
                           setRefusal(null);
                           try {

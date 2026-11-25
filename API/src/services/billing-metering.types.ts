@@ -17,6 +17,7 @@ export type RawMeteringLine = {
   callerProduct: string | null;
   originProduct: string | null;
   userId: string | null;
+  terms?: { mode: 'standard' | 'free' | 'at_cost' | 'custom'; markupBps: number };
   billingDisposition: 'paid' | 'nonbillable';
   breakdown?: {
     thoughtOutputTokens?: string;

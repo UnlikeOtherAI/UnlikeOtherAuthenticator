@@ -9,7 +9,7 @@ type EventReader = Pick<Prisma.TransactionClient, 'billingTariffTermEvent'>;
 export async function assignmentEffectiveFromMonths(
   reader: EventReader,
   assignmentIds: readonly string[],
-): Promise<Map<string, string>> {
+): Promise<Map<string, { effectiveFromMonth: string; effectiveAt: Date | null }>> {
   if (assignmentIds.length === 0) return new Map();
   const newest = await reader.billingTariffTermEvent.groupBy({
     by: ['assignmentId'],
@@ -20,10 +20,11 @@ export async function assignmentEffectiveFromMonths(
   if (sequences.length === 0) return new Map();
   const events = await reader.billingTariffTermEvent.findMany({
     where: { sequence: { in: sequences } },
-    select: { assignmentId: true, effectiveFromMonth: true },
+    select: { assignmentId: true, effectiveFromMonth: true, createdAt: true, reason: true },
   });
   return new Map(events.flatMap((event) =>
-    event.assignmentId ? [[event.assignmentId, event.effectiveFromMonth] as const] : []));
+    event.assignmentId ? [[event.assignmentId, { effectiveFromMonth: event.effectiveFromMonth,
+      effectiveAt: event.reason === 'admin-assignment-effective' ? event.createdAt : null }] as const] : []));
 }
 
 export async function listBillingServices(deps?: { prisma?: PrismaClient }) {
@@ -102,7 +103,8 @@ export async function listBillingServices(deps?: { prisma?: PrismaClient }) {
     assignments: service.assignments.map((assignment) => ({
       ...assignment,
       tariff: describe(assignment.tariff),
-      effectiveFromMonth: effectiveFrom.get(assignment.id) ?? null,
+      effectiveFromMonth: effectiveFrom.get(assignment.id)?.effectiveFromMonth ?? null,
+      effectiveAt: effectiveFrom.get(assignment.id)?.effectiveAt ?? null,
     })),
   }));
 }

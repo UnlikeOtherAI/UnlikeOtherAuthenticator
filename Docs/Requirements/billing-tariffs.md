@@ -88,6 +88,8 @@ markup. The prefill is prospective; stored versions and negotiated custom or
 at-cost terms are never rewritten by that UI default. Stripe collection stays
 an explicit choice.
 
+The monthly assignment schedule described below applies to legacy decisions. New Admin saves follow [the November 2026 assignment rules](#admin-tariff-assignments-from-november-2026).
+
 Commercial selection now has an append-only monthly history as well as the
 operator's current default/assignment pointers. A new service's initial default
 applies from its creation UTC month. Later default and organisation/team
@@ -2037,3 +2039,9 @@ the member-safe projection, immutable deadlines, rollout and verification.
 The implementation is an unmerged candidate, not a deployed billing change.
 Provider collection remains unverified because the original Stripe test key
 has expired. Synthetic receipt tests are not provider evidence.
+
+### Admin tariff assignments from November 2026
+
+Saving or removing an organisation or team tariff assignment in Admin takes effect for new usage at the recorded UTC instant. Earlier usage keeps its terms. Admin changes issue no refunds or credits. Existing subscription and contract protections still apply. Previously scheduled assignments retain their dates until changed.
+
+A dispatch uses the tariff in effect when it started, including when its receipt arrives later. An open statement shows the active plan and retains the monthly fee in effect at the start of the period. Removing a team assignment immediately restores the applicable organisation or product terms.
