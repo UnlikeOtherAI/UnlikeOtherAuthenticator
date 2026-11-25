@@ -58,7 +58,7 @@ describe('SMS evidence region isolation', () => {
 
   it('keeps availability, ownership and all pricing on US1 with only US1 credentials', async () => {
     const { provider, calls } = regionalProvider();
-    await provider.assertAvailableMobile('CZ', phone);
+    await provider.assertAvailableNumber('CZ', phone);
     await provider.ownedNumber(accountSid, phoneSid);
     for (const direction of ['monthly', 'inbound', 'outbound'] as const) await provider.price('CZ', direction);
     expect(calls).toHaveLength(5);

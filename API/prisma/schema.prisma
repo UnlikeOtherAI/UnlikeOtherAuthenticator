@@ -5339,6 +5339,7 @@ model BillingSmsFxSnapshot {
 }
 
 model BillingSmsQuote {
+  numberType String @default("mobile") @map("number_type") @db.VarChar(16)
   commercialPolicyVersion String @map("commercial_policy_version") @db.VarChar(80)
   monthlyFeeEur Decimal @map("monthly_fee_eur") @db.Decimal(18, 6)
   messageMarkupBps Int @map("message_markup_bps")
@@ -5373,6 +5374,7 @@ model BillingSmsQuote {
 }
 
 model BillingSmsNumberResource {
+  smsCapable           Boolean  @default(true) @map("sms_capable")
   id                   String   @id @db.VarChar(160)
   serviceId            String   @map("service_id")
   appKeyId             String   @map("app_key_id")
@@ -5530,6 +5532,7 @@ model BillingSmsDispatchGrant {
 
 // Explicit, dated complete-fee evidence; absence never means zero additional fees.
 model BillingSmsRoutePolicy {
+  numberType           String   @default("mobile") @map("number_type") @db.VarChar(16)
   id                   String   @id @default(cuid())
   accountSid           String   @map("account_sid") @db.Char(34)
   country              String   @db.Char(2)
@@ -5558,6 +5561,7 @@ model BillingSmsRoutePolicy {
 // Flat monthly mobile-number price per currency, the same in every country.
 // Append-only; the newest row per currency is current.
 model BillingSmsMonthlyPrice {
+  numberType String @default("mobile") @map("number_type") @db.VarChar(16)
   id          String   @id @default(cuid())
   amount      Decimal  @db.Decimal(18, 2)
   currency    String   @db.Char(3)

@@ -12,7 +12,7 @@ import type { BillingSmsProvider } from './billing-sms-provider.service.js';
 import { runBillingSerializableTransaction } from './billing-serializable-transaction.service.js';
 import { sumSmsAmounts } from './billing-sms-money.service.js';
 import {
-  recordSmsMonthlyQuoteOutcome, SmsMonthlyBelowCostError, smsMonthlyTerms,
+  RentalNumberType, monthlyPriceAlertSubject, recordSmsMonthlyQuoteOutcome, SmsMonthlyBelowCostError, smsMonthlyTerms,
 } from './billing-sms-monthly-price.service.js';
 import type { SmsPolicyAlertLog } from './billing-sms-policy-alert.service.js';
 import { requireOrganisationBillingRegion } from './billing-organisation-region.service.js';
@@ -38,7 +38,7 @@ function formattedQuanta(value: bigint, places: number): string {
 }
 
 export function publicSmsQuote(quote: BillingSmsQuote): BillingSmsFinalQuoteV1 {
-  if (!['monthly_mobile', 'inbound_mobile', 'maximum_mobile_carrier'].includes(quote.rateBasis) ||
+  if (!['monthly_mobile', 'monthly_number', 'inbound_mobile', 'inbound_number', 'maximum_mobile_carrier', 'maximum_number_carrier'].includes(quote.rateBasis) ||
       !['monthly', 'inbound', 'outbound'].includes(quote.direction) ||
       !(quote.finalCurrency === 'USD' || (quote.direction === 'monthly' && ['EUR', 'GBP'].includes(quote.finalCurrency)))) {
     throw unavailable();
@@ -47,7 +47,7 @@ export function publicSmsQuote(quote: BillingSmsQuote): BillingSmsFinalQuoteV1 {
     id: quote.id, amount: quote.finalAmount.toFixed(quote.direction === 'monthly' ? 2 : 18),
     currency: quote.finalCurrency as BillingSmsFinalQuoteV1['currency'], expires_at: quote.expiresAt.toISOString(),
     rate_basis: quote.rateBasis as BillingSmsFinalQuoteV1['rate_basis'],
-    scope: { organisation_id: quote.orgId, country: quote.country, number_type: 'mobile',
+    scope: { organisation_id: quote.orgId, country: quote.country, number_type: RentalNumberType.parse(quote.numberType),
       direction: quote.direction as BillingSmsFinalQuoteV1['scope']['direction'],
       destination: quote.destination, carrier: null, mcc: null, mnc: null },
   };
@@ -57,7 +57,7 @@ function assertQuoteScope(quote: BillingSmsQuote, request: BillingSmsQuoteReques
   credential: VerifiedBillingAppKey): void {
   if (quote.serviceId !== credential.service.id || quote.orgId !== request.organisation_id ||
       quote.country !== request.country || quote.direction !== request.direction ||
-      quote.destination !== request.destination || request.number_type !== 'mobile' ||
+      quote.destination !== request.destination || request.number_type !== quote.numberType ||
       request.carrier !== null || request.mcc !== null || request.mnc !== null) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_QUOTE_SCOPE_MISMATCH');
   }
@@ -85,7 +85,7 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
   const request = input.request;
   const commercial = readSmsCommercialPolicy();
   if (request.carrier !== null || request.mcc !== null || request.mnc !== null ||
-      request.number_type !== 'mobile' || !/^[A-Z]{2}$/.test(request.country) ||
+      !/^[A-Z]{2}$/.test(request.country) ||
       (request.direction === 'outbound' ? !request.destination : request.destination !== null)) {
     throw new AppError('BAD_REQUEST', 400, 'BILLING_SMS_QUOTE_SCOPE_INVALID');
   }
@@ -93,7 +93,7 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
       await deps.provider.destinationCountry(request.destination) !== request.country) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_DESTINATION_COUNTRY_MISMATCH');
   }
-  const price = await deps.provider.price(request.country, request.direction);
+  const price = await deps.provider.price(request.country, request.direction, request.number_type);
   const providerAmount = exactDecimal(price.amount);
   const monthly = request.direction === 'monthly';
   const issue = () => runBillingSerializableTransaction(prisma, async (tx) => {
@@ -106,7 +106,7 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
     if (!fx) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SMS_FX_POLICY_REQUIRED');
     const policy = monthly ? null : await tx.billingSmsRoutePolicy.findFirst({ where: {
       accountSid: deps.provider.configuration.accountSid, country: request.country,
-      direction: request.direction, currency: price.currency, expiresAt: { gt: now },
+      direction: request.direction, currency: price.currency, numberType: request.number_type, expiresAt: { gt: now },
     }, orderBy: { acceptedAt: 'desc' } });
     if (!monthly && !policy) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SMS_ROUTE_BOUND_REQUIRED');
     // Per-message fees are conservatively included in every segment of the displayed maximum.
@@ -119,10 +119,10 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
       const { currency } = await requireOrganisationBillingRegion(request.organisation_id, tx);
       const rental = { providerAmount: providerAmount.toFixed(), providerCurrency: price.currency, currency,
         rates: { usdPerEur: fx.usdPerEur.toFixed(), gbpPerEur: fx.gbpPerEur?.toFixed() ?? null } };
-      terms = commercial.mode === 'provider_markup'
+      terms = commercial.mode === 'provider_markup' && request.number_type === 'mobile'
         ? { finalAmount: formattedQuanta(smsMonthlyPriceMinor({ ...rental, markupBps: commercial.monthlyMarkupBps }), 2),
           finalCurrency: currency, monthlyPriceId: null }
-        : await smsMonthlyTerms(tx, { ...rental, country: request.country });
+        : await smsMonthlyTerms(tx, { ...rental, country: request.country, numberType: request.number_type });
     } else {
       terms = { finalAmount: formattedQuanta(smsFinalUsdQuanta({ providerAmount: providerBound.toFixed(),
         providerCurrency: price.currency, usdPerEur: fx.usdPerEur.toFixed(), ...commercial,
@@ -130,15 +130,16 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
     }
     const quote = await tx.billingSmsQuote.create({ data: {
       serviceId: input.credential.service.id, appKeyId: input.credential.id, orgId: request.organisation_id,
-      country: request.country, direction: request.direction, destination: request.destination,
+      country: request.country, numberType: request.number_type, direction: request.direction, destination: request.destination,
       commercialPolicyVersion: commercial.version, monthlyFeeEur: monthly ? '0' : commercial.monthlyFeeEur,
-      monthlyMarkupBps: commercial.monthlyMarkupBps, messageMarkupBps: commercial.messageMarkupBps,
+      monthlyMarkupBps: terms.monthlyPriceId ? 0 : commercial.monthlyMarkupBps, messageMarkupBps: commercial.messageMarkupBps,
       providerAmount, providerCurrency: price.currency, providerSource: price.source,
       providerObservedAt: price.observedAt, fxSnapshotId: fx.id,
       providerBoundAmount: providerBound, routePolicyId: policy?.id ?? null, monthlyPriceId: terms.monthlyPriceId,
       finalAmount: terms.finalAmount, finalCurrency: terms.finalCurrency,
-      rateBasis: monthly ? 'monthly_mobile' : request.direction === 'inbound'
-        ? 'inbound_mobile' : 'maximum_mobile_carrier',
+      rateBasis: request.direction === 'outbound'
+        ? (request.number_type === 'mobile' ? 'maximum_mobile_carrier' : 'maximum_number_carrier')
+        : request.direction + (request.number_type === 'mobile' ? '_mobile' : '_number'),
       expiresAt: new Date(Math.min(now.getTime() + QUOTE_TTL_MS, fx.expiresAt.getTime(),
         policy?.expiresAt.getTime() ?? Number.POSITIVE_INFINITY)),
     } });
@@ -147,7 +148,7 @@ deps: SmsQuoteDependencies): Promise<BillingSmsFinalQuoteV1> {
   try {
     const quote = await issue();
     if (monthly) {
-      await recordSmsMonthlyQuoteOutcome(prisma, `monthly:${request.country}:${quote.currency}`, null, deps.log);
+      await recordSmsMonthlyQuoteOutcome(prisma, monthlyPriceAlertSubject(request.country, quote.currency, request.number_type), null, deps.log);
     }
     return quote;
   } catch (error) {

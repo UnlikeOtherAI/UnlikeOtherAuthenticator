@@ -1,3 +1,4 @@
+import { RentalNumberType } from '../../services/billing-sms-monthly-price.service.js';
 import type { FastifyInstance } from 'fastify';
 import { BILLING_SMS_PATHS, billingSmsGrantRequestV1JsonSchema, billingSmsGrantReadRequestV1JsonSchema,
   billingSmsGrantQuoteRequestV1JsonSchema, billingSmsGrantV1JsonSchema, billingSmsGrantRevokeResultV1JsonSchema,
@@ -51,9 +52,12 @@ export function registerSmsGrantRoutes(app: FastifyInstance): void {
     const prisma = getAdminPrisma();
     const grant = await prisma.billingSmsDispatchGrant.findUnique({ where: { id: request.body.grant_id } });
     if (!grant || grant.serviceId !== credential.service.id) throw new AppError('NOT_FOUND', 404);
+    const number = await prisma.billingSmsNumberResource.findFirst({ where: { id: grant.numberId,
+      serviceId: credential.service.id, state: 'active', smsCapable: true }, select: { quote: { select: { numberType: true } } } });
+    if (!number) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_NUMBER_NOT_ACTIVE');
     const result = await issueSmsQuote({ credential, request: {
       ...grantSubject(grant, request.body.product), country: request.body.country,
-      number_type: 'mobile', direction: 'outbound', destination: request.body.destination,
+      number_type: RentalNumberType.parse(number.quote.numberType), direction: 'outbound', destination: request.body.destination,
       carrier: null, mcc: null, mnc: null,
     }, authorize: (tx) => lockSmsGrant(tx, { credential, grantId: grant.id, product: request.body.product }) },
     { provider: configuredSmsProvider(), prisma });

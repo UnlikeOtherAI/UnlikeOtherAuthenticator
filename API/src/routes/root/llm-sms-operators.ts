@@ -39,14 +39,17 @@ complete_segment_bound,complete_message_bound} appends both policies under the
 operator with a generated reason, each recording provider_price so it can
 renew. A non-USD account price answers 409 BILLING_SMS_ROUTE_RULE_UNSUPPORTED;
 enter such routes through /routes/preview instead.
-GET /monthly-prices under the same base lists the legacy flat monthly mobile-number
-price of each currency (seeded EUR 4.99, GBP 4.49, USD 5.49); POST with
-{amount:"4.99",currency:"EUR"} appends a new current price for one currency.
-Every monthly quote uses its organisation region's currency. Provider-markup
-mode uses the number country's current rental and the configured number markup.
-In legacy mode, a country whose Twilio rental reaches the flat price at the
-accepted ECB rates answers 409 BILLING_SMS_MONTHLY_PRICE_BELOW_COST and raises
-a monthly_price_below_cost alert.
+Manual route evidence applies only to its number_type (mobile by default). Add country
+and existing policies cover mobile. Select the sender type when reviewing evidence for another route.
+
+GET /monthly-prices?by_type=true lists current flat number rentals by number_type and currency.
+Omit by_type to read the original mobile-only response.
+POST {amount:"4.99",currency:"EUR",number_type:"national"} sets a new price.
+Valid types are mobile, local, national and toll-free. Omitting the type updates mobile.
+The organisation's billing region selects the currency. Local, national and toll-free always
+use their own operator price. Mobile uses the configured pricing mode. A missing price
+refuses quotation; a flat price at or below the converted rental returns
+409 BILLING_SMS_MONTHLY_PRICE_BELOW_COST and opens an alert for the class, country and currency.
 Selected product > App keys > SMS runtime issues purpose sms_runtime independently
 of customer lifecycle, entitlement and Ledger keys, with no redirect origins.
 Transfer one-time plaintext only through approved deployment secrets.

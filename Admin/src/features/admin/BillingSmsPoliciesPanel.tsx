@@ -29,7 +29,7 @@ export function BillingSmsPoliciesPanel() {
   }, onSuccess: async () => { setRoute(null); await reload(); } });
   return <div className="space-y-4">
     <Card className="p-5"><CardHeader><h2 className="font-semibold text-gray-900">SMS pricing policies</h2></CardHeader>
-      <p className="text-sm text-gray-600">Private operator evidence for mobile-number pricing and prepaid SMS.
+      <p className="text-sm text-gray-600">Manage phone number rental prices and prepaid SMS policies.
         Accepted policies apply only while fresh. A missing or expired policy blocks new quotes or dispatch.
         Customers receive final prices only. These controls do not enable billing or provision provider credentials.
         When automatic renewal is enabled, a daily job renews in-band ECB rates and unchanged route prices and raises

@@ -9,10 +9,12 @@ export const SmsFxEvidenceSchema = z.object({
   observed_at: z.string().datetime(), expires_at: z.string().datetime(), usd_per_eur: decimal,
   gbp_per_eur: decimal.nullable(),
 }).strict();
+export const RentalNumberType = z.enum(['mobile', 'local', 'national', 'toll-free']);
 export const SmsRouteImportSchema = z.object({
   account_sid: z.string().regex(/^AC[0-9a-fA-F]{32}$/, 'Enter the exact Twilio account SID.'),
   country: z.string().regex(/^[A-Z]{2}$/, 'Enter the two-letter country code.'),
   direction: z.enum(['inbound', 'outbound']), currency: z.enum(['USD', 'EUR']),
+  number_type: RentalNumberType.optional(),
   additional_per_segment: decimal, additional_per_message: decimal,
   source: z.string().trim().min(8).max(500), evidence: z.string().trim().min(20).max(32_000),
   expires_at: z.string().datetime({ offset: true, message: 'Enter a UTC or offset timestamp.' }),
@@ -47,10 +49,11 @@ export type SmsRouteImport = z.infer<typeof SmsRouteImportSchema>;
 export type SmsPolicies = z.infer<typeof SmsPoliciesSchema>;
 export type SmsPolicyAlert = z.infer<typeof SmsPolicyAlertSchema>;
 
-export const SmsMonthlyPriceSchema = z.object({ id: z.string(),
+export const SmsMonthlyPriceSchema = z.object({ number_type: RentalNumberType.default('mobile'), id: z.string(),
   amount: z.string().regex(/^\d{1,6}\.\d{2}$/), currency: z.enum(['EUR', 'GBP', 'USD']),
   set_by: z.enum(['seed', 'operator']), set_by_user_id: z.string().nullable(), set_at: z.string().datetime() }).strict();
 export const SmsMonthlyPriceInputSchema = z.object({
+  number_type: RentalNumberType.default('mobile'),
   amount: z.string().regex(/^(?:0|[1-9]\d{0,5})\.\d{2}$/, 'Enter an amount with two decimals, for example 4.99.')
     .refine((value) => value !== '0.00', 'Enter an amount above zero.'),
   currency: z.enum(['EUR', 'GBP', 'USD']),

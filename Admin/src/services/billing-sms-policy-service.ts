@@ -9,13 +9,13 @@ const base = '/internal/admin/billing/sms-policies';
 const options = { cache: 'no-store' } as const;
 export const billingSmsPolicyService = {
   async monthlyPrices() {
-    return SmsMonthlyPricesSchema.parse(await api.get<unknown>(`${base}/monthly-prices`, options)).prices;
+    return SmsMonthlyPricesSchema.parse(await api.get<unknown>(`${base}/monthly-prices?by_type=true`, options)).prices;
   },
   async setMonthlyPrice(input: SmsMonthlyPriceInput) {
     return SmsMonthlyPriceSchema.parse(await api.post<unknown>(`${base}/monthly-prices`,
       SmsMonthlyPriceInputSchema.parse(input), options));
   },
-  async list() { return SmsPoliciesSchema.parse(await api.get<unknown>(base, options)); },
+  async list() { return SmsPoliciesSchema.parse(await api.get<unknown>(`${base}?by_type=true`, options)); },
   async previewFx(xml?: string) {
     return SmsFxPreviewSchema.parse(await api.post<unknown>(`${base}/fx/preview`,
       xml === undefined ? {} : { xml }, options));

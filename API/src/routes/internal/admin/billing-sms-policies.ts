@@ -16,6 +16,7 @@ import {
   listSmsMonthlyPrices, serializeSmsMonthlyPrice, setSmsMonthlyPrice, SmsMonthlyPriceInput,
 } from '../../../services/billing-sms-monthly-price.service.js';
 
+const ByType = z.object({ by_type: z.literal('true').optional() }).strict();
 const FxPreview = z.object({ xml: z.string().min(1).max(100_000).optional() }).strict();
 const Acceptance = z.object({ preview_token: z.string().min(1).max(100_000),
   acceptance_reason: z.string().trim().min(8).max(500),
@@ -55,8 +56,9 @@ export function registerInternalAdminSmsPolicyRoutes(app: FastifyInstance) {
     const { resourceId } = z.object({ resourceId: z.string().min(1).max(160) }).strict().parse(request.params);
     return reply.header('Cache-Control', 'private, no-store').send(await readSmsRecoveryResource(resourceId));
   });
-  app.get(base, guard, async (_request, reply) => {
-    return reply.header('Cache-Control', 'private, no-store').send(await listSmsPolicies());
+  app.get(base, guard, async (request, reply) => {
+    const query = ByType.parse(request.query);
+    return reply.header('Cache-Control', 'private, no-store').send(await listSmsPolicies(Boolean(query.by_type)));
   });
   app.post(`${base}/fx/preview`, guard, async (request, reply) => {
     const { xml } = FxPreview.parse(request.body);
@@ -67,13 +69,15 @@ export function registerInternalAdminSmsPolicyRoutes(app: FastifyInstance) {
     const result = await acceptSmsFxPolicy(actor(request), value.preview_token, value.acceptance_reason);
     return reply.header('Cache-Control', 'private, no-store').send(serializeSmsFxPolicy(result));
   });
-  app.get(`${base}/monthly-prices`, guard, async (_request, reply) => {
-    return reply.header('Cache-Control', 'private, no-store').send({ prices: await listSmsMonthlyPrices() });
+  app.get(`${base}/monthly-prices`, guard, async (request, reply) => {
+    const query = ByType.parse(request.query);
+    return reply.header('Cache-Control', 'private, no-store').send({ prices: await listSmsMonthlyPrices(Boolean(query.by_type)) });
   });
   app.post(`${base}/monthly-prices`, guard, async (request, reply) => {
     const value = SmsMonthlyPriceInput.parse(request.body);
     return reply.header('Cache-Control', 'private, no-store')
-      .send(serializeSmsMonthlyPrice(await setSmsMonthlyPrice(actor(request), value)));
+      .send(serializeSmsMonthlyPrice(await setSmsMonthlyPrice(actor(request), value),
+        Object.prototype.hasOwnProperty.call(request.body, 'number_type')));
   });
   app.post(`${base}/fx/refresh-accept`, guard, async (request, reply) => {
     FxRefreshAcceptance.parse(request.body);

@@ -60,6 +60,22 @@ describe.skipIf(!process.env.DATABASE_URL)('SMS paid number and outgoing financi
       account_sid: smsAccount, phone_number_sid: `PN${'a'.repeat(32)}` } }, deps())).toMatchObject({ state: 'active' });
   });
 
+  it('attaches voice-only ownership and refuses to reserve SMS credits on that number', async () => {
+    const receipt = { product: 'nessie', resource_id: smsIds.number, account_sid: smsAccount,
+      phone_number_sid: `PN${'a'.repeat(32)}` };
+    const ownership = vi.spyOn(fixture.provider, 'ownedNumber').mockResolvedValueOnce({
+      phone: smsPhone, sms: false, voice: true,
+    });
+    try {
+      expect(await attachSmsNumber({ credential: smsCredential, request: receipt }, deps())).toMatchObject({ state: 'active' });
+      await expect(reserve('voice-only-dispatch')).rejects.toThrow('BILLING_SMS_NUMBER_NOT_ACTIVE');
+      expect(await prisma.billingSmsReservation.findUnique({ where: { dispatchId: 'voice-only-dispatch' } })).toBeNull();
+    } finally {
+      ownership.mockRestore();
+      await attachSmsNumber({ credential: smsCredential, request: receipt }, deps());
+    }
+  });
+
   it('reserves before send, returns exactly one dispatch token, and settles/replays an exact wallet debit', async () => {
     expect(await reserve('outgoing-paid')).toMatchObject({ state: 'reserved', reserved_credits: '16.510000' });
     const claims = await Promise.all([claim('outgoing-paid'), claim('outgoing-paid')]);

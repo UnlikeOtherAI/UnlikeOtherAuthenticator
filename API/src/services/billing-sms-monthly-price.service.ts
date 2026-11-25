@@ -11,30 +11,39 @@ import {
 
 /** The currencies a billing region can set; each has its own flat monthly number price. */
 export const SMS_MONTHLY_PRICE_CURRENCIES = ['EUR', 'GBP', 'USD'] as const;
+export const RentalNumberType = z.enum(['mobile', 'local', 'national', 'toll-free']);
+export type RentalNumberType = z.infer<typeof RentalNumberType>;
 export type SmsMonthlyPriceCurrency = (typeof SMS_MONTHLY_PRICE_CURRENCIES)[number];
 
 /** Exact two-place price; the Stripe monthly price is its minor-unit amount. */
 export const SmsMonthlyPriceInput = z.object({
   amount: z.string().regex(/^(?:0|[1-9]\d{0,5})\.\d{2}$/).refine((value) => value !== '0.00'),
   currency: z.enum(SMS_MONTHLY_PRICE_CURRENCIES),
+  number_type: RentalNumberType.default('mobile'),
 }).strict();
 type MonthlyPriceDb = Pick<PrismaClient | Prisma.TransactionClient, 'billingSmsMonthlyPrice'>;
 
 /** A currency's current flat monthly price: its newest appended row. */
-export async function readSmsMonthlyPrice(db: MonthlyPriceDb, currency: string): Promise<BillingSmsMonthlyPrice> {
-  const price = await db.billingSmsMonthlyPrice.findFirst({ where: { currency },
+export async function readSmsMonthlyPrice(db: MonthlyPriceDb, currency: string,
+  numberType: RentalNumberType = 'mobile'): Promise<BillingSmsMonthlyPrice> {
+  const price = await db.billingSmsMonthlyPrice.findFirst({ where: { currency, numberType },
     orderBy: [{ setAt: 'desc' }, { id: 'desc' }] });
   if (!price) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SMS_MONTHLY_PRICE_REQUIRED');
   return price;
 }
 
-export async function listSmsMonthlyPrices(db: MonthlyPriceDb = getAdminPrisma()) {
-  return Promise.all(SMS_MONTHLY_PRICE_CURRENCIES.map(async (currency) =>
-    serializeSmsMonthlyPrice(await readSmsMonthlyPrice(db, currency))));
+export async function listSmsMonthlyPrices(byType: boolean, db: MonthlyPriceDb = getAdminPrisma()) {
+  const rows = await db.billingSmsMonthlyPrice.findMany({
+    where: byType ? {} : { numberType: 'mobile' },
+    orderBy: [{ numberType: 'asc' }, { currency: 'asc' }, { setAt: 'desc' }, { id: 'desc' }],
+    distinct: ['numberType', 'currency'],
+  });
+  return rows.map((row) => serializeSmsMonthlyPrice(row, byType));
 }
 
-export function serializeSmsMonthlyPrice(value: BillingSmsMonthlyPrice) {
-  return { id: value.id, amount: value.amount.toFixed(2), currency: value.currency, set_by: value.setBy,
+export function serializeSmsMonthlyPrice(value: BillingSmsMonthlyPrice, byType: boolean) {
+  return { ...(byType ? { number_type: RentalNumberType.parse(value.numberType) } : {}),
+    id: value.id, amount: value.amount.toFixed(2), currency: value.currency, set_by: value.setBy,
     set_by_user_id: value.setByUserId, set_at: value.setAt.toISOString() };
 }
 
@@ -42,8 +51,8 @@ export function serializeSmsMonthlyPrice(value: BillingSmsMonthlyPrice) {
 export async function setSmsMonthlyPrice(actor: SmsPolicyActor, input: z.infer<typeof SmsMonthlyPriceInput>) {
   const value = SmsMonthlyPriceInput.parse(input);
   return getAdminPrisma().$transaction(async (tx) => {
-    await lockSmsPolicyAcceptance(tx, { kind: 'operator', actor }, `monthly-number-price:${value.currency}`);
-    return tx.billingSmsMonthlyPrice.create({ data: { amount: value.amount, currency: value.currency,
+    await lockSmsPolicyAcceptance(tx, { kind: 'operator', actor }, `monthly-number-price:${value.currency}:${value.number_type}`);
+    return tx.billingSmsMonthlyPrice.create({ data: { amount: value.amount, currency: value.currency, numberType: value.number_type,
       setBy: 'operator', setByUserId: actor.userId, setAt: new Date() } });
   });
 }
@@ -65,9 +74,9 @@ function inPriceCurrency(amount: string, currency: string, target: string, rates
  * The flat price for a monthly quote in its region's currency, never below cost:
  * the provider's monthly rental at the quote's accepted ECB rates must stay under it.
  */
-export async function smsMonthlyTerms(db: MonthlyPriceDb, input: { country: string; currency: string;
+export async function smsMonthlyTerms(db: MonthlyPriceDb, input: { country: string; currency: string; numberType?: RentalNumberType;
   providerAmount: string; providerCurrency: string; rates: SmsFxRates }) {
-  const price = await readSmsMonthlyPrice(db, input.currency);
+  const price = await readSmsMonthlyPrice(db, input.currency, input.numberType);
   const priceAmount = price.amount.toFixed(2);
   // A currency the accepted snapshot cannot convert waits for the next accepted ECB document.
   if ([input.currency, input.providerCurrency].includes('GBP') && input.rates.gbpPerEur === null) {
@@ -76,13 +85,17 @@ export async function smsMonthlyTerms(db: MonthlyPriceDb, input: { country: stri
   if (smsCostReachesPrice({ costAmount: input.providerAmount, costCurrency: input.providerCurrency,
     priceAmount, priceCurrency: price.currency, rates: input.rates })) {
     const converted = inPriceCurrency(input.providerAmount, input.providerCurrency, price.currency, input.rates);
-    throw new SmsMonthlyBelowCostError(`monthly:${input.country}:${price.currency}`, `${input.country} mobile ` +
+    throw new SmsMonthlyBelowCostError(monthlyPriceAlertSubject(input.country, price.currency, input.numberType), `${input.country} ${input.numberType ?? 'mobile'} ` +
       `numbers cost ${input.providerCurrency} ${input.providerAmount} a month at Twilio (${price.currency} ` +
       `${converted} at the accepted ECB rates), at or above the flat ${price.currency} ${priceAmount} price, ` +
       `so ${price.currency} monthly quotes for ${input.country} are refused. Raise the ${price.currency} price ` +
       `or stop offering ${input.country}.`);
   }
   return { finalAmount: priceAmount, finalCurrency: price.currency, monthlyPriceId: price.id };
+}
+
+export function monthlyPriceAlertSubject(country: string, currency: string, numberType: RentalNumberType = 'mobile') {
+  return numberType === 'mobile' ? `monthly:${country}:${currency}` : `monthly:${country}:${currency}:${numberType}`;
 }
 
 /** Surface a refused country and currency on the SMS policies page and by email once; a later quote clears it. */

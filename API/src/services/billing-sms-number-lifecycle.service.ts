@@ -21,7 +21,8 @@ export async function attachSmsNumber(input: { request: BillingSmsNumberAttachRe
   const status = await readSmsNumber({ ...input.request, credential: input.credential }, deps);
   if (!status.acquisition_authorized) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_PAYMENT_NOT_ACTIVE');
   const evidence = await deps.provider.ownedNumber(input.request.account_sid, input.request.phone_number_sid);
-  if (!evidence || !evidence.sms || evidence.phone !== status.phone_number) {
+  if (!evidence || evidence.phone !== status.phone_number
+      || (!evidence.sms && !evidence.voice)) {
     throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_NUMBER_ATTACHMENT_MISMATCH');
   }
   await runBillingSerializableTransaction(prisma, async (tx) => {
@@ -36,7 +37,7 @@ export async function attachSmsNumber(input: { request: BillingSmsNumberAttachRe
       throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_RESOURCE_BINDING_CONFLICT');
     }
     await tx.billingSmsNumberResource.update({ where: { id: row.id }, data: {
-      accountSid: input.request.account_sid, phoneNumberSid: input.request.phone_number_sid, state: 'active',
+      accountSid: input.request.account_sid, phoneNumberSid: input.request.phone_number_sid, smsCapable: evidence.sms, state: 'active',
     } });
   }, 'BILLING_SMS_RESOURCE_RETRY_EXHAUSTED');
   return readSmsNumber({ ...input.request, credential: input.credential }, deps);

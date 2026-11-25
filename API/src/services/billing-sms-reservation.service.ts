@@ -130,11 +130,12 @@ export async function reserveAuthorizedSms(input: { request: BillingSmsReserveRe
     }
     const number = await tx.billingSmsNumberResource.findFirst({ where: { id: body.number_id,
       serviceId: input.credential.service.id, orgId: body.organisation_id, state: 'active',
-      accountSid: body.account_sid, phoneNumber: body.from, phoneNumberSid: { not: null } } });
+      smsCapable: true, accountSid: body.account_sid, phoneNumber: body.from, phoneNumberSid: { not: null } } });
     if (!number) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_NUMBER_NOT_ACTIVE');
     const now = deps.now?.() ?? new Date();
     const evidence = await lockSmsQuote(tx, { quoteId: body.quote_id, serviceId: input.credential.service.id,
       orgId: body.organisation_id, direction: 'outbound', destination: body.to, accountSid: body.account_sid, now });
+    if (evidence.quote.numberType !== paid.quote.scope.number_type) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_QUOTE_SCOPE_MISMATCH');
     if (evidence.quote.country !== destinationCountry) throw new AppError('BAD_REQUEST', 409, 'BILLING_SMS_DESTINATION_COUNTRY_MISMATCH');
     if (!evidence.quote.providerBoundAmount) throw new AppError('SERVICE_UNAVAILABLE', 503, 'BILLING_SMS_ROUTE_BOUND_UNAVAILABLE');
     const one = smsProviderUsd(evidence.quote.providerBoundAmount.toFixed(),

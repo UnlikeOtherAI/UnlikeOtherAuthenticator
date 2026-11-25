@@ -2,17 +2,17 @@ import type { EndpointSchema } from './schema.js';
 
 const subject = { product: 'registered product identifier', organisation_id: 'exact UOA organisation ID',
   team_id: 'exact active actor context team ID', user_id: 'exact current UOA actor subject' };
-const scope = { country: 'ISO country verified against destination for outbound', number_type: 'mobile',
+const scope = { country: 'ISO country verified against destination for outbound', number_type: 'mobile | local | national | toll-free',
   direction: 'monthly | inbound | outbound', destination: 'E.164 for outbound; null otherwise',
-  carrier: 'null; outbound uses conservative maximum mobile carrier rate', mcc: 'null', mnc: 'null' };
+  carrier: 'null; outbound uses the highest published carrier rate for the selected sender type', mcc: 'null', mnc: 'null' };
 const auth = 'Product ENTITLEMENT app key plus fresh RS256 X-UOA-Actor with exact endpoint audience; live epoch and exact membership rechecked';
 
 export const billingSmsEndpoints: EndpointSchema[] = [
   { method: 'POST', path: '/billing/v1/sms/numbers/begin',
     auth: 'CUSTOMER_LIFECYCLE key and exact-endpoint fresh actor; organisation billing manager',
-    description: 'Bind one exact mobile number and accepted quote to hosted monthly subscription Checkout.',
+    description: 'Bind one exact phone number and accepted quote to hosted monthly subscription Checkout.',
     body: { ...subject, resource_id: 'Stable acquisition-operation ID', quote_id: 'Accepted quote ID',
-      phone_number: 'Exact SMS-capable available mobile E.164' },
+      phone_number: 'Exact available E.164 with SMS or voice capability in the quoted rental class' },
     response: { 200: 'Exact number resource, pinned final quote, payment state and hosted Checkout URL',
       409: 'Changed binding, expired unaccepted quote or canceled resource' } },
   { method: 'POST', path: '/billing/v1/sms/numbers/status', auth,
@@ -35,7 +35,7 @@ export const billingSmsEndpoints: EndpointSchema[] = [
     response: { 200: 'Number state or exact missing-resource cancellation tombstone',
       503: 'Payment/provider outcome unresolved; no false cancellation or refund' } },
   { method: 'POST', path: '/billing/v1/sms/quotes', auth,
-    description: 'Issue an opaque, scoped and expiring UOA final customer mobile-number or SMS quote.',
+    description: 'Issue an opaque, scoped and expiring UOA final customer phone-number rental or SMS quote.',
     body: { ...subject, ...scope },
     response: { 200: 'id, exact decimal amount, currency (monthly: the organisation billing region currency, GBP, USD or EUR; messages: USD), expiry, rate_basis and exact scope only',
       409: 'BILLING_REGION_REQUIRED: choose the organisation billing region first; BILLING_SMS_MONTHLY_PRICE_BELOW_COST: the legacy flat monthly price does not cover the provider rental in this country',

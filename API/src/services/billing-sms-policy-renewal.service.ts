@@ -99,7 +99,9 @@ async function renewFx(db: PrismaClient, deps: SmsPolicyRenewalDeps, now: Date, 
 async function renewRoute(db: PrismaClient, deps: SmsPolicyRenewalDeps, provider: PricingProvider,
   policy: BillingSmsRoutePolicy, horizon: Date, now: Date): Promise<'renewed' | 'alerted'> {
   const subject = smsRouteAlertSubject(policy);
-  const label = `${policy.country} ${policy.direction} ${policy.currency} route fee bounds expire ${utc(policy.expiresAt)}.`;
+  const numberType = policy.numberType ?? 'mobile';
+  const route = numberType === 'mobile' ? policy.country : `${policy.country} ${numberType}`;
+  const label = `${route} ${policy.direction} ${policy.currency} route fee bounds expire ${utc(policy.expiresAt)}.`;
   const raise = async (kind: SmsPolicyAlertCondition['kind'], message: string) => {
     await alert(db, deps, { kind, subject, message: `${label} ${message}` }, now);
     return 'alerted' as const;
@@ -110,7 +112,7 @@ async function renewRoute(db: PrismaClient, deps: SmsPolicyRenewalDeps, provider
   if (!root || attested === null) {
     return raise('route_needs_operator', 'They were accepted without a recorded Twilio account price ' +
       '(manual evidence, or accepted before automatic renewal), so they cannot renew automatically. ' +
-      'Accept the country again with Add country, or enter evidence manually.');
+      (numberType === 'mobile' ? 'Accept the country again with Add country, or enter evidence manually.' : 'Enter fresh fee evidence for this number type.'));
   }
   let price: Awaited<ReturnType<PricingProvider['price']>>;
   try {
@@ -145,7 +147,7 @@ async function renewRoute(db: PrismaClient, deps: SmsPolicyRenewalDeps, provider
     // Instances renew one route at a time; a peer or an operator may already have extended it.
     await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`uoa:sms-route-renewal:${subject}`}, 0))::text`);
     const covered = await tx.billingSmsRoutePolicy.findFirst({ where: { accountSid: policy.accountSid,
-      country: policy.country, direction: policy.direction, currency: policy.currency,
+      country: policy.country, direction: policy.direction, currency: policy.currency, numberType: policy.numberType,
       expiresAt: { gt: horizon } } });
     if (covered) return;
     await lockSmsPolicyAcceptance(tx, JOB, value.evidence_digest);

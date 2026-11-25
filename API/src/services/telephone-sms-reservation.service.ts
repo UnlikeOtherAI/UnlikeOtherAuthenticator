@@ -38,7 +38,7 @@ export async function reserveTelephoneSms(input: {
     team_id: admitted.challenge.teamId, user_id: admitted.challenge.userId };
   const prior = await prisma.billingSmsReservation.findUnique({ where: { telephoneCallChallengeId: body.challengeId } });
   const quoteId = prior?.quoteId ?? (await issueSmsQuote({ credential: input.credential, authorize, request: {
-    ...subject, country: destinationCountry, number_type: 'mobile', direction: 'outbound',
+    ...subject, country: destinationCountry, number_type: admitted.senderType, direction: 'outbound',
     destination: number, carrier: null, mcc: null, mnc: null,
   } }, { ...deps, prisma })).id;
   return reserveAuthorizedSms({ credential: input.credential, request: { ...subject,
