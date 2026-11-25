@@ -3,7 +3,6 @@ import {
   billingMonthIsFuture,
   billingMonthStart,
   billingTariffLabel,
-  nextBillingMonth,
 } from './billing-format';
 
 // Pure derivations for Admin → Billing → Organisations (Docs/plans/2026-11-16-billing-admin-cleanup.md §4).
@@ -197,17 +196,15 @@ export function billingTariffChange(
   service: BillingService,
   row: BillingTariffRowModel,
   value: string,
-  now: Date = new Date(),
 ): BillingTariffChange | null {
   if (value === row.savedValue) return null;
-  const starts = billingMonthStart(nextBillingMonth(now));
   if (value === '') {
     if (!row.assignment) return null;
     return {
       kind: 'remove',
       assignmentId: row.assignment.id,
       title: `Remove ${row.name}'s own tariff?`,
-      body: `From ${starts} (UTC) ${row.name} uses ${row.fallback ? label(row.fallback, service) : 'no tariff'}.`,
+      body: `${row.name} uses ${row.fallback ? label(row.fallback, service) : 'the inherited tariff'} immediately. Previous charges stay as billed.`,
     };
   }
   const tariff = service.tariffs.find((entry) => entry.id === value);
@@ -217,7 +214,7 @@ export function billingTariffChange(
     kind: 'save',
     tariffId: tariff.id,
     title: `Move ${row.name} to ${name}?`,
-    body: `${row.name} uses ${name} for ${service.name} from ${starts} (UTC). This month keeps its current terms.${
+    body: `${row.name} uses ${name} for ${service.name} immediately. Previous charges stay as billed.${
       row.teamId === null ? ' Teams with their own tariff are not affected.' : ''}`,
   };
 }

@@ -76,7 +76,7 @@ function prismaDouble() {
       findUnique: vi.fn().mockResolvedValue({ tariffHistoryFromMonth: '2026-07' }),
     },
     billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
-    billingTariffTermEvent: {
+    billingTariffTermEvent: { findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn(async ({ where }: { where: { source: string } }) =>
         where.source === 'SERVICE_DEFAULT' ? { tariffId: 'tariff_standard', assignmentId: null, tariff: {
         id: 'tariff_standard',

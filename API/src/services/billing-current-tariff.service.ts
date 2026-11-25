@@ -9,7 +9,7 @@ type Reader = Parameters<typeof resolveBillingTariffForMonth>[0] & Pick<Prisma.T
 /** Current purchase/admission terms only. Historical statements keep their monthly term history. */
 export async function resolveCurrentBillingTariff(reader: Reader,
   scope: Parameters<typeof resolveBillingTariffForMonth>[1], product: string) {
-  const effective = await resolveBillingTariffForMonth(reader, scope);
+  const effective = await resolveBillingTariffForMonth(reader, { ...scope, asOf: scope.asOf ?? new Date() });
   if (product !== 'nessie' || effective.source !== 'SERVICE_DEFAULT') return effective;
   // Explicit, effective internal terms have already won above. Keep the exact
   // paid catalogue version even when it is retired or the public default moves.

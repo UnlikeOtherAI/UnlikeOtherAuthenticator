@@ -17,6 +17,7 @@ import {
 import {
   createBillingService,
   createBillingTariffVersion,
+  removeBillingTariffAssignment,
   setDefaultBillingTariff,
   upsertBillingTariffAssignment,
 } from '../../src/services/billing-tariff.service.js';
@@ -129,15 +130,47 @@ describe.skipIf(!process.env.DATABASE_URL)('tariff version retirement with Postg
     const assignee = await org('assignment-holder');
     const assignment = await upsertBillingTariffAssignment({ serviceId, tariffId: assigned.id,
       organisationId: assignee.id, actor }, deps());
-    expect(assignment.effectiveFromMonth).toBe(nextUtcBillingMonth(new Date()));
+    const cutoff = assignment.effectiveAt!;
+    const scope = { serviceId, organisationId: assignee.id, teamId: null, billingMonth: utcBillingMonth(cutoff) };
+    expect(assignment.effectiveFromMonth).toBe(scope.billingMonth);
+    expect((await resolveBillingTariffForMonth(db.prisma, { ...scope, asOf: new Date(+cutoff - 1) })).tariff.id)
+      .not.toBe(assigned.id);
+    expect((await resolveBillingTariffForMonth(db.prisma, { ...scope, asOf: cutoff })).tariff.id).toBe(assigned.id);
     expect(assignment.tariff.retireBlockedBy).toEqual(['assignments']);
     await expect(retireBillingTariff({ serviceId, tariffId: assigned.id, actor }, deps()))
       .rejects.toThrow('BILLING_TARIFF_IN_USE');
     const listed = serializeBillingService((await listBillingServices(deps())).find((row) => row.id === serviceId)!);
     expect(listed.assignments.find((row) => row.id === assignment.id)).toMatchObject({
-      effective_from_month: nextUtcBillingMonth(new Date()),
+      effective_from_month: scope.billingMonth, effective_at: cutoff.toISOString(),
       tariff: { id: assigned.id, retired_at: null, retire_blocked_by: ['assignments'] },
     });
+  });
+
+  it('activates a queued assignment on resave and never restores it after removal', async () => {
+    const queued = await tariff('queued');
+    const holder = await org('queued-holder');
+    const nextMonth = nextUtcBillingMonth(new Date());
+    const assignment = await db.prisma.billingTariffAssignment.create({ data: {
+      serviceId, tariffId: queued.id, orgId: holder.id, scope: 'ORGANISATION', scopeKey: holder.id,
+      createdByEmail: actor.email,
+    } });
+    await db.prisma.billingTariffTermEvent.create({ data: {
+      serviceId, source: 'ORGANISATION', scopeKey: holder.id, effectiveFromMonth: nextMonth,
+      tariffId: queued.id, assignmentId: assignment.id, reason: 'assignment-changed',
+    } });
+    const scope = { serviceId, organisationId: holder.id, teamId: null };
+    const save = () => upsertBillingTariffAssignment({ ...scope, tariffId: queued.id, actor }, deps());
+    const resolve = async (billingMonth: string, asOf?: Date) =>
+      (await resolveBillingTariffForMonth(db.prisma, { ...scope, billingMonth, asOf })).tariff.id;
+    const active = await save();
+    const cutoff = active.effectiveAt!;
+    expect(await resolve(thisMonth, new Date(+cutoff - 1))).toBe(defaultId);
+    expect(await resolve(thisMonth, cutoff)).toBe(queued.id);
+    expect((await save()).effectiveAt).toEqual(cutoff);
+    expect(await resolve(nextMonth)).toBe(queued.id);
+    await removeBillingTariffAssignment({ serviceId, assignmentId: assignment.id, actor }, deps());
+    expect(await resolve(thisMonth, new Date())).toBe(defaultId);
+    expect(await resolve(nextMonth)).toBe(defaultId);
   });
 
   it('blocks on a live Stripe subscription and stops once it has ended', async () => {

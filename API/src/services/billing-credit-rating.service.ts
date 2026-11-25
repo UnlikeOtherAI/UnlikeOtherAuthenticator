@@ -167,6 +167,7 @@ export function rateCreditPortfolio(params: {
   previousAllocations: PreviousCreditAllocation[];
   balanceMicrocredits: bigint;
   validTeamUserIds: Set<string>;
+  frozenPaygByService?: ReadonlyMap<string, ReadonlyMap<string | null, bigint>>;
   maxAdditionalCreditsByService?: ReadonlyMap<string, bigint>;
 }): RatedCreditService[] {
   if (!meteringIsComplete(params.portfolio.billingCompleteness)) {
@@ -215,7 +216,9 @@ export function rateCreditPortfolio(params: {
     const old = previous.get(key);
     const service = cost?.service ?? servicesById.get(old?.serviceId ?? '');
     if (!service) throw new AppError('INTERNAL', 500, 'BILLING_CREDIT_SERVICE_MISSING');
-    const rated = cost ? ratedMicroMinor(cost.amount, service) : 0n;
+    const frozen = params.frozenPaygByService?.get(service.id);
+    const rated = frozen ? frozen.get(cost?.userId ?? old?.userId ?? null) ?? 0n :
+      cost ? ratedMicroMinor(cost.amount, service) : 0n;
     const previousConsumedMicrocredits = old?.consumedMicrocredits ?? 0n;
     const previousConsumedCredits = previousConsumedMicrocredits / MICROCREDITS_PER_CREDIT;
     const capacityCredits = rated / MICRO_MINOR_PER_CREDIT;

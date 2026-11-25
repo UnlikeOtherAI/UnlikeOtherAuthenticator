@@ -15,7 +15,7 @@ import {
   readVerifiedCycleCreditEvidence, usdFromRatedMicrocredits,
 } from './billing-cycle-paid-credit-evidence.service.js';
 import {
-  cycleUsageContentFingerprint, projectCycleUsage, type CycleUsageEvidence,
+  cycleUsageContentFingerprint, mixedCycleLines, projectCycleUsage, type CycleUsageEvidence,
 } from './billing-cycle-usage-projection.service.js';
 import { fetchLedgerMeteringUsage } from './billing-ledger-collector.service.js';
 import { fetchVerifiedLedgerPaidReceiptSet } from './billing-ledger-paid-receipt-proof.service.js';
@@ -201,6 +201,7 @@ export async function prepareBillingTeamUsageCycle(
           // A wallet or issuer effect must close that revision independently.
         }
         const id = randomUUID();
+        const mixedUsage = creditEvidence.mixed_usage;
         const publicSnapshot: BillingCycleDetailV2 = {
           schema_version: 2, cycle_id: id,
           ...(existing?.state === 'pending_reconciliation' ?
@@ -215,7 +216,8 @@ export async function prepareBillingTeamUsageCycle(
           scope: { organisation_id: params.organisationId, team_id: params.teamId,
             cycle_scope: 'team', payer_scope: payer.toLowerCase() as 'team' | 'organisation' },
           product: service, totals: [], document_available: false,
-          subscription_lines: [], usage_lines: projected.lines.map((line) => ({
+          subscription_lines: [], usage_lines: mixedUsage ? projected.lines.flatMap(item =>
+            mixedCycleLines(item, mixedUsage, terms.tariff.usageCurrency)) : projected.lines.map((line) => ({
             ...line, customer_charge: line.usage_payment_mode === 'prepaid' ? null :
               exactMoney(usdFromRatedMicrocredits(
                 BigInt(creditEvidence.consumed_microcredits) -

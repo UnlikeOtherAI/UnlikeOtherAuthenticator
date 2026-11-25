@@ -109,6 +109,7 @@ async function signServiceAssertion(
     organisationId: string;
     teamId: string | null;
     billingMonth: string;
+    period?: { startsAt: string; endsAt: string };
     view?: 'team_portfolio' | 'paid_receipt_set' | 'budget_receipt_set';
     excludeDispatchId?: string;
     excludeRequestFingerprint?: string;
@@ -142,7 +143,8 @@ async function signServiceAssertion(
         native_scope_id: params.nativeScopeId,
         native_born_at: params.nativeBornAt,
         ...(params.nativeOwnerSub ? { native_owner_sub: params.nativeOwnerSub } : {}) } : {}),
-    billing_month: params.billingMonth,
+    ...(params.period ? { period_start: params.period.startsAt, period_end: params.period.endsAt } :
+      { billing_month: params.billingMonth }),
   })
     .setProtectedHeader({
       alg: 'RS256',
@@ -246,6 +248,7 @@ export async function fetchLedgerRawUsage(
     teamId: string | null;
     billingMonth: string;
     groupBy: 'service' | 'team' | 'user';
+    period?: { startsAt: string; endsAt: string };
     cursor?: string;
   },
   deps?: {
@@ -335,11 +338,12 @@ export async function fetchLedgerMeteringUsage(
   params: {
     product: string; organisationId: string; teamId: string | null;
     billingMonth: string; groupBy: 'service' | 'user'; cursor?: string;
+    period?: { startsAt: string; endsAt: string };
   },
   deps?: { env?: Env; fetch?: typeof fetch; now?: () => number;
     signAssertion?: typeof signServiceAssertion },
 ): Promise<NormalizedMeteringUsage> {
-  const period = billingMonthBounds(params.billingMonth);
+  const period = params.period ?? billingMonthBounds(params.billingMonth);
   const response = await fetchLedgerRawUsage(params, deps);
   try {
     const usage = LedgerMeteringUsageSchema.parse(response.value);
@@ -349,7 +353,7 @@ export async function fetchLedgerMeteringUsage(
       usage.scope.organizationId !== params.organisationId ||
       usage.scope.teamId !== params.teamId ||
       usage.scope.userId !== null ||
-      usage.scope.month !== params.billingMonth ||
+      usage.scope.month !== (params.period ? null : params.billingMonth) ||
       usage.scope.startsAt !== period.startsAt ||
       usage.scope.endsAt !== period.endsAt
     ) {

@@ -281,7 +281,7 @@ export const billingEndpoints: EndpointSchema[] = [
       organisation_id: 'string (required)',
       team_id: 'string | null (optional; when set, team must belong to organisation)',
     },
-    response: { 200: 'The assignment with its tariff and effective_from_month', 409: 'BILLING_TARIFF_RETIRED: the version is retired' },
+    response: { 200: 'The assignment with its tariff, effective_from_month and effective_at', 409: 'BILLING_TARIFF_RETIRED: the version is retired' },
   },
   {
     method: 'DELETE',

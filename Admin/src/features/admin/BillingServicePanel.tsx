@@ -22,7 +22,7 @@ type BillingTab = (typeof tabs)[number];
 
 /** The one sentence that explains which tariff wins and when a change starts. */
 export const billingPrecedenceSentence = "A team's tariff overrides its organisation's, which " +
-  'overrides the product default. A change starts on the 1st of next month (UTC).';
+  'overrides the product default. Assignment changes take effect immediately.';
 
 export function BillingServicePanel({
   onAddAppKey,

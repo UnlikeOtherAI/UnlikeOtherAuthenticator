@@ -1,3 +1,4 @@
+import { usdFromRatedMicrocredits } from './billing-cycle-paid-credit-evidence.service.js';
 import { createHash } from 'node:crypto';
 
 import { BillingUsagePaymentMode, type BillingTariff } from '@prisma/client';
@@ -120,4 +121,19 @@ export function cycleUsageContentFingerprint(rows: CycleUsageEvidence[]): string
   return createHash('sha256').update(JSON.stringify(rows.map((row) => ({
     team_id: row.team_id, content_sha256: row.content_sha256,
   })).sort((a, b) => compareBillingCycleUtf8(a.team_id, b.team_id)))).digest('hex');
+}
+
+/** Split the display when a month spans payment modes. Amounts come from the
+ * dispatch receipts, so a later assignment cannot reprice earlier usage. */
+export function mixedCycleLines(line: BillingCycleUsageLine,
+  mixed: { prepaid: string; payg: string; paygWaived: string }, currency: string): BillingCycleUsageLine[] {
+  const prepaid = BigInt(mixed.prepaid);
+  const payg = BigInt(mixed.payg);
+  return [
+    ...(prepaid ? [{ ...line, id: line.id + ':prepaid', usage_payment_mode: 'prepaid' as const,
+      customer_charge: null, credits_consumed: decimalCredits(prepaid) }] : []),
+    ...((payg || !prepaid) ? [{ ...line, id: line.id + ':payg', usage_payment_mode: 'pay_as_you_go' as const,
+      customer_charge: exactMoney(usdFromRatedMicrocredits(payg - BigInt(mixed.paygWaived)), currency),
+      credits_consumed: decimalCredits(payg) }] : []),
+  ];
 }

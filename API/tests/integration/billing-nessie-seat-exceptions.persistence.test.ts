@@ -1,10 +1,11 @@
+import { resolveDispatchFundingTariff } from '../../src/services/billing-nessie-usage-admission.service.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { baseClientConfigPayload } from '../helpers/test-config.js';
 import { validateConfigFields } from '../../src/services/config.service.js';
 import { issueInviteToken } from '../../src/services/team-invite.service.base.js';
 import { createTestDb } from '../helpers/test-db.js';
 import { createBillingTariffVersion, upsertBillingTariffAssignment } from '../../src/services/billing-tariff.service.js';
-import { nextUtcBillingMonth, resolveBillingTariffForMonth } from '../../src/services/billing-tariff-history.service.js';
+import { utcBillingMonth, resolveBillingTariffForMonth } from '../../src/services/billing-tariff-history.service.js';
 import { collectInvitationPayment, invitationFundingRequest, requireFundedInvitation }
   from '../../src/services/billing-invitation-seat.service.js';
 import { rateProviderCost } from '../../src/services/billing-rating.service.js';
@@ -20,6 +21,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie seat and usage exceptions', (
   beforeAll(async () => {
     const handle = await createTestDb(); if (!handle) throw new Error('DATABASE_URL_REQUIRED'); db = handle;
     serviceId = (await db.prisma.billingService.create({ data: { identifier: 'nessie', name: 'Seats', tariffHistoryFromMonth: '2026-01' } })).id;
+    await db.prisma.billingAppKey.create({ data: { serviceId, purpose: 'CUSTOMER_LIFECYCLE', name: 'Seats',
+      keyPrefix: 'uoa_test_seat', secretDigest: 'seat-exception-test', actorIssuer: 'https://seat.example',
+      actorAudience: 'https://identity.example', actorKeyId: 'test', actorPublicJwk: {}, checkoutReturnOrigins: ['https://seat.example'] } });
     ownerId = (await db.prisma.user.create({ data: { email: 'owner@example.test', userKey: 'owner' } })).id;
     await createBillingTariffVersion({ serviceId, actor, setAsDefault: true, tariff: {
       key: 'standard-usd', name: 'Regular seats', mode: 'standard', collectionMode: 'stripe',
@@ -39,30 +43,34 @@ describe.skipIf(!process.env.DATABASE_URL)('Nessie seat and usage exceptions', (
         monthlyChargeBasis: 'per_seat', seatPolicy: 'automatic', seatChargeTiming: 'prorated',
         markupBps: paidUsage && mode !== 'at_cost' ? 3000 : 0, usagePaymentMode: paidUsage ? 'prepaid' : 'pay_as_you_go',
       } }, { prisma: p });
-      const assignment = await upsertBillingTariffAssignment({ serviceId, tariffId: tariff.id, actor, organisationId: org.id,
-        teamId: scope === 'team' ? team.id : null }, { prisma: p });
-      const terms = await resolveBillingTariffForMonth(p, { serviceId, organisationId: org.id, teamId: team.id,
-        billingMonth: nextUtcBillingMonth(new Date()) });
-      expect(terms.assignmentId).toBe(assignment.id);
-      expect(terms.source).toBe(scope.toUpperCase());
-      expect(terms.tariff).toMatchObject({ monthlyAmountMinor: BigInt(seat), anniversarySeats: seat > 0,
-        seatPolicy: 'AUTOMATIC', usagePaymentMode: paidUsage ? 'PREPAID' : 'PAY_AS_YOU_GO' });
-      expect(rateProviderCost('1', 'USD', { mode, markupBps: terms.tariff.markupBps }).total).toBe(mode === 'at_cost' ? '1' : paidUsage ? '1.3' : '0');
       const invite = (email: string) => p.teamInvite.create({ data: {
         orgId: org.id, teamId: team.id, email, lastSentAt: new Date(),
       } });
       const ready = async (id: string) => (await p.$queryRaw<Array<{ ready: boolean }>>`
         SELECT billing_invitation_seat_ready(${id}) AS ready`)[0]?.ready;
-      // Future exceptions never waive payment under the current regular default.
+      // The inherited regular tariff requires payment before Admin saves the assignment.
       const future = await invite('future@example.test');
       expect(future).toMatchObject({ billingSeatRequired: true, billingSeatFundedAt: null });
       expect(await ready(future.id)).toBe(false);
-      await p.billingTariffTermEvent.create({ data: { serviceId, source: scope === 'team' ? 'TEAM' : 'ORGANISATION',
-        scopeKey: assignment.scopeKey, effectiveFromMonth: new Date().toISOString().slice(0, 7),
-        tariffId: tariff.id, assignmentId: assignment.id, reason: 'effective-exception-test' } });
+      const assignment = await upsertBillingTariffAssignment({ serviceId, tariffId: tariff.id, actor, organisationId: org.id,
+        teamId: scope === 'team' ? team.id : null }, { prisma: p });
+      const terms = await resolveBillingTariffForMonth(p, { serviceId, organisationId: org.id, teamId: team.id,
+        billingMonth: utcBillingMonth(assignment.effectiveAt!), asOf: assignment.effectiveAt! });
+      expect(terms.assignmentId).toBe(assignment.id);
+      expect(terms.source).toBe(scope.toUpperCase());
+      expect(terms.tariff).toMatchObject({ monthlyAmountMinor: BigInt(seat), anniversarySeats: seat > 0,
+        seatPolicy: 'AUTOMATIC', usagePaymentMode: paidUsage ? 'PREPAID' : 'PAY_AS_YOU_GO' });
+      expect(rateProviderCost('1', 'USD', { mode, markupBps: terms.tariff.markupBps }).total).toBe(mode === 'at_cost' ? '1' : paidUsage ? '1.3' : '0');
       const current = await invite('effective@example.test');
       expect(current).toMatchObject({ billingSeatRequired: seat > 0, billingSeatFundedAt: null });
       expect(await ready(current.id)).toBe(seat === 0);
+      if (seat === 0 && mode === 'free') {
+        const funding = await p.$transaction(tx => resolveDispatchFundingTariff(tx, {
+          serviceId, organisationId: org.id, teamId: team.id, userId: ownerId,
+          billingMonth: utcBillingMonth(new Date()),
+        }, 'nessie'));
+        expect(funding.id).toBe(tariff.id);
+      }
       if (seat === 0) {
         const cardOnFile = vi.fn().mockRejectedValue(new Error('No card saved'));
         const collect = vi.fn().mockRejectedValue(new Error('No seat charge permitted'));

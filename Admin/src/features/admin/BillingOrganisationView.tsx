@@ -170,8 +170,7 @@ function OrganisationProductTariffs({
     <>
       <p className="px-5 pb-4 text-xs text-gray-500">
         Product default: {productDefault ? billingTariffName(productDefault) : '—'}. A team&apos;s tariff
-        overrides its organisation&apos;s, which overrides the product default. A change starts on the
-        1st of next month (UTC).
+        overrides its organisation&apos;s, which overrides the product default. Assignment changes take effect immediately.
       </p>
       <DataTable headers={['Applies to', 'Tariff', 'What they pay',
         { label: 'Changed', className: 'hidden md:table-cell' }, { label: '', className: 'w-48' }]}>

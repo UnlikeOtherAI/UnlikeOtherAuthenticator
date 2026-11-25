@@ -110,8 +110,8 @@ test('operator moves a team, retries a refused change and removes a team tariff'
   billing.refuseNextSave();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Move Frontend to Standard?' });
-  await expect(dialog).toContainText('Frontend uses Standard for Nessie from');
-  await expect(dialog).toContainText('This month keeps its current terms.');
+  await expect(dialog).toContainText('Frontend uses Standard for Nessie immediately.');
+  await expect(dialog).toContainText('Previous charges stay as billed.');
   // A routine move is confirmed with the primary button, not the destructive one.
   await expect(dialog.getByRole('button', { name: 'Move Frontend to Standard' })).toHaveClass(/bg-indigo-600/);
   await capture(page, info.project.name, 'organisation-confirm');
@@ -133,7 +133,7 @@ test('operator moves a team, retries a refused change and removes a team tariff'
   await backend.selectOption('');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   const removal = page.getByRole('dialog', { name: "Remove Backend's own tariff?" });
-  await expect(removal).toContainText('(UTC) Backend uses Free.');
+  await expect(removal).toContainText('Backend uses Free immediately.');
   await expect(removal.getByRole('button', { name: "Remove Backend's own tariff" })).toHaveClass(/bg-red-600/);
   await removal.getByRole('button', { name: "Remove Backend's own tariff" }).click();
   await expect(backend).toHaveValue('');

@@ -159,7 +159,7 @@ function prisma() {
         { identifier: 'deeptest', name: 'DeepTest' },
       ]),
     },
-    billingTariffTermEvent: { findFirst: vi.fn().mockResolvedValue(effectiveTerm) },
+    billingTariffTermEvent: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(effectiveTerm) },
     billingOrganisationContractVersion: { findMany: vi.fn().mockResolvedValue([]) },
     billingCommercialAdjustment: {
       findMany: vi.fn().mockResolvedValue([]),

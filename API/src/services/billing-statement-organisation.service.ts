@@ -1,3 +1,4 @@
+import { meteringWithAssignmentTerms } from './billing-assignment-metering.service.js';
 import type { BillingCustomerLocale } from './billing-copy-locale.js';
 import { billingStatementCopy } from './billing-statement-copy.catalog.js';
 import { billingSubscriptionCopy } from './billing-subscription-copy.catalog.js';
@@ -190,7 +191,8 @@ async function buildTeamUsage(
     }),
   ]);
 
-  const productMetering = filterPortfolioForProduct(portfolio, context.statementProduct);
+  const productMetering = await meteringWithAssignmentTerms(deps.prisma, context.serviceId,
+    filterPortfolioForProduct(portfolio, context.statementProduct));
   const rated = rateBillingStatementUsage({
     serviceMetering: productMetering,
     userMetering: productMetering,
