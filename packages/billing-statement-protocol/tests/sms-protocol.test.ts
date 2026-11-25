@@ -1,3 +1,4 @@
+import { localPhoneNumberRentalType } from '../src/phone-number-rental.js';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
@@ -77,4 +78,16 @@ describe('SMS commercial protocol', () => {
       acquisition_authorized: true, checkout_url: null, disabled_reason: null,
       stripe_subscription_id: 'sub_private' })).toBe(false);
   });
+});
+
+it('classifies a Local offer only when the rental catalogue or a documented prefix identifies its class', () => {
+  const mixed = ['national', 'local'];
+  expect(localPhoneNumberRentalType('CZ', '+420910123456', ['national', 'mobile'])).toBe('national');
+  expect(localPhoneNumberRentalType('CZ', '+420910123456', ['local'])).toBeNull();
+  expect(localPhoneNumberRentalType('GB', '+442079460000', mixed)).toBe('local');
+  expect(localPhoneNumberRentalType('GB', '+443001234567', mixed)).toBe('national');
+  expect(localPhoneNumberRentalType('FR', '+33123456789', mixed)).toBe('local');
+  expect(localPhoneNumberRentalType('FR', '+33912345678', mixed)).toBe('national');
+  expect(localPhoneNumberRentalType('FR', '+33800123456', mixed)).toBeNull();
+  expect(localPhoneNumberRentalType('EE', '+3721234567', mixed)).toBeNull();
 });

@@ -400,3 +400,19 @@ credits; these are display values. 2.3.0 includes everything in 2.2.0.
 [Billing mode protocol 1.0.0](BILLING-MODE.md) defines read negotiation, the optional
 opaque `billing_context`, original-browser-context forwarding and stale/missing
 refusals. A backend must never replace a clicked action's context during a refresh.
+
+## Phone-number rental classes (6.6.0, SMS protocol 1.2.0)
+
+Monthly quotes and verification carry the exact rental class in `scope.number_type`:
+`mobile`, `local`, `national`, or `toll-free`. A monthly non-mobile quote uses
+`monthly_number`; its amount comes from the operator's price for that class and the
+organisation's currency. Mobile quotes retain `monthly_mobile`. Inbound SMS quotes
+follow the receiving number's class (`inbound_mobile` or `inbound_number`).
+Outbound SMS quotes use the maximum carrier rate for that sending number class in
+the destination country (`maximum_mobile_carrier` or `maximum_number_carrier`).
+
+Twilio's Local inventory includes national numbers in several countries. Use the
+type from the country pricing catalogue when it distinguishes them. When both types
+appear, `localPhoneNumberRentalType` checks documented prefixes and returns null
+for an unclassified number. See Twilio's [UK](https://www.twilio.com/en-us/guidelines/gb/porting)
+and [French](https://www.twilio.com/en-us/guidelines/fr/porting) numbering guides.

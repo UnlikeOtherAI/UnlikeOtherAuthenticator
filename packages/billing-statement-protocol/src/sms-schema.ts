@@ -9,7 +9,7 @@ const account = { type: 'string', pattern: '^AC[a-fA-F0-9]{32}$' } as const;
 const message = { type: 'string', pattern: '^SM[a-fA-F0-9]{32}$' } as const;
 const scope = {
   country: { type: 'string', pattern: '^[A-Z]{2}$' },
-  number_type: { const: 'mobile' },
+  number_type: { enum: ['mobile', 'local', 'national', 'toll-free'] },
   direction: { enum: ['monthly', 'inbound', 'outbound'] },
   destination: { anyOf: [phone, { type: 'null' }] },
   carrier: nullableId, mcc: nullableId, mnc: nullableId,
@@ -24,7 +24,7 @@ export const billingSmsVerifyQuoteRequestV1JsonSchema = billingSubjectActionBody
 );
 export const billingSmsFinalQuoteV1JsonSchema = exact({
   id, amount: decimal, currency: { enum: ['USD', 'EUR', 'GBP'] }, expires_at: { type: 'string', format: 'date-time' },
-  rate_basis: { enum: ['monthly_mobile', 'inbound_mobile', 'maximum_mobile_carrier'] },
+  rate_basis: { enum: ['monthly_mobile', 'monthly_number', 'inbound_mobile', 'inbound_number', 'maximum_mobile_carrier', 'maximum_number_carrier'] },
   scope: exact({ organisation_id: id, ...scope }),
 });
 const binding = {

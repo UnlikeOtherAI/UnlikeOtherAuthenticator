@@ -1,6 +1,6 @@
 import type { BillingSubjectRequest } from './funding-schema-primitives.js';
 
-export const BILLING_SMS_PROTOCOL_VERSION = '1.1.0' as const;
+export const BILLING_SMS_PROTOCOL_VERSION = '1.2.0' as const;
 export const BILLING_SMS_PATHS = {
   quote: '/billing/v1/sms/quotes',
   verifyQuote: '/billing/v1/sms/quotes/verify',
@@ -28,7 +28,7 @@ export type BillingSmsDirection = 'monthly' | 'inbound' | 'outbound';
 export type BillingSmsQuoteScope = {
   organisation_id: string;
   country: string;
-  number_type: 'mobile';
+  number_type: 'mobile' | 'local' | 'national' | 'toll-free';
   direction: BillingSmsDirection;
   destination: string | null;
   carrier: string | null;
@@ -42,7 +42,7 @@ export type BillingSmsFinalQuoteV1 = {
   amount: string;
   currency: 'USD' | 'EUR' | 'GBP';
   expires_at: string;
-  rate_basis: 'monthly_mobile' | 'inbound_mobile' | 'maximum_mobile_carrier';
+  rate_basis: 'monthly_mobile' | 'monthly_number' | 'inbound_mobile' | 'inbound_number' | 'maximum_mobile_carrier' | 'maximum_number_carrier';
   scope: BillingSmsQuoteScope;
 };
 
