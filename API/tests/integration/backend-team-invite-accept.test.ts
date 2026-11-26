@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { InviteApprovalStatus, InviteRevokedReason } from '@prisma/client';
 
 import { createApp } from '../../src/app.js';
+import { baseClientConfigPayload, signTestConfigJwt } from '../helpers/test-config.js';
 import { seedDomainSecret } from '../helpers/domain-secret.js';
 import { createTestDb } from '../helpers/test-db.js';
 import {
@@ -139,6 +140,53 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
     await app.ready();
     return { app, headers: { authorization: `Bearer ${domainBearer}` } };
   }
+
+  it('only lets the recipient decline, permits retries and leaves their memberships untouched', async () => {
+    const team = await seedTeam('Decline');
+    const invitee = await createDomainUser('recipient@example.com');
+    const invite = await seedInvite({ ...team, email: 'recipient@example.com' });
+    const { app, headers } = await createBackendRequestState();
+    const acceptUrl = url(team.orgId, team.teamId, invite.id);
+    const decline = (userId: string) => app.inject({ method: 'POST', headers,
+      url: acceptUrl.replace('/accept?', '/decline?'), payload: { userId } });
+    try {
+      expect((await decline(team.ownerId)).statusCode).toBe(400);
+      expect((await decline(invitee.id)).statusCode).toBe(200);
+      expect((await decline(invitee.id)).statusCode).toBe(200);
+      expect((await decline(team.ownerId)).statusCode).toBe(400);
+      expect((await app.inject({ method: 'POST', headers, url: acceptUrl,
+        payload: { userId: invitee.id } })).statusCode).toBe(400);
+      expect(await handle.prisma.teamInvite.findUniqueOrThrow({ where: { id: invite.id },
+        select: { declinedAt: true, acceptedAt: true } })).toEqual({ declinedAt: expect.any(Date), acceptedAt: null });
+      expect(await handle.prisma.teamMember.count({ where: { teamId: team.teamId, userId: invitee.id } })).toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('keeps a recipient decline inside the organisation pinned in the signed config', async () => {
+    const team = await seedTeam('Foreign');
+    const pinned = await seedTeam('Pinned');
+    const user = await createDomainUser('pinned-invitee@example.com');
+    const invite = await seedInvite({ ...team, email: 'pinned-invitee@example.com' });
+    const { app, headers } = await createBackendRequestState();
+    const config = await signTestConfigJwt(baseClientConfigPayload({
+      domain: DOMAIN, redirect_urls: [`https://${DOMAIN}/oauth/callback`],
+      org_features: { enabled: true, backend_org_management: true },
+      login_flow: { team_selection: 'auto', organization_id: pinned.orgId },
+    }));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(config)));
+    try {
+      const response = await app.inject({ method: 'POST', headers,
+        url: url(team.orgId, team.teamId, invite.id).replace('/accept?', '/decline?'),
+        payload: { userId: user.id } });
+      expect(response.statusCode).toBe(401);
+      expect(await handle.prisma.teamInvite.findUniqueOrThrow({ where: { id: invite.id },
+        select: { declinedAt: true } })).toEqual({ declinedAt: null });
+    } finally {
+      await app.close();
+    }
+  });
 
   it('creates both memberships, marks the invite accepted, and repeats as idempotent success', async () => {
     const team = await seedTeam('Happy');

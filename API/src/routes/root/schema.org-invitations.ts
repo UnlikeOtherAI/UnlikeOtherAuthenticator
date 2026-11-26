@@ -125,6 +125,14 @@ export const orgInvitationEndpoints: EndpointSchema[] = [
     },
   },
   {
+    method: 'POST',
+    path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/decline',
+    description: 'Decline an actionable invitation for its recipient. UOA checks the current recipient address, invalidates outstanding email links, and returns success when the recipient retries.',
+    auth: 'Domain hash bearer token in backend mode with backend_org_management enabled.',
+    body: { userId: 'Authenticated UOA subject asserted by the product backend' },
+    response: { 200: '{ ok: true, orgId, teamId }', 400: 'Invalid invitation or recipient' },
+  },
+  {
     method: 'DELETE',
     path: '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId',
     description:
