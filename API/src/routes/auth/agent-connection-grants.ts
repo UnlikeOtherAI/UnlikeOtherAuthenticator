@@ -14,6 +14,7 @@ import { agentConnectionGrantRateLimiter } from './rate-limit-keys.js';
 const Uuid = z.string().uuid();
 const IssueBody = z.object({
   request_id: Uuid,
+  all_teams: z.boolean().optional(),
   connection_id: z.string().min(1).max(160),
   product: z.string().min(1).max(100),
   resource: z.string().min(1).max(2048),
@@ -23,6 +24,9 @@ const IssueBody = z.object({
 const RenewBody = z.object({
   request_id: Uuid,
   touch: z.boolean(),
+  target: z.object({ org_id: z.string().min(1).max(256), team_id: z.string().min(1).max(256) }).strict().optional(),
+  connection_only: z.boolean().optional(),
+  list_teams: z.boolean().optional(),
   resource: z.string().min(1).max(2048).optional(),
   scope: z.string().min(1).max(200).optional(),
 }).strict();
@@ -50,12 +54,12 @@ export function registerAgentConnectionGrantRoutes(app: FastifyInstance): void {
     if (!request.configJwt) throw new AppError('BAD_REQUEST', 400, 'MISSING_CONFIG');
     const result = await issueAgentConnectionGrant({
       ...appBinding(request), configJwt: request.configJwt, config: config(request),
-      requestId: body.request_id, connectionId: body.connection_id, product: body.product,
+      requestId: body.request_id, connectionId: body.connection_id, product: body.product, allTeams: body.all_teams,
       resource: body.resource, subjectToken: body.subject_token,
     }, { prisma: request.adminDb });
     reply.header('Cache-Control', 'no-store').header('Pragma', 'no-cache');
     reply.code(result.created ? 201 : 200);
-    return { grant_handle: result.grantHandle, idle_expires_at: result.idleExpiresAt,
+    return { all_teams: result.allTeams, grant_handle: result.grantHandle, idle_expires_at: result.idleExpiresAt,
       expires_at: result.expiresAt };
   });
 
@@ -64,11 +68,11 @@ export function registerAgentConnectionGrantRoutes(app: FastifyInstance): void {
     const { grantHandle } = GrantParams.parse(request.params);
     const result = await renewAgentConnectionGrant({
       grantHandle, ...appBinding(request), config: config(request), requestId: body.request_id,
-      touch: body.touch, resource: body.resource, scope: body.scope,
+      touch: body.touch, target: body.target, listTeams: body.list_teams, connectionOnly: body.connection_only, resource: body.resource, scope: body.scope,
     }, { prisma: request.adminDb });
     reply.header('Cache-Control', 'no-store').header('Pragma', 'no-cache');
     return {
-      idle_expires_at: result.idleExpiresAt, expires_at: result.expiresAt, org: result.org,
+      idle_expires_at: result.idleExpiresAt, expires_at: result.expiresAt, org: result.org, ...(result.teams ? { teams: result.teams } : {}),
       ...(result.resourceToken ? { access_token: result.resourceToken.accessToken, token_type: 'Bearer',
         expires_in: result.resourceToken.expiresIn, resource: result.resourceToken.resource,
         scope: result.resourceToken.scope } : {}),

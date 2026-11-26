@@ -37,6 +37,11 @@ export type OrgContext = {
   group_admin?: string[];
 };
 
+export function agentGrantOrgContext(org: OrgContext, teamId: string): OrgContext {
+  return { org_id: org.org_id, tenant_slug: org.tenant_slug, org_role: org.org_role,
+    teams: [teamId], team_roles: org.team_roles[teamId] ? { [teamId]: org.team_roles[teamId] } : {} };
+}
+
 function ensureFeatureEnabled(config: ClientConfig): void {
   if (!config.org_features?.enabled) {
     throw new AppError('NOT_FOUND', 404);
@@ -125,6 +130,7 @@ export async function getActiveUserOrgContext(
   // teams while retaining the org role as the source of that authority.
   if(orgMembership.role==='owner'||orgMembership.role==='admin'||orgMembership.org.ownerId===userId) {
     const admitted=await prisma.team.findMany({where:{orgId:orgMembership.orgId,
+      ...(unpaid.length ? { id: { notIn: unpaid.flatMap(row => row.team_id ? [row.team_id] : []) } } : {}),
       AND:[activeTeamAuthorityWhere(userId)]},select:{id:true},orderBy:{id:'asc'}});
     for(const team of admitted)if(!teams.includes(team.id)){
       teams.push(team.id);teamRoles[team.id]=orgMembership.org.ownerId===userId?'owner':orgMembership.role;

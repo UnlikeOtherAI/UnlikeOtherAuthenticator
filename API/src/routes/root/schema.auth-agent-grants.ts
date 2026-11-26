@@ -9,6 +9,7 @@ export const agentConnectionGrantEndpoints: EndpointSchema[] = [
     auth, query: { config_url: 'signed app config whose domain matches the authenticated bearer' },
     body: {
       request_id: 'UUID the product generates once per (connection, team) before issue; exact retries recover the same grant.',
+      'all_teams?': 'Explicit standing consent for current and future eligible teams. Defaults to false.',
       connection_id: 'The product’s own id for the connected program, 1–160 of [A-Za-z0-9._:-].',
       product: 'nessie (first-party, on by default at api.nessie.works), or the product of an enabled confidential delegation mapping that lists agent.connection.',
       resource: 'https://api.nessie.works/mcp for Nessie, or the exact resource of that mapping (the product’s own API).',
@@ -16,6 +17,7 @@ export const agentConnectionGrantEndpoints: EndpointSchema[] = [
       subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
     },
     response: {
+      all_teams: 'Whether this grant covers current and future eligible teams.',
       grant_handle: 'Opaque UUID; useful only with the same authenticated product domain credential and request_id.',
       idle_expires_at: 'RFC3339; 90 days after issue, slid only by renewals with touch=true.',
       expires_at: 'RFC3339; the earlier of idle_expires_at and the organisation’s agent_connection_max_days ceiling.',
@@ -30,6 +32,9 @@ export const agentConnectionGrantEndpoints: EndpointSchema[] = [
     body: {
       request_id: 'original grant request UUID',
       touch: 'boolean; true only when the connected program itself is presenting its credential. At most once an hour it moves idle_expires_at to now+90 days. Reconciliation, revocation intake and background work send false.',
+      'target?': 'Exact org_id and team_id for this call. A different team requires all_teams.',
+      'connection_only?': 'Check a standing grant without admitting any team. Omit target, resource and scope.',
+      'list_teams?': 'Return currently eligible team ids, names and organisation ids on an all-teams grant.',
       'resource?': 'with scope: an exact resource the product’s mapping allows for a downstream token',
       'scope?': 'with resource: space-delimited subset of ai.invoke, billing.read, memory.read, memory.write',
     },

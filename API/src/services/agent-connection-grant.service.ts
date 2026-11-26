@@ -15,7 +15,7 @@ import { consumeConfidentialAssertion } from './confidential-assertion-use.servi
 import { resolveConfidentialDelegation } from './confidential-delegation.service.js';
 import { verifyConfidentialSubjectToken } from './confidential-token-exchange.service.js';
 import type { PublicRsaJwks } from './client-jwk.service.js';
-import { getActiveClientOrgContext, type OrgContext } from './org-context.service.js';
+import { agentGrantOrgContext, getActiveClientOrgContext, type OrgContext } from './org-context.service.js';
 import { signConfidentialAccessToken } from './oauth/access-token.service.js';
 import { lockProductTeamPolicyShared, lockTokenIssuanceProductPolicy } from './product-team-policy-lock.service.js';
 import { validateSessionAssurance } from './session-assurance.service.js';
@@ -90,11 +90,13 @@ async function maxExpiresAt(tx: Prisma.TransactionClient, orgId: string, created
 
 
 /** Live authority for one person in one team, standing in for a session only where evidence allows. */
-async function currentAuthority(tx: Prisma.TransactionClient, args: {
+type GrantAuthorityInput = {
   clientDomainId: string; sourceDomain: string; config: Config; product: string; resource: string;
   subjectId: string; orgId: string; teamId: string; tokenVersion: number;
   assuranceId?: string; agentGrant?: AgentGrantEvidence;
-}): Promise<{ email: string; org: OrgContext }> {
+};
+
+async function accountAuthority(tx: Prisma.TransactionClient, args: GrantAuthorityInput): Promise<string> {
   const prisma = asPrismaClient(tx);
   try {
     await lockAndAssertAuthenticationEpoch({ userId: args.subjectId, domain: args.sourceDomain,
@@ -111,24 +113,31 @@ async function currentAuthority(tx: Prisma.TransactionClient, args: {
       scope: 'agent.connection', agentConnectionGrant: true }, { prisma });
   }
   if (args.agentGrant) await assertAgentGrantEvidence(args.agentGrant, prisma);
-  const [user, domainRole, org] = await Promise.all([
+  const [user, domainRole] = await Promise.all([
     tx.user.findFirst({ where: { id: args.subjectId, lifecycleStatus: 'ACTIVE' }, select: { email: true } }),
     tx.domainRole.findUnique({ where: { domain_userId: { domain: args.sourceDomain, userId: args.subjectId } },
       select: { role: true } }),
-    getActiveClientOrgContext({ userId: args.subjectId, domain: args.sourceDomain, orgId: args.orgId,
-      groupsEnabled: args.config.org_features?.groups_enabled, assuranceId: args.assuranceId,
-      agentGrant: args.agentGrant }, { crossProductPrisma: prisma, policyPrisma: prisma, prisma }),
   ]);
-  if (!user?.email || !domainRole || !org || !org.teams.includes(args.teamId)) unavailable();
-  return { email: user.email, org };
+  if (!user?.email || !domainRole) unavailable();
+  return user.email;
+}
+
+async function currentAuthority(tx: Prisma.TransactionClient, args: GrantAuthorityInput) {
+  const email = await accountAuthority(tx, args);
+  const prisma = asPrismaClient(tx);
+  const org = await getActiveClientOrgContext({ userId: args.subjectId, domain: args.sourceDomain, orgId: args.orgId,
+      groupsEnabled: args.config.org_features?.groups_enabled, assuranceId: args.assuranceId,
+      agentGrant: args.agentGrant }, { crossProductPrisma: prisma, policyPrisma: prisma, prisma });
+  if (!org || !org.teams.includes(args.teamId)) unavailable();
+  return { email, org: agentGrantOrgContext(org, args.teamId) };
 }
 
 export async function issueAgentConnectionGrant(
   params: { clientDomainId: string; sourceDomain: string; configJwt: string; config: Config;
-    requestId: string; connectionId: string; product: string; resource: string; subjectToken: string },
+    allTeams?: boolean; requestId: string; connectionId: string; product: string; resource: string; subjectToken: string },
   deps: { prisma?: PrismaClient; now?: () => number;
     fetchJwks?: (jwksUrl: string, opts: { expectedHost: string }) => Promise<PublicRsaJwks> } = {},
-): Promise<{ grantHandle: string; idleExpiresAt: string; expiresAt: string; created: boolean }> {
+): Promise<{ grantHandle: string; idleExpiresAt: string; expiresAt: string; allTeams: boolean; created: boolean }> {
   if (!params.clientDomainId || !Uuid.safeParse(params.requestId).success
     || !ConnectionId.safeParse(params.connectionId).success || !Product.safeParse(params.product).success
     || !Resource.safeParse(params.resource).success) invalidRequest();
@@ -145,7 +154,7 @@ export async function issueAgentConnectionGrant(
   const assuranceId = assertion.verifiedAssuranceId;
   const now = new Date(nowSeconds * 1000);
   const binding = bindingHash([params.clientDomainId, params.sourceDomain, params.requestId, params.connectionId,
-    assertion.sub, active.orgId, active.teamId, assertion.tv, params.product, params.resource]);
+    assertion.sub, active.orgId, active.teamId, assertion.tv, params.product, params.resource, ...(params.allTeams ? ['all-teams'] : [])]);
   const db = deps.prisma ?? getAdminPrisma();
   const outcome = await serializable(db, async (tx) => {
     const existing = await tx.agentConnectionGrant.findUnique({ where: {
@@ -170,7 +179,7 @@ export async function issueAgentConnectionGrant(
       clientDomainId: params.clientDomainId, requestId: params.requestId, connectionId: params.connectionId,
       sourceDomain: params.sourceDomain, subjectId: assertion.sub, orgId: active.orgId, teamId: active.teamId,
       tokenVersion: assertion.tv, originTokenJti: assertion.jti, product: params.product,
-      resource: params.resource, bindingHash: binding, sourceAssuranceId: proof.id, method: proof.method,
+      allTeams: params.allTeams === true, resource: params.resource, bindingHash: binding, sourceAssuranceId: proof.id, method: proof.method,
       connectionRef: proof.connectionId, connectionRevision: proof.connectionRevision,
       connectionGeneration: proof.connectionGeneration, externalIdentityId: proof.externalIdentityId,
       mfaSource: proof.mfaSource, amr: proof.amr, policyGeneration: proof.policyGeneration,
@@ -178,7 +187,7 @@ export async function issueAgentConnectionGrant(
     } });
     return { row, max: await maxExpiresAt(tx, row.orgId, row.createdAt), created: true };
   });
-  return { grantHandle: outcome.row.id, idleExpiresAt: outcome.row.idleExpiresAt.toISOString(),
+  return { allTeams: outcome.row.allTeams, grantHandle: outcome.row.id, idleExpiresAt: outcome.row.idleExpiresAt.toISOString(),
     expiresAt: effectiveExpiry(outcome.row.idleExpiresAt, outcome.max).toISOString(), created: outcome.created };
 }
 
@@ -195,13 +204,14 @@ async function lockGrant(tx: Prisma.TransactionClient, handle: string, caller: {
 export type AgentGrantRenewal = {
   idleExpiresAt: string;
   expiresAt: string;
-  org: OrgContext;
+  org?: OrgContext;
+  teams?: { org_id: string; team_id: string; name: string }[];
   resourceToken?: { accessToken: string; expiresIn: number; resource: string; scope: string };
 };
 
 export async function renewAgentConnectionGrant(
   params: { grantHandle: string; clientDomainId: string; sourceDomain: string; config: Config;
-    requestId: string; touch: boolean; resource?: string; scope?: string },
+    requestId: string; touch: boolean; target?: { org_id: string; team_id: string }; listTeams?: boolean; connectionOnly?: boolean; resource?: string; scope?: string },
   deps: { prisma?: PrismaClient; now?: Date } = {},
 ): Promise<AgentGrantRenewal> {
   if (!Uuid.safeParse(params.grantHandle).success || !Uuid.safeParse(params.requestId).success
@@ -215,19 +225,49 @@ export async function renewAgentConnectionGrant(
     const row = await lockGrant(tx, params.grantHandle, params);
     const max = await maxExpiresAt(tx, row.orgId, row.createdAt);
     if (row.revokedAt || effectiveExpiry(row.idleExpiresAt, max) <= now) unavailable();
-    const current = await currentAuthority(tx, { clientDomainId: row.clientDomainId, sourceDomain: row.sourceDomain,
-      config: params.config, product: row.product, resource: row.resource, subjectId: row.subjectId,
-      orgId: row.orgId, teamId: row.teamId, tokenVersion: row.tokenVersion, agentGrant: evidenceOf(row) });
+    const target = params.target ?? { org_id: row.orgId, team_id: row.teamId };
+    const directory = params.listTeams || params.connectionOnly;
+    if ((params.listTeams && !row.allTeams) || (directory && (params.resource || params.target))) invalidRequest();
+    if (!row.allTeams && (target.org_id !== row.orgId || target.team_id !== row.teamId)) unavailable();
+    const args = { ...row, config: params.config, orgId: target.org_id, teamId: target.team_id,
+      agentGrant: evidenceOf(row) };
+    let current: Awaited<ReturnType<typeof currentAuthority>> | undefined;
+    if (directory) await accountAuthority(tx, args);
+    else current = await currentAuthority(tx, args);
+    const targetLimit = target.org_id === row.orgId ? max : await maxExpiresAt(tx, target.org_id, row.createdAt);
+    if (targetLimit && targetLimit <= now) unavailable();
     let idleExpiresAt = row.idleExpiresAt;
     // Only the program's own use keeps the grant alive; reconciliation and background work do not.
     if (params.touch && now.getTime() - row.lastTouchedAt.getTime() >= AGENT_GRANT_TOUCH_INTERVAL_MS) {
       idleExpiresAt = new Date(now.getTime() + AGENT_GRANT_IDLE_MS);
       await tx.agentConnectionGrant.update({ where: { id: row.id }, data: { idleExpiresAt, lastTouchedAt: now } });
     }
-    const expiresAt = effectiveExpiry(idleExpiresAt, max);
+    const expiresAt = effectiveExpiry(effectiveExpiry(idleExpiresAt, max), targetLimit);
     const renewal: AgentGrantRenewal = { idleExpiresAt: idleExpiresAt.toISOString(),
-      expiresAt: expiresAt.toISOString(), org: current.org };
-    if (!params.resource || !params.scope) return renewal;
+      expiresAt: expiresAt.toISOString(), ...(current ? { org: current.org } : {}) };
+    if (params.listTeams) {
+      if (!row.allTeams) unavailable();
+      const memberships = await tx.orgMember.findMany({ where: { userId: row.subjectId, status: 'ACTIVE' }, select: { orgId: true } });
+      const teams: NonNullable<AgentGrantRenewal['teams']> = [];
+      for (const { orgId } of memberships) {
+        const limit = await maxExpiresAt(tx, orgId, row.createdAt);
+        if (limit && limit <= now) continue;
+        const prisma = asPrismaClient(tx);
+        let org: OrgContext | null;
+        try {
+          org = await getActiveClientOrgContext({ userId: row.subjectId, domain: row.sourceDomain,
+            orgId, agentGrant: evidenceOf(row) }, { prisma, crossProductPrisma: prisma, policyPrisma: prisma });
+        } catch (error) {
+          if (error instanceof AppError && error.statusCode === 403) continue;
+          throw error;
+        }
+        if (!org) continue;
+        const admitted = await tx.team.findMany({ where: { orgId, id: { in: org.teams } }, select: { id: true, name: true } });
+        teams.push(...admitted.map(team => ({ org_id: orgId, team_id: team.id, name: team.name })));
+      }
+      renewal.teams = teams;
+    }
+    if (!params.resource || !params.scope || !current) return renewal;
     const delegation = await resolveConfidentialDelegation({ authenticatedClientDomainId: row.clientDomainId,
       sourceDomain: row.sourceDomain, product: row.product, resource: params.resource, scope: params.scope },
     { prisma: asPrismaClient(tx) });
@@ -240,7 +280,7 @@ export async function renewAgentConnectionGrant(
       sourceDomain: row.sourceDomain, product: delegation.product, resource: delegation.resource,
       issuer: getPublicBaseUrl(), ttlSeconds: AGENT_GRANT_RESOURCE_TOKEN_TTL_SECONDS,
       expiresAtEpochSeconds: tokenExpiresAt, scope: delegation.scope, org: current.org,
-      active: { orgId: row.orgId, teamId: row.teamId },
+      active: { orgId: target.org_id, teamId: target.team_id },
       agentConnection: { grant_handle: row.id, connection_id: row.connectionId },
     });
     return { ...renewal, resourceToken: { accessToken, expiresIn: tokenExpiresAt - nowSeconds,
