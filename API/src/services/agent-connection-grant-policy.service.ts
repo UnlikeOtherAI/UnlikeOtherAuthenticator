@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { asPrismaClient } from '../db/tenant-context.js';
 import { AppError } from '../utils/errors.js';
 import { assertAgentGrantEvidence, type AgentGrantEvidence } from './agent-connection-grant-evidence.service.js';
+import { getActiveClientOrgContext } from './org-context.service.js';
 import { resolveConfidentialDelegation } from './confidential-delegation.service.js';
 
 /** Rules shared by the grant service and the subject-assertion verifier. */
@@ -45,7 +46,7 @@ function unavailable(): never {
   throw new AppError('FORBIDDEN', 403, 'AGENT_GRANT_UNAVAILABLE');
 }
 
-export type AdmittedAgentGrant = { id: string; connectionId: string; evidence: AgentGrantEvidence };
+export type AdmittedAgentGrant = { id: string; connectionId: string; expiresAt: Date; evidence: AgentGrantEvidence };
 
 /**
  * A product's subject assertion that names an agent grant instead of a session proof
@@ -62,12 +63,13 @@ export async function admitAgentGrantAssertion(
   if (!Uuid.safeParse(input.handle).success) unavailable();
   const row = await db.agentConnectionGrant.findUnique({ where: { id: input.handle } });
   if (!row || row.revokedAt || row.sourceDomain !== input.sourceDomain || row.subjectId !== input.subjectId
-    || row.orgId !== input.orgId || row.teamId !== input.teamId || row.tokenVersion !== input.tokenVersion) {
+    || (!row.allTeams && (row.orgId !== input.orgId || row.teamId !== input.teamId)) || row.tokenVersion !== input.tokenVersion) {
     unavailable();
   }
   const org = await db.organisation.findUnique({ where: { id: row.orgId }, select: { agentConnectionMaxDays: true } });
   const max = org?.agentConnectionMaxDays ? new Date(row.createdAt.getTime() + org.agentConnectionMaxDays * DAY_MS) : null;
-  if (effectiveExpiry(row.idleExpiresAt, max) <= now) unavailable();
+  let expiresAt = effectiveExpiry(row.idleExpiresAt, max);
+  if (expiresAt <= now) unavailable();
   const user = await db.user.findFirst({ where: { id: row.subjectId, lifecycleStatus: 'ACTIVE' },
     select: { tokenVersion: true } });
   if (!user || user.tokenVersion !== row.tokenVersion) unavailable();
@@ -79,7 +81,15 @@ export async function admitAgentGrantAssertion(
   }
   const evidence = evidenceOf(row);
   await assertAgentGrantEvidence(evidence, prisma);
-  return { id: row.id, connectionId: row.connectionId, evidence };
+  if (row.allTeams) {
+    const ctx = await getActiveClientOrgContext({ userId: row.subjectId, domain: row.sourceDomain,
+      orgId: input.orgId, agentGrant: evidence }, { prisma, crossProductPrisma: prisma, policyPrisma: prisma });
+    if (!ctx?.teams.includes(input.teamId)) unavailable();
+    const policy = await db.organisation.findUnique({ where: { id: input.orgId }, select: { agentConnectionMaxDays: true } });
+    if (policy?.agentConnectionMaxDays) expiresAt = effectiveExpiry(expiresAt, new Date(row.createdAt.getTime() + policy.agentConnectionMaxDays * DAY_MS));
+    if (expiresAt <= now) unavailable();
+  }
+  return { id: row.id, connectionId: row.connectionId, expiresAt, evidence };
 }
 
 /** Scopes a grant-derived token exchange may mint. */

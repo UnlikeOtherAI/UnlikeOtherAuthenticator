@@ -27,6 +27,7 @@ const request = (overrides: { accessToken?: string; assertion?: string; teamId?:
   if (overrides.accessToken !== undefined) headers['x-uoa-access-token'] = overrides.accessToken;
   if (overrides.assertion !== undefined) headers['x-uoa-subject-assertion'] = overrides.assertion;
   return {
+    method: 'GET', routeOptions: { url: '/org/organisations/:orgId/teams/:teamId' },
     headers,
     query: { domain: 'api.nessie.works' },
     configJwt: 'verified-nessie-config.jwt',
@@ -84,7 +85,6 @@ describe('requireOrgRole — subject assertion user mode', () => {
       configJwt: 'verified-nessie-config.jwt',
       sourceDomain: 'api.nessie.works',
       audience: 'https://authentication.unlikeotherai.com/org',
-      allowAgentGrant: true,
     });
     expect(lockEpochShared).toHaveBeenCalledWith(
       { userId: 'user_1', domain: 'api.nessie.works', credentialEpoch: 7 },
@@ -99,6 +99,26 @@ describe('requireOrgRole — subject assertion user mode', () => {
       org: { org_id: 'org_1', org_role: 'owner' },
       active: { orgId: 'org_1', teamId: 'team_1', tenantSlug: 'live-team' },
     });
+  });
+
+  it('binds a program roster read to the team in its grant assertion', async () => {
+    verifySubjectAssertion.mockResolvedValueOnce({
+      sub: 'user_1', tv: 7, active: { orgId: 'org_1', teamId: 'team_1' },
+      verifiedAgentGrant: { evidence: {} },
+    });
+    await expect(requireOrgRole()(request({ assertion: 'program.assertion', teamId: 'team_2' }), {} as FastifyReply))
+      .rejects.toMatchObject({ statusCode: 403 });
+    expect(getActiveOrg).not.toHaveBeenCalled();
+  });
+
+  it('requires a human sign-in assertion on an organisation update', async () => {
+    const update = Object.assign(request({ assertion: 'program.assertion' }), {
+      method: 'PUT', routeOptions: { url: '/org/organisations/:orgId' },
+    });
+    verifySubjectAssertion.mockRejectedValueOnce(new Error('INVALID_SUBJECT_TOKEN'));
+    await expect(requireOrgRole('owner')(update, {} as FastifyReply)).rejects.toThrow();
+    expect(verifySubjectAssertion).toHaveBeenCalledWith(expect.objectContaining({ allowAgentGrant: false }));
+    expect(getActiveOrg).not.toHaveBeenCalled();
   });
 
   it('keeps a different active team as provenance and lets the target service authorize it', async () => {

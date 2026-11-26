@@ -117,15 +117,15 @@ describe.skipIf(!enabled)('agent connection grants', () => {
     .setIssuer(sourceDomain).setAudience(`${baseUrl}${AGENT_GRANT_AUDIENCE_PATH}`).setSubject(subjectId)
     .setIssuedAt(nowSeconds).setExpirationTime(nowSeconds + 45).setJti(randomUUID()).sign(sourcePrivateKey);
 
-  const issue = async (requestId: string, overrides: { withProof?: boolean; connectionId?: string } = {}) =>
+  const issue = async (requestId: string, overrides: { allTeams?: boolean; withProof?: boolean; connectionId?: string } = {}) =>
     issueAgentConnectionGrant({ clientDomainId, sourceDomain, configJwt: fakeConfigJwt(), config, requestId,
-      connectionId: overrides.connectionId ?? 'conn-1', product, resource,
+      allTeams: overrides.allTeams, connectionId: overrides.connectionId ?? 'conn-1', product, resource,
       subjectToken: await subjectToken(overrides.withProof ?? true) },
     { prisma: db, now: () => nowSeconds, fetchJwks: async () => ({ keys: [sourcePublicJwk] }) });
 
   const renew = (grantHandle: string, requestId: string, at: number, extra: { touch?: boolean;
-    resource?: string; scope?: string } = {}) => renewAgentConnectionGrant({ grantHandle, clientDomainId,
-    sourceDomain, config, requestId, touch: extra.touch ?? true, resource: extra.resource, scope: extra.scope },
+    connectionOnly?: boolean; listTeams?: boolean; target?: { org_id: string; team_id: string }; resource?: string; scope?: string } = {}) => renewAgentConnectionGrant({ grantHandle, clientDomainId,
+    sourceDomain, config, requestId, ...extra, touch: extra.touch ?? true },
   { prisma: db, now: new Date(at) });
 
   it('issues only from a live sign-in proof and recovers the same grant on retry', async () => {
@@ -138,6 +138,39 @@ describe.skipIf(!enabled)('agent connection grants', () => {
     await expect(issue(requestId, { connectionId: 'conn-other' })).rejects.toThrow('AGENT_GRANT_REQUEST_CONFLICT');
   });
 
+  it('includes later memberships only with standing consent and loses them on removal', async () => {
+    const fixedId = randomUUID(), allId = randomUUID();
+    const fixed = await issue(fixedId), all = await issue(allId, { allTeams: true });
+    const later = await db.team.create({ data: { name: 'Later', slug: 'later', orgId } });
+    const target = { org_id: orgId, team_id: later.id };
+    const at = nowSeconds * 1000;
+    const directory = () => renew(all.grantHandle, allId, at, { listTeams: true });
+    try {
+      await db.refreshToken.updateMany({ where: { userId: subjectId }, data: { revokedAt: new Date() } });
+      expect((await directory()).teams?.map(team => team.team_id)).not.toContain(later.id);
+      const membership = await db.teamMember.create({ data: { teamId: later.id, userId: subjectId, teamRole: 'member' } });
+      expect((await directory()).teams?.map(team => team.team_id)).toContain(later.id);
+      await expect(renew(fixed.grantHandle, fixedId, at, { target })).rejects.toThrow('AGENT_GRANT_UNAVAILABLE');
+      expect((await renew(all.grantHandle, allId, at, { target })).org?.teams).toContain(later.id);
+      await db.teamMember.update({ where: { id: 'agent-grant-team-member' }, data: { status: 'REMOVED' } });
+      try {
+        expect((await renew(all.grantHandle, allId, at, { connectionOnly: true })).org).toBeUndefined();
+        expect((await renew(fixed.grantHandle, fixedId, at, { connectionOnly: true })).org).toBeUndefined();
+        await expect(renew(fixed.grantHandle, fixedId, at, { target })).rejects.toThrow('AGENT_GRANT_UNAVAILABLE');
+        expect((await directory()).teams?.map(team => team.team_id)).toEqual([later.id]);
+        expect((await renew(all.grantHandle, allId, at, { target })).org?.teams).toContain(later.id);
+        await expect(renew(all.grantHandle, allId, at)).rejects.toThrow('AGENT_GRANT_UNAVAILABLE');
+      } finally {
+        await db.teamMember.update({ where: { id: 'agent-grant-team-member' }, data: { status: 'ACTIVE' } });
+      }
+      await db.teamMember.delete({ where: { id: membership.id } });
+      await expect(renew(all.grantHandle, allId, at, { target })).rejects.toThrow('AGENT_GRANT_UNAVAILABLE');
+    } finally {
+      await db.refreshToken.updateMany({ where: { userId: subjectId }, data: { revokedAt: null } });
+      await db.team.delete({ where: { id: later.id } });
+    }
+  });
+
   it('outlives the session, slides only on touch, and lapses after 90 unused days', async () => {
     const requestId = randomUUID();
     const grant = await issue(requestId);
@@ -146,7 +179,7 @@ describe.skipIf(!enabled)('agent connection grants', () => {
     const issuedAt = nowSeconds * 1000;
     const quiet = await renew(grant.grantHandle, requestId, issuedAt + 60 * DAY_MS, { touch: false });
     expect(quiet.idleExpiresAt).toBe(grant.idleExpiresAt);
-    expect(quiet.org.teams).toContain(teamId);
+    expect(quiet.org?.teams).toContain(teamId);
     const used = await renew(grant.grantHandle, requestId, issuedAt + 80 * DAY_MS);
     expect(new Date(used.idleExpiresAt).getTime()).toBe(issuedAt + 80 * DAY_MS + AGENT_GRANT_IDLE_MS);
     await expect(renew(grant.grantHandle, requestId, issuedAt + 171 * DAY_MS))
@@ -229,6 +262,6 @@ describe.skipIf(!enabled)('agent connection grants', () => {
     await db.confidentialDelegationMapping.update({ where, data: { enabled: false } });
     await expect(renew(grant.grantHandle, requestId, nowSeconds * 1000)).rejects.toThrow();
     await db.confidentialDelegationMapping.update({ where, data: { enabled: true } });
-    expect((await renew(grant.grantHandle, requestId, nowSeconds * 1000)).org.teams).toContain(teamId);
+    expect((await renew(grant.grantHandle, requestId, nowSeconds * 1000)).org?.teams).toContain(teamId);
   });
 });

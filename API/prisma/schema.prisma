@@ -3607,6 +3607,7 @@ model BillingJobComputeRenewal {
 // The source proof's evidence is copied so renewal can recheck SSO connection,
 // external identity, provisioning and policy generation after the session has ended.
 model AgentConnectionGrant {
+  allTeams             Boolean  @default(false) @map("all_teams")
   id                   String    @id @default(uuid())
   clientDomainId       String    @map("client_domain_id")
   requestId            String    @map("request_id") @db.Uuid

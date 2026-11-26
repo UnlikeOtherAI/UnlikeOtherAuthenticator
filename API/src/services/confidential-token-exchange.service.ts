@@ -24,7 +24,7 @@ import {
   signConfidentialAccessToken,
   type ConfidentialAccessTokenClaims,
 } from './oauth/access-token.service.js';
-import { getActiveClientOrgContext } from './org-context.service.js';
+import { agentGrantOrgContext, getActiveClientOrgContext } from './org-context.service.js';
 import {
   CONFIDENTIAL_ASSERTION_CLOCK_TOLERANCE_SECONDS,
   consumeConfidentialAssertion,
@@ -328,11 +328,13 @@ async function exchangeConfidentialSubjectTokenInsidePolicyLock(
 
   const teamClaims =
     assertion.active && org
-      ? { org, active: { ...assertion.active, tenantSlug: org.tenant_slug } }
+      ? { org: assertion.verifiedAgentGrant ? agentGrantOrgContext(org, assertion.active.teamId) : org,
+        active: { ...assertion.active, tenantSlug: org.tenant_slug } }
       : {};
 
   const now = deps.now?.() ?? Math.floor(Date.now() / 1000);
   const expiresInSeconds = Math.min(CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
+    assertion.verifiedAgentGrant ? Math.floor(assertion.verifiedAgentGrant.expiresAt.getTime() / 1000) - now : CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS,
     sourceAssurance ? Math.floor(sourceAssurance.expiresAt.getTime() / 1000) - now : CONFIDENTIAL_ACCESS_TOKEN_TTL_SECONDS);
   if (expiresInSeconds <= 0) throw invalidSubjectToken();
   const accessToken = await (deps.signAccessToken ?? signConfidentialAccessToken)({

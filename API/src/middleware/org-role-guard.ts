@@ -8,7 +8,7 @@ import {
   isAuthenticationEpochMismatchError,
   lockAndAssertAuthenticationEpochShared,
 } from '../services/authentication-epoch.service.js';
-import { getActiveClientOrgContext } from '../services/org-context.service.js';
+import { agentGrantOrgContext, getActiveClientOrgContext } from '../services/org-context.service.js';
 import { normalizeDomain } from '../utils/domain.js';
 import { getEnv } from '../config/env.js';
 
@@ -160,10 +160,18 @@ async function resolveSubjectAssertionClaims(
     configJwt,
     sourceDomain,
     audience: ORG_SUBJECT_ASSERTION_AUDIENCE,
-    allowAgentGrant: true,
+    allowAgentGrant: request.method === 'GET' && [
+      '/org/me',
+      '/org/organisations/:orgId/teams/:teamId',
+      '/org/organisations/:orgId/teams/:teamId/members',
+    ].includes(request.routeOptions?.url ?? ''),
   });
   if (!assertion.active) throw invalidSubjectAssertion();
 
+  const requestTeamId = (request.params as { teamId?: string } | undefined)?.teamId;
+  if (assertion.verifiedAgentGrant && requestTeamId && requestTeamId !== assertion.active.teamId) {
+    throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
+  }
   const requestOrgId = resolveOrgIdFromParams(request);
   if (requestOrgId && normalizeOrgId(assertion.active.orgId) !== requestOrgId) {
     throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
@@ -230,7 +238,7 @@ async function resolveSubjectAssertionClaims(
     // shape has a required clientId field.
     clientId: 'uoa-subject-assertion',
     role: 'user',
-    org,
+    org: assertion.verifiedAgentGrant ? agentGrantOrgContext(org, assertion.active.teamId) : org,
     active: {
       orgId: assertion.active.orgId,
       teamId: assertion.active.teamId,

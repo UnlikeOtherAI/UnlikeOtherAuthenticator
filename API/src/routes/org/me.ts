@@ -8,7 +8,7 @@ import { requireOrgFeaturesEnabled } from '../../middleware/org-features.js';
 import { resolveOrgUserClaims } from '../../middleware/org-role-guard.js';
 import { runWithRequestAdminTransaction, setTenantContextFromRequest } from '../../plugins/tenant-context.plugin.js';
 import {
-  getActiveClientOrgContext,
+  agentGrantOrgContext, getActiveClientOrgContext,
   getUserOrgContext,
 } from '../../services/org-context.service.js';
 import {
@@ -82,7 +82,7 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
         const assurance = proof && await prisma.domainRole.findUnique({
           where: { domain_userId: { domain: normalizedDomain, userId: claims.userId } }, select: { role: true },
         }) ? { ...assuranceValidationAnswer(proof), org_id: proof.orgId, team_id: proof.teamId } : undefined;
-        const systemAdmin = Boolean(getEnv().DATABASE_URL) && await isPlatformSuperuser({
+        const systemAdmin = !claims.agentGrant && Boolean(getEnv().DATABASE_URL) && await isPlatformSuperuser({
           userId: claims.userId,
           prisma,
         });
@@ -121,8 +121,16 @@ export function registerOrgMeRoute(app: FastifyInstance): void {
           );
         }
 
-        const teamPolicy = context ? await resolveProductTeamPolicy({ domain: normalizedDomain }, { prisma }) : undefined;
-        const [teamDirectory, pendingInvites] = context ? await Promise.all([
+        if (claims.agentGrant) {
+          const teamId = claims.active?.teamId;
+          if (!teamId || !context || !context.teams.includes(teamId)) {
+            throw new AppError('FORBIDDEN', 403, 'INSUFFICIENT_ORG_ROLE');
+          }
+          context = agentGrantOrgContext(context, teamId);
+        }
+        const sidebar = context && !claims.agentGrant;
+        const teamPolicy = sidebar ? await resolveProductTeamPolicy({ domain: normalizedDomain }, { prisma }) : undefined;
+        const [teamDirectory, pendingInvites] = sidebar ? await Promise.all([
           buildSidebarTeams(
             { userId: claims.userId, domain: normalizedDomain },
             { prisma, crossProductPrisma: prisma, policy: teamPolicy },
