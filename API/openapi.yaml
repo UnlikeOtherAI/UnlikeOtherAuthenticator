@@ -7815,6 +7815,53 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /org/organisations/{orgId}/teams/{teamId}/invitations/{inviteId}/decline:
+    post:
+      tags: [Organizations]
+      summary: Decline an invitation as its recipient
+      operationId: declineRecipientTeamInvitation
+      description: |
+        A verified backend with backend_org_management enabled supplies its authenticated
+        recipient's UOA subject. UOA verifies the invitation, organisation, team and current
+        recipient address. Declining consumes outstanding email links. The recipient can retry.
+      security:
+        - domainHashBearer: []
+      parameters:
+        - $ref: '#/components/parameters/orgIdPath'
+        - $ref: '#/components/parameters/teamIdPath'
+        - name: inviteId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/domainQuery'
+        - $ref: '#/components/parameters/configUrl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              additionalProperties: false
+              properties:
+                userId: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: The recipient declined the invitation.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, orgId, teamId]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  orgId: { type: string }
+                  teamId: { type: string }
+        '400':
+          description: Invalid invitation or recipient.
+        '401':
+          description: Backend access required.
+
   /org/organisations/{orgId}/teams/{teamId}/invitations/{inviteId}/resend:
     post:
       tags: [Organizations]

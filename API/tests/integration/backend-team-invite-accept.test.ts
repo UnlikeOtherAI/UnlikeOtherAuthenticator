@@ -140,6 +140,29 @@ describe.skipIf(!hasDatabase)('backend-mode team invitation acceptance', () => {
     return { app, headers: { authorization: `Bearer ${domainBearer}` } };
   }
 
+  it('only lets the recipient decline, permits retries and leaves their memberships untouched', async () => {
+    const team = await seedTeam('Decline');
+    const invitee = await createDomainUser('recipient@example.com');
+    const invite = await seedInvite({ ...team, email: 'recipient@example.com' });
+    const { app, headers } = await createBackendRequestState();
+    const acceptUrl = url(team.orgId, team.teamId, invite.id);
+    const decline = (userId: string) => app.inject({ method: 'POST', headers,
+      url: acceptUrl.replace('/accept?', '/decline?'), payload: { userId } });
+    try {
+      expect((await decline(team.ownerId)).statusCode).toBe(400);
+      expect((await decline(invitee.id)).statusCode).toBe(200);
+      expect((await decline(invitee.id)).statusCode).toBe(200);
+      expect((await decline(team.ownerId)).statusCode).toBe(400);
+      expect((await app.inject({ method: 'POST', headers, url: acceptUrl,
+        payload: { userId: invitee.id } })).statusCode).toBe(400);
+      expect(await handle.prisma.teamInvite.findUniqueOrThrow({ where: { id: invite.id },
+        select: { declinedAt: true, acceptedAt: true } })).toEqual({ declinedAt: expect.any(Date), acceptedAt: null });
+      expect(await handle.prisma.teamMember.count({ where: { teamId: team.teamId, userId: invitee.id } })).toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('creates both memberships, marks the invite accepted, and repeats as idempotent success', async () => {
     const team = await seedTeam('Happy');
     const invitee = await createDomainUser('happy-invitee@example.com');

@@ -1,3 +1,4 @@
+import { declineRecipientTeamInvite } from '../../services/team-invite.service.recipient-decline.js';
 import { withInvitationDelivery } from './invitation-delivery.js';
 import { memberInvitePermission } from '../../services/team-invite.service.permissions.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -344,6 +345,37 @@ export function registerTeamInvitationRoutes(app: FastifyInstance): void {
       });
 
       reply.status(200).send({ ok: true, ...accepted });
+    },
+  );
+
+  app.post(
+    '/org/organisations/:orgId/teams/:teamId/invitations/:inviteId/decline',
+    {
+      preValidation: [
+        requireDomainHashAuthForDomainQuery(),
+        configVerifier,
+        parseDomainContextHook,
+        requireOrgFeatures,
+        requireOrgBackendOnly(),
+        createRateLimiter({
+          limit: 20,
+          windowMs: 60 * 60 * 1000,
+          keyBuilder: keyInviteTeamRateLimit,
+        }),
+      ],
+    },
+    async (request, reply) => {
+      const config = requireVerifiedConfig(request);
+      const orgId = getOrgIdFromParams(request.params);
+      const teamId = getTeamIdFromParams(request.params);
+      const inviteId = getInviteIdFromParams(request.params);
+      const body = AcceptTeamInviteBodySchema.parse(request.body ?? {});
+
+      setTenantContextFromRequest(request, { orgId });
+      await request.withTenantTx(tx => declineRecipientTeamInvite(tx, {
+        orgId, teamId, inviteId, userId: body.userId, config,
+      }));
+      reply.status(200).send({ ok: true, orgId, teamId });
     },
   );
 
