@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import type { ClientConfig } from './config.service.js';
 import { AppError } from '../utils/errors.js';
+import { assertLoginOrganization } from './login-organization.service.js';
 import { assertEntryTeam } from './entry-team-interface.service.js';
 import { declineTeamInviteForUser } from './team-invite.service.acceptance.js';
 import { isExpired } from './team-invite-state-machine.js';
@@ -10,6 +11,7 @@ export async function declineRecipientTeamInvite(
   input: { orgId: string; teamId: string; inviteId: string; userId: string; config: ClientConfig },
 ): Promise<void> {
   const { orgId, teamId, inviteId, userId, config } = input;
+  assertLoginOrganization(config, orgId);
   await tx.$queryRaw`SELECT id FROM team_invites
     WHERE id=${inviteId} AND org_id=${orgId} AND team_id=${teamId} FOR UPDATE`;
   const invite = await tx.teamInvite.findFirst({
